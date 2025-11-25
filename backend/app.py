@@ -12,7 +12,7 @@ import pandas as pd
 import numpy as np
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-from openpyxl.utils.dataframe import dataframe_to_rows
+from openpyxl.utils import get_column_letter
 import httpx
 import asyncio
 import json
@@ -41,6 +41,7 @@ DEFAULT_CONFIG = {
     "base_address": "Москва, Сходненский тупик 16с4",
     "fuel_coefficient": 7,
     "fuel_max": 3000,
+    "fuel_warning": 2000,
     "transport_amount": 1000,
     "transport_min_revenue": 10000,
     "transport_percent_min": 20,
@@ -52,9 +53,24 @@ DEFAULT_CONFIG = {
 # Global storage for session data
 session_data = {}
 
-
 # Distance cache to avoid repeated API calls
 distance_cache = {}
+
+# Worker name normalization map
+WORKER_NAME_MAP = {
+    "Романюк Алексей": "Романюк Алексей Юрьевич",
+}
+
+
+def normalize_worker_name(name: str) -> str:
+    """Normalize worker name to handle duplicates like 'Романюк Алексей' -> 'Романюк Алексей Юрьевич'"""
+    if not name:
+        return name
+    clean_name = name.replace(" (оплата клиентом)", "").strip()
+    normalized = WORKER_NAME_MAP.get(clean_name, clean_name)
+    if "(оплата клиентом)" in name:
+        return f"{normalized} (оплата клиентом)"
+    return normalized
 
 
 async def geocode_address_yandex(address: str, api_key: str) -> tuple:
@@ -77,14 +93,13 @@ async def geocode_address_yandex(address: str, api_key: str) -> tuple:
                 coords = pos[0]["GeoObject"]["Point"]["pos"].split()
                 return float(coords[1]), float(coords[0])  # lat, lon
     except Exception as e:
-        pass  # Silent fail, will try fallback
+        pass
     return None, None
 
 
 async def geocode_address_nominatim(address: str) -> tuple:
     """Get coordinates from Nominatim (OpenStreetMap) - free"""
     try:
-        # Add delay to respect rate limits
         await asyncio.sleep(1)
         async with httpx.AsyncClient() as client:
             url = "https://nominatim.openstreetmap.org/search"
@@ -102,24 +117,21 @@ async def geocode_address_nominatim(address: str) -> tuple:
             if data:
                 return float(data[0]["lat"]), float(data[0]["lon"])
     except Exception as e:
-        pass  # Silent fail
+        pass
     return None, None
 
 
 async def geocode_address(address: str, api_key: str) -> tuple:
     """Get coordinates - try Yandex first, fallback to Nominatim"""
-    # Check cache
     cache_key = f"geo_{address}"
     if cache_key in distance_cache:
         return distance_cache[cache_key]
     
-    # Try Yandex first
     lat, lon = await geocode_address_yandex(address, api_key)
     if lat and lon:
         distance_cache[cache_key] = (lat, lon)
         return lat, lon
     
-    # Fallback to Nominatim (free)
     lat, lon = await geocode_address_nominatim(address)
     if lat and lon:
         distance_cache[cache_key] = (lat, lon)
@@ -137,22 +149,51 @@ async def get_distance_osrm(lat1: float, lon1: float, lat2: float, lon2: float) 
             
             if data.get("code") == "Ok" and data.get("routes"):
                 distance_meters = data["routes"][0]["distance"]
-                return distance_meters / 1000  # km
+                return distance_meters / 1000
     except Exception as e:
-        print(f"OSRM error: {e}")
+        pass
     return 0
 
 
+def is_moscow_region(address: str) -> bool:
+    """Check if address is in Moscow or Moscow Oblast"""
+    if not address:
+        return False
+    addr_lower = address.lower()
+    moscow_keywords = [
+        "москва", "московская", "мо,", "м.о.", "го ", "г.о.", 
+        "мытищи", "химки", "одинцово", "щелково", "люберцы", "балашиха",
+        "красногорск", "подольск", "королев", "долгопрудный", "реутов",
+        "домодедово", "раменск", "серпухов", "ногинск", "пушкино",
+        "коломна", "электросталь", "орехово-зуево", "сергиев посад",
+        "наро-фоминск", "дмитров", "клин", "солнечногорск", "истра",
+        "волоколамск", "можайск", "руза", "шатура", "егорьевск",
+        "воскресенск", "ступино", "кашира", "озеры", "зарайск",
+        "коттеджный", "снт", "днп", "кп ", "деревня", "село",
+        "поселок", "городской округ", "район"
+    ]
+    return any(kw in addr_lower for kw in moscow_keywords)
+
+
 async def calculate_fuel_cost(address: str, config: dict, days: int = 1) -> int:
-    """Calculate fuel cost for round trip"""
+    """Calculate fuel cost for round trip - only for Moscow and MO"""
     if not address or pd.isna(address):
         return 0
+    
+    # Only calculate for Moscow and Moscow Oblast
+    if not is_moscow_region(address):
+        return 0
+    
+    # Add "Москва" or "Московская область" if not present for better geocoding
+    addr_for_geocode = address
+    if "москва" not in address.lower() and "московская" not in address.lower():
+        addr_for_geocode = f"Московская область, {address}"
     
     base_lat, base_lon = await geocode_address(config["base_address"], config["yandex_api_key"])
     if not base_lat:
         return 0
     
-    dest_lat, dest_lon = await geocode_address(address, config["yandex_api_key"])
+    dest_lat, dest_lon = await geocode_address(addr_for_geocode, config["yandex_api_key"])
     if not dest_lat:
         return 0
     
@@ -160,11 +201,9 @@ async def calculate_fuel_cost(address: str, config: dict, days: int = 1) -> int:
     if distance == 0:
         return 0
     
-    # Round trip * coefficient * days, rounded to 100
     cost = distance * 2 * config["fuel_coefficient"] * days
     cost = round(cost / 100) * 100
     
-    # Max limit
     return min(cost, config["fuel_max"])
 
 
@@ -173,27 +212,20 @@ def extract_address_from_order(order_text: str) -> str:
     if not order_text or pd.isna(order_text):
         return ""
     
-    # Pattern: after date/time, before \n or end
-    # Example: "Заказ клиента КАУТ-001560 от 27.10.2025 14:17:38, Ростовская набережная 1, магазин Интерьер Маркет"
-    
     text = str(order_text)
     
-    # Skip non-address entries
     skip_patterns = ["ОБУЧЕНИЕ", "обучение", "двойная оплата", "В прошлом расчете"]
     for pattern in skip_patterns:
         if pattern in text:
             return ""
     
-    # Try to extract address after datetime pattern
     match = re.search(r'\d{2}\.\d{2}\.\d{4}\s+\d{1,2}:\d{2}:\d{2},\s*(.+?)(?:\n|$)', text)
     if match:
         addr = match.group(1).strip()
-        # Clean up address
-        addr = re.sub(r'\\n.*', '', addr)  # Remove everything after \n
-        addr = re.sub(r'\|.*', '', addr)   # Remove coordinates
+        addr = re.sub(r'\\n.*', '', addr)
+        addr = re.sub(r'\|.*', '', addr)
         return addr.strip()
     
-    # Alternative: after "0:00:00," or similar
     match = re.search(r'\d:\d{2}:\d{2},\s*(.+?)(?:\n|$)', text)
     if match:
         addr = match.group(1).strip()
@@ -224,7 +256,6 @@ def extract_period(df: pd.DataFrame) -> str:
         for col in df.columns:
             val = df.iloc[i][col]
             if pd.notna(val) and 'Период:' in str(val):
-                # "Период: 01.11.2025 - 15.11.2025"
                 match = re.search(r'(\d{2})\.(\d{2})\.(\d{4})\s*-\s*(\d{2})\.(\d{2})\.(\d{4})', str(val))
                 if match:
                     d1, m1, y1, d2, m2, y2 = match.groups()
@@ -236,7 +267,6 @@ def parse_excel_file(file_bytes: bytes, is_over_10k: bool) -> pd.DataFrame:
     """Parse Excel file from 1C and extract data"""
     df = pd.read_excel(BytesIO(file_bytes), header=None)
     
-    # Find header row (contains "Монтажник" as exact cell value, not "Заказ, Комментарий")
     header_row = None
     for i in range(min(10, len(df))):
         first_val = str(df.iloc[i].iloc[0]) if pd.notna(df.iloc[i].iloc[0]) else ""
@@ -251,16 +281,14 @@ def parse_excel_file(file_bytes: bytes, is_over_10k: bool) -> pd.DataFrame:
     current_worker = None
     is_client_payment_section = False
     
-    for i in range(header_row + 2, len(df)):  # Skip header rows
+    for i in range(header_row + 2, len(df)):
         row = df.iloc[i]
         first_col = row.iloc[0] if pd.notna(row.iloc[0]) else ""
         first_col_str = str(first_col).strip()
         
-        # Skip empty rows, "Итого", and header-like rows
         if not first_col_str or first_col_str == "Итого" or first_col_str == "Заказ, Комментарий":
             continue
         
-        # Check if this is a worker name (not an order)
         is_order = (first_col_str.startswith("Заказ") or 
                    "КАУТ-" in first_col_str or 
                    "ИБУТ-" in first_col_str or 
@@ -268,17 +296,16 @@ def parse_excel_file(file_bytes: bytes, is_over_10k: bool) -> pd.DataFrame:
                    "В прошлом расчете" in first_col_str)
         
         if not is_order:
-            # This is a worker name row
             is_client_payment_section = "(оплата клиентом)" in first_col_str
             worker_name = first_col_str.replace(" (оплата клиентом)", "").strip()
             
-            # Skip if this is the header row value
             if worker_name == "Монтажник":
                 continue
-                
+            
+            # Normalize worker name
+            worker_name = normalize_worker_name(worker_name)
             current_worker = worker_name
             
-            # If this is "оплата клиентом" section header with totals, add it
             if is_client_payment_section and (pd.notna(row.iloc[4]) or pd.notna(row.iloc[10])):
                 records.append({
                     "worker": current_worker,
@@ -296,10 +323,9 @@ def parse_excel_file(file_bytes: bytes, is_over_10k: bool) -> pd.DataFrame:
                     "is_worker_total": True
                 })
         else:
-            # This is an order row or correction row
             if current_worker:
                 records.append({
-                    "worker": current_worker,
+                    "worker": normalize_worker_name(current_worker),
                     "order": first_col_str,
                     "revenue_total": row.iloc[4] if pd.notna(row.iloc[4]) else 0,
                     "revenue_services": row.iloc[5] if pd.notna(row.iloc[5]) else 0,
@@ -317,42 +343,74 @@ def parse_excel_file(file_bytes: bytes, is_over_10k: bool) -> pd.DataFrame:
     return pd.DataFrame(records)
 
 
-def generate_alarms(df: pd.DataFrame) -> List[Dict]:
-    """Generate warning alarms for manual review"""
+def generate_alarms(data: List[dict], config: dict) -> List[Dict]:
+    """Generate warning alarms for manual review - AFTER calculation"""
     alarms = []
     
-    for idx, row in df.iterrows():
+    for row in data:
+        worker = row.get("worker", "")
+        order = row.get("order", "")
+        
+        # Full row data for display
+        row_info = {
+            "Монтажник": worker,
+            "Заказ": order[:80] + "..." if len(str(order)) > 80 else order,
+            "Выручка итого": row.get("revenue_total", ""),
+            "Выручка от услуг": row.get("revenue_services", ""),
+            "Диагностика": row.get("diagnostic", ""),
+            "Оплата диагностики": row.get("diagnostic_payment", ""),
+            "Выручка (выезд)": row.get("specialist_fee", ""),
+            "Доп. расходы": row.get("additional_expenses", ""),
+            "Сумма оплаты": row.get("service_payment", ""),
+            "Процент": row.get("percent", ""),
+            "Оплата бензина": row.get("fuel_payment", ""),
+            "Транспортные": row.get("transport", ""),
+            "Итого": row.get("total", ""),
+            "Диагностика -50%": row.get("diagnostic_50", "")
+        }
+        
         # Alarm 1: service_payment > 20000
         service_payment = row.get("service_payment", 0)
-        if pd.notna(service_payment) and float(service_payment) > 20000:
+        if pd.notna(service_payment) and service_payment != "" and float(service_payment) > 20000:
             alarms.append({
                 "type": "high_payment",
                 "message": f"⚠️ Сумма оплаты > 20000: {service_payment}",
-                "worker": row.get("worker", ""),
-                "order": row.get("order", ""),
-                "row_data": row.to_dict()
+                "worker": worker,
+                "order": order,
+                "row_info": row_info
             })
         
         # Alarm 2: non-standard percent (not 30, 50, 100)
         percent = parse_percent(row.get("percent", 0))
-        if percent > 0 and percent not in [30, 50, 100]:
+        if percent > 0 and round(percent, 0) not in [30, 50, 100]:
             alarms.append({
                 "type": "non_standard_percent",
-                "message": f"⚠️ Нестандартный процент: {percent}%",
-                "worker": row.get("worker", ""),
-                "order": row.get("order", ""),
-                "row_data": row.to_dict()
+                "message": f"⚠️ Нестандартный процент: {percent:.1f}%",
+                "worker": worker,
+                "order": order,
+                "row_info": row_info
             })
         
         # Alarm 3: specialist_fee > 3500
         specialist_fee = row.get("specialist_fee", 0)
-        if pd.notna(specialist_fee) and float(specialist_fee) > 3500:
+        if pd.notna(specialist_fee) and specialist_fee != "" and float(specialist_fee) > 3500:
             alarms.append({
                 "type": "high_specialist_fee",
                 "message": f"⚠️ Выручка (выезд) > 3500: {specialist_fee}",
-                "worker": row.get("worker", ""),
-                "order": row.get("order", ""),
-                "row_data": row.to_dict()
+                "worker": worker,
+                "order": order,
+                "row_info": row_info
+            })
+        
+        # Alarm 4: fuel_payment > 2000
+        fuel_payment = row.get("fuel_payment", 0)
+        if pd.notna(fuel_payment) and fuel_payment != "" and float(fuel_payment) > config.get("fuel_warning", 2000):
+            alarms.append({
+                "type": "high_fuel",
+                "message": f"⚠️ Оплата бензина > {config.get('fuel_warning', 2000)}: {fuel_payment}",
+                "worker": worker,
+                "order": order,
+                "row_info": row_info
             })
     
     return alarms
@@ -362,15 +420,13 @@ async def calculate_row(row: dict, config: dict, days_map: dict) -> dict:
     """Calculate additional columns for a row"""
     result = row.copy()
     
-    # Initialize new columns
     result["fuel_payment"] = 0
     result["transport"] = 0
     result["diagnostic_50"] = 0
     result["total"] = 0
     
-    # Skip worker total rows and correction rows
     if row.get("is_worker_total") or "В прошлом расчете" in str(row.get("order", "")):
-        service_payment = float(row.get("service_payment", 0)) if pd.notna(row.get("service_payment")) else 0
+        service_payment = float(row.get("service_payment", 0)) if pd.notna(row.get("service_payment")) and row.get("service_payment") != "" else 0
         result["total"] = service_payment
         return result
     
@@ -378,20 +434,20 @@ async def calculate_row(row: dict, config: dict, days_map: dict) -> dict:
     address = extract_address_from_order(order)
     
     specialist_fee = row.get("specialist_fee", 0)
-    specialist_fee = float(specialist_fee) if pd.notna(specialist_fee) else 0
+    specialist_fee = float(specialist_fee) if pd.notna(specialist_fee) and specialist_fee != "" else 0
     
     revenue_services = row.get("revenue_services", 0)
-    revenue_services = float(revenue_services) if pd.notna(revenue_services) else 0
+    revenue_services = float(revenue_services) if pd.notna(revenue_services) and revenue_services != "" else 0
     
     percent = parse_percent(row.get("percent", 0))
     
     service_payment = row.get("service_payment", 0)
-    service_payment = float(service_payment) if pd.notna(service_payment) else 0
+    service_payment = float(service_payment) if pd.notna(service_payment) and service_payment != "" else 0
     
     diagnostic = row.get("diagnostic", 0)
-    diagnostic = float(diagnostic) if pd.notna(diagnostic) else 0
+    diagnostic = float(diagnostic) if pd.notna(diagnostic) and diagnostic != "" else 0
     
-    # 1. Fuel payment - only if specialist_fee is empty and has real address
+    # 1. Fuel payment - only if specialist_fee is empty and has real address in Moscow/MO
     if specialist_fee == 0 and address:
         days = days_map.get(order, 1)
         result["fuel_payment"] = await calculate_fuel_cost(address, config, days)
@@ -411,99 +467,168 @@ async def calculate_row(row: dict, config: dict, days_map: dict) -> dict:
 
 
 def create_excel_report(data: List[dict], period: str, config: dict) -> bytes:
-    """Create Excel report with all formatting"""
+    """Create Excel report with proper formatting and formulas"""
     wb = Workbook()
     ws = wb.active
     ws.title = "Лист_1"
     
-    # Styles
-    header_font = Font(bold=True)
+    # Styles matching the original format
+    header_font = Font(bold=True, size=10)
     header_fill = PatternFill("solid", fgColor="DAEEF3")
+    data_font = Font(size=9)
+    worker_font = Font(bold=True, size=10)
+    total_font = Font(bold=True, size=10)
     border = Border(
-        left=Side(style='thin'),
-        right=Side(style='thin'),
-        top=Side(style='thin'),
-        bottom=Side(style='thin')
+        left=Side(style='thin', color='B8B8B8'),
+        right=Side(style='thin', color='B8B8B8'),
+        top=Side(style='thin', color='B8B8B8'),
+        bottom=Side(style='thin', color='B8B8B8')
     )
     
-    # Header rows
+    # Header rows (matching original file format)
     ws['A1'] = ""
     ws['A2'] = "Параметры:"
-    ws['C2'] = f"Период: {period.replace('-', '.').replace('.', '.')} - ..."  # Will be formatted properly
+    ws['C2'] = f"Период: {period}"
     ws['C3'] = f"Процент оплаты диагностики: 0,{config['diagnostic_percent']}"
     ws['C4'] = "Процент выручки от услуг: 0,3"
     
     # Column headers (row 6)
     headers = [
-        "Монтажник", "", "", "", "Выручка итого", "Выручка от услуг", 
-        "Диагностика", "Оплата диагностики", "Выручка (выезд) специалиста",
-        "Доп. расходы (Оплата услуг помощников)", "Сумма оплаты от услуг",
-        "Процент от выручки по услугам", "Оплата бензина", "Транспортные",
-        "Итого", "Диагностика -50%"
+        ("A", "Монтажник", 80),
+        ("B", "", 3),
+        ("C", "", 3),
+        ("D", "", 3),
+        ("E", "Выручка итого", 14),
+        ("F", "Выручка от услуг", 16),
+        ("G", "Диагностика", 12),
+        ("H", "Оплата диагностики", 17),
+        ("I", "Выручка (выезд) специалиста", 24),
+        ("J", "Доп. расходы (Оплата услуг помощников)", 32),
+        ("K", "Сумма оплаты от услуг", 20),
+        ("L", "Процент от выручки по услугам", 26),
+        ("M", "Оплата бензина", 14),
+        ("N", "Транспортные", 12),
+        ("O", "Итого", 12),
+        ("P", "Диагностика -50%", 16)
     ]
     
-    for col, header in enumerate(headers, 1):
-        cell = ws.cell(row=6, column=col, value=header)
+    for col_letter, header_text, width in headers:
+        cell = ws[f"{col_letter}6"]
+        cell.value = header_text
         cell.font = header_font
         cell.fill = header_fill
         cell.border = border
+        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        ws.column_dimensions[col_letter].width = width
     
-    ws.cell(row=7, column=1, value="Заказ, Комментарий")
+    ws['A7'] = "Заказ, Комментарий"
+    ws['A7'].font = data_font
     
-    # Data rows
-    current_row = 8
-    current_worker = None
-    worker_start_row = None
-    
+    # Group data by worker
+    workers_data = {}
     for record in data:
-        worker = record.get("worker", "")
+        worker = record.get("worker", "").replace(" (оплата клиентом)", "")
+        if worker not in workers_data:
+            workers_data[worker] = {"regular": [], "client_payment": []}
         
-        # New worker section
-        if worker != current_worker:
-            if current_worker is not None:
-                current_row += 1  # Empty row between workers
+        if record.get("is_client_payment"):
+            workers_data[worker]["client_payment"].append(record)
+        else:
+            workers_data[worker]["regular"].append(record)
+    
+    current_row = 8
+    
+    for worker in sorted(workers_data.keys()):
+        if not worker:
+            continue
             
-            current_worker = worker
-            worker_start_row = current_row
+        worker_data = workers_data[worker]
+        regular_rows = worker_data["regular"]
+        client_rows = worker_data["client_payment"]
+        
+        # Worker name row with formulas for totals
+        worker_name_row = current_row
+        ws.cell(row=current_row, column=1, value=worker).font = worker_font
+        current_row += 1
+        
+        # Track row ranges for formulas
+        regular_start = current_row
+        
+        # Regular orders
+        for record in regular_rows:
+            if record.get("is_worker_total"):
+                continue
             
-            # Worker name row
-            ws.cell(row=current_row, column=1, value=worker)
-            ws.cell(row=current_row, column=1).font = Font(bold=True)
+            ws.cell(row=current_row, column=1, value=record.get("order", "")).font = data_font
             
-            # Worker totals will be filled later
+            for col, key in [(5, "revenue_total"), (6, "revenue_services"), (7, "diagnostic"),
+                            (8, "diagnostic_payment"), (9, "specialist_fee"), (10, "additional_expenses"),
+                            (11, "service_payment")]:
+                val = record.get(key, "")
+                if val != "" and val != 0 and pd.notna(val):
+                    ws.cell(row=current_row, column=col, value=val).font = data_font
+            
+            # Percent
+            ws.cell(row=current_row, column=12, value=record.get("percent", "")).font = data_font
+            
+            # Calculated columns
+            for col, key in [(13, "fuel_payment"), (14, "transport"), (15, "total"), (16, "diagnostic_50")]:
+                val = record.get(key, "")
+                if val != "" and val != 0:
+                    ws.cell(row=current_row, column=col, value=val).font = data_font
+            
             current_row += 1
         
-        # Order row
-        ws.cell(row=current_row, column=1, value=record.get("order", ""))
-        ws.cell(row=current_row, column=5, value=record.get("revenue_total", ""))
-        ws.cell(row=current_row, column=6, value=record.get("revenue_services", ""))
-        ws.cell(row=current_row, column=7, value=record.get("diagnostic", "") if record.get("diagnostic") else "")
-        ws.cell(row=current_row, column=8, value=record.get("diagnostic_payment", "") if record.get("diagnostic_payment") else "")
-        ws.cell(row=current_row, column=9, value=record.get("specialist_fee", "") if record.get("specialist_fee") else "")
-        ws.cell(row=current_row, column=10, value=record.get("additional_expenses", "") if record.get("additional_expenses") else "")
-        ws.cell(row=current_row, column=11, value=record.get("service_payment", ""))
-        ws.cell(row=current_row, column=12, value=record.get("percent", ""))
-        ws.cell(row=current_row, column=13, value=record.get("fuel_payment", "") if record.get("fuel_payment") else "")
-        ws.cell(row=current_row, column=14, value=record.get("transport", "") if record.get("transport") else "")
-        ws.cell(row=current_row, column=15, value=record.get("total", ""))
-        ws.cell(row=current_row, column=16, value=record.get("diagnostic_50", "") if record.get("diagnostic_50") else "")
+        regular_end = current_row - 1
         
+        # Add formulas for worker total row (regular)
+        if regular_end >= regular_start:
+            for col in [5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16]:
+                col_letter = get_column_letter(col)
+                formula = f"=SUM({col_letter}{regular_start}:{col_letter}{regular_end})"
+                ws.cell(row=worker_name_row, column=col, value=formula).font = worker_font
+        
+        # Client payment section
+        if client_rows:
+            client_name_row = current_row
+            ws.cell(row=current_row, column=1, value=f"{worker} (оплата клиентом)").font = worker_font
+            current_row += 1
+            
+            client_start = current_row
+            
+            for record in client_rows:
+                if record.get("is_worker_total"):
+                    continue
+                
+                ws.cell(row=current_row, column=1, value=record.get("order", "")).font = data_font
+                
+                for col, key in [(5, "revenue_total"), (6, "revenue_services"), (7, "diagnostic"),
+                                (8, "diagnostic_payment"), (9, "specialist_fee"), (10, "additional_expenses"),
+                                (11, "service_payment")]:
+                    val = record.get(key, "")
+                    if val != "" and val != 0 and pd.notna(val):
+                        ws.cell(row=current_row, column=col, value=val).font = data_font
+                
+                ws.cell(row=current_row, column=12, value=record.get("percent", "")).font = data_font
+                
+                for col, key in [(13, "fuel_payment"), (14, "transport"), (15, "total"), (16, "diagnostic_50")]:
+                    val = record.get(key, "")
+                    if val != "" and val != 0:
+                        ws.cell(row=current_row, column=col, value=val).font = data_font
+                
+                current_row += 1
+            
+            client_end = current_row - 1
+            
+            # Add formulas for client payment total row
+            if client_end >= client_start:
+                for col in [5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16]:
+                    col_letter = get_column_letter(col)
+                    formula = f"=SUM({col_letter}{client_start}:{col_letter}{client_end})"
+                    ws.cell(row=client_name_row, column=col, value=formula).font = worker_font
+        
+        # Empty row between workers
         current_row += 1
-    
-    # Column widths
-    ws.column_dimensions['A'].width = 80
-    ws.column_dimensions['E'].width = 15
-    ws.column_dimensions['F'].width = 18
-    ws.column_dimensions['G'].width = 12
-    ws.column_dimensions['H'].width = 18
-    ws.column_dimensions['I'].width = 25
-    ws.column_dimensions['J'].width = 35
-    ws.column_dimensions['K'].width = 20
-    ws.column_dimensions['L'].width = 28
-    ws.column_dimensions['M'].width = 15
-    ws.column_dimensions['N'].width = 14
-    ws.column_dimensions['O'].width = 12
-    ws.column_dimensions['P'].width = 18
     
     # Save to bytes
     output = BytesIO()
@@ -514,7 +639,8 @@ def create_excel_report(data: List[dict], period: str, config: dict) -> bytes:
 
 def create_worker_report(data: List[dict], worker: str, period: str, config: dict) -> bytes:
     """Create individual worker Excel report"""
-    worker_data = [r for r in data if r.get("worker", "").replace(" (оплата клиентом)", "") == worker.replace(" (оплата клиентом)", "")]
+    worker_normalized = normalize_worker_name(worker.replace(" (оплата клиентом)", ""))
+    worker_data = [r for r in data if normalize_worker_name(r.get("worker", "").replace(" (оплата клиентом)", "")) == worker_normalized]
     return create_excel_report(worker_data, period, config)
 
 
@@ -531,39 +657,30 @@ async def upload_files(
 ):
     """Upload and parse Excel files"""
     try:
-        # Read files
         content_under = await file_under_10k.read()
         content_over = await file_over_10k.read()
         
-        # Parse files
         df_under = parse_excel_file(content_under, is_over_10k=False)
         df_over = parse_excel_file(content_over, is_over_10k=True)
         
-        # Extract period
         period_df = pd.read_excel(BytesIO(content_under), header=None)
         period = extract_period(period_df)
         
-        # Combine data
         combined = pd.concat([df_over, df_under], ignore_index=True)
         
-        # Generate alarms
-        alarms = generate_alarms(combined)
-        
-        # Get unique workers
-        workers = combined["worker"].unique().tolist()
-        workers = [w for w in workers if w and not pd.isna(w)]
+        # Get unique workers (normalized)
+        workers = list(set([normalize_worker_name(w) for w in combined["worker"].unique() if w and not pd.isna(w)]))
+        workers = sorted(workers)
         
         # Get orders for days input
         orders = combined[["worker", "order"]].to_dict("records")
         orders = [o for o in orders if o.get("order") and not str(o.get("order", "")).startswith(("ОБУЧЕНИЕ", "В прошлом"))]
         
-        # Store in session
         session_id = datetime.now().strftime("%Y%m%d%H%M%S")
         session_data[session_id] = {
             "combined": combined.to_dict("records"),
             "period": period,
-            "workers": workers,
-            "alarms": alarms
+            "workers": workers
         }
         
         return JSONResponse({
@@ -572,7 +689,6 @@ async def upload_files(
             "period": period,
             "workers": workers,
             "orders": orders,
-            "alarms": alarms,
             "total_records": len(combined)
         })
         
@@ -597,7 +713,6 @@ async def calculate_salaries(
         days_map = json.loads(days_json)
         extra_rows = json.loads(extra_rows_json)
         
-        # Merge config with defaults
         full_config = {**DEFAULT_CONFIG, **config}
         
         # Calculate each row
@@ -610,7 +725,7 @@ async def calculate_salaries(
         for worker, rows in extra_rows.items():
             for extra in rows:
                 calculated_data.append({
-                    "worker": worker,
+                    "worker": normalize_worker_name(worker),
                     "order": extra.get("description", ""),
                     "revenue_total": "",
                     "revenue_services": "",
@@ -630,7 +745,10 @@ async def calculate_salaries(
                 })
         
         # Sort by worker
-        calculated_data.sort(key=lambda x: x.get("worker", ""))
+        calculated_data.sort(key=lambda x: normalize_worker_name(x.get("worker", "")))
+        
+        # Generate alarms AFTER calculation
+        alarms = generate_alarms(calculated_data, full_config)
         
         period = session["period"]
         workers = session["workers"]
@@ -638,11 +756,9 @@ async def calculate_salaries(
         # Create ZIP with all files
         zip_buffer = BytesIO()
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-            # Main report
             main_report = create_excel_report(calculated_data, period, full_config)
             zf.writestr(f"Общий_отчет {period}.xlsx", main_report)
             
-            # Individual reports
             for worker in workers:
                 worker_surname = worker.split()[0] if worker else "Unknown"
                 worker_report = create_worker_report(calculated_data, worker, period, full_config)
@@ -650,14 +766,17 @@ async def calculate_salaries(
         
         zip_buffer.seek(0)
         
-        # Save ZIP temporarily
         temp_path = f"/tmp/salary_report_{session_id}.zip"
         with open(temp_path, "wb") as f:
             f.write(zip_buffer.getvalue())
         
+        # Store alarms for response
+        session_data[session_id]["alarms"] = alarms
+        
         return JSONResponse({
             "success": True,
-            "download_url": f"/download/{session_id}"
+            "download_url": f"/download/{session_id}",
+            "alarms": alarms
         })
         
     except Exception as e:
