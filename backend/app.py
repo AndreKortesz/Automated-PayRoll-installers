@@ -29,6 +29,11 @@ app = FastAPI(title="Salary Calculator", description="Расчёт зарпла�
 
 # Templates and static files
 templates = Jinja2Templates(directory="../frontend/templates")
+
+# Create static directory if it doesn't exist (for Railway deployment)
+import pathlib
+static_dir = pathlib.Path("../frontend/static")
+static_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/static", StaticFiles(directory="../frontend/static"), name="static")
 
 # Configuration defaults
