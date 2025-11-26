@@ -851,11 +851,11 @@ def create_excel_report(data: List[dict], period: str, config: dict, for_workers
     return output.getvalue()
 
 
-def create_worker_report(data: List[dict], worker: str, period: str, config: dict) -> bytes:
+def create_worker_report(data: List[dict], worker: str, period: str, config: dict, for_workers: bool = False) -> bytes:
     """Create individual worker Excel report"""
     worker_normalized = normalize_worker_name(worker.replace(" (оплата клиентом)", ""))
     worker_data = [r for r in data if normalize_worker_name(r.get("worker", "").replace(" (оплата клиентом)", "")) == worker_normalized]
-    return create_excel_report(worker_data, period, config)
+    return create_excel_report(worker_data, period, config, for_workers=for_workers)
 
 
 @app.get("/")
@@ -975,32 +975,48 @@ async def calculate_salaries(
         period = session["period"]
         workers = session["workers"]
         
-        zip_buffer = BytesIO()
-        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-            # Full report (for accounting)
+        # Archive 1: Full reports (for accounting)
+        zip_full = BytesIO()
+        with zipfile.ZipFile(zip_full, "w", zipfile.ZIP_DEFLATED) as zf:
             main_report = create_excel_report(calculated_data, period, full_config, for_workers=False)
             zf.writestr(f"Общий_отчет {period}.xlsx", main_report)
             
-            # Simplified report for workers (hidden columns, simplified order text)
-            workers_report = create_excel_report(calculated_data, period, full_config, for_workers=True)
-            zf.writestr(f"Для_монтажников {period}.xlsx", workers_report)
+            for worker in workers:
+                worker_surname = worker.split()[0] if worker else "Unknown"
+                worker_report = create_worker_report(calculated_data, worker, period, full_config, for_workers=False)
+                zf.writestr(f"{worker_surname} {period}.xlsx", worker_report)
+        
+        zip_full.seek(0)
+        
+        # Archive 2: Simplified reports (for workers - hidden columns)
+        zip_workers = BytesIO()
+        with zipfile.ZipFile(zip_workers, "w", zipfile.ZIP_DEFLATED) as zf:
+            main_report = create_excel_report(calculated_data, period, full_config, for_workers=True)
+            zf.writestr(f"Общий_отчет {period}.xlsx", main_report)
             
             for worker in workers:
                 worker_surname = worker.split()[0] if worker else "Unknown"
-                worker_report = create_worker_report(calculated_data, worker, period, full_config)
+                worker_report = create_worker_report(calculated_data, worker, period, full_config, for_workers=True)
                 zf.writestr(f"{worker_surname} {period}.xlsx", worker_report)
         
-        zip_buffer.seek(0)
+        zip_workers.seek(0)
         
-        temp_path = f"/tmp/salary_report_{session_id}.zip"
-        with open(temp_path, "wb") as f:
-            f.write(zip_buffer.getvalue())
+        # Save both archives
+        temp_path_full = f"/tmp/salary_report_{session_id}_full.zip"
+        temp_path_workers = f"/tmp/salary_report_{session_id}_workers.zip"
+        
+        with open(temp_path_full, "wb") as f:
+            f.write(zip_full.getvalue())
+        
+        with open(temp_path_workers, "wb") as f:
+            f.write(zip_workers.getvalue())
         
         session_data[session_id]["alarms"] = alarms
         
         return JSONResponse({
             "success": True,
-            "download_url": f"/download/{session_id}",
+            "download_url_full": f"/download/{session_id}/full",
+            "download_url_workers": f"/download/{session_id}/workers",
             "alarms": alarms
         })
         
@@ -1008,18 +1024,31 @@ async def calculate_salaries(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.get("/download/{session_id}")
-async def download_report(session_id: str):
-    """Download generated ZIP file"""
-    temp_path = f"/tmp/salary_report_{session_id}.zip"
+@app.get("/download/{session_id}/{archive_type}")
+async def download_report(session_id: str, archive_type: str):
+    """Download generated ZIP file
+    
+    Args:
+        archive_type: 'full' for accounting reports, 'workers' for simplified reports
+    """
+    if archive_type not in ["full", "workers"]:
+        raise HTTPException(status_code=400, detail="Invalid archive type")
+    
+    temp_path = f"/tmp/salary_report_{session_id}_{archive_type}.zip"
     if not os.path.exists(temp_path):
         raise HTTPException(status_code=404, detail="File not found")
     
     period = session_data.get(session_id, {}).get("period", "report")
+    
+    if archive_type == "full":
+        filename = f"Зарплата_{period}.zip"
+    else:
+        filename = f"Для_монтажников_{period}.zip"
+    
     return FileResponse(
         temp_path,
         media_type="application/zip",
-        filename=f"Зарплата_{period}.zip"
+        filename=filename
     )
 
 
