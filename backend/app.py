@@ -45,7 +45,7 @@ DEFAULT_CONFIG = {
     "transport_amount": 1000,
     "transport_min_revenue": 10000,
     "transport_percent_min": 20,
-    "transport_percent_max": 40,
+    "transport_percent_max": 50,
     "diagnostic_percent": 50,
     "yandex_api_key": "9c140935-e689-4e9f-ab3a-46473474918e"
 }
@@ -71,6 +71,34 @@ def normalize_worker_name(name: str) -> str:
     if "(оплата клиентом)" in name:
         return f"{normalized} (оплата клиентом)"
     return normalized
+
+
+def format_order_short(order_text: str) -> str:
+    """Format order text for display: remove 'Заказ клиента' and time, keep code, date and address"""
+    if not order_text or pd.isna(order_text):
+        return ""
+    
+    text = str(order_text)
+    
+    # Skip special rows
+    if any(p in text for p in ["ОБУЧЕНИЕ", "В прошлом расчете"]):
+        return text
+    
+    # Pattern: "Заказ клиента КАУТ-001658 от 05.11.2025 23:59:59, адрес"
+    # Result: "КАУТ-001658 от 05.11.2025, адрес"
+    match = re.search(r'((?:КАУТ|ИБУТ|ТДУТ)-\d+)\s+от\s+(\d{2}\.\d{2}\.\d{4})\s+\d{1,2}:\d{2}:\d{2},?\s*(.*)', text)
+    if match:
+        code = match.group(1)
+        date = match.group(2)
+        address = match.group(3).strip()
+        # Clean address from \n and other artifacts
+        address = re.sub(r'\\n.*', '', address)
+        address = re.sub(r'\|.*', '', address)
+        return f"{code} от {date}, {address}".strip(', ')
+    
+    # Fallback: just remove "Заказ клиента" prefix
+    text = re.sub(r'^Заказ клиента\s+', '', text)
+    return text
 
 
 async def geocode_address_yandex(address: str, api_key: str) -> tuple:
@@ -306,22 +334,8 @@ def parse_excel_file(file_bytes: bytes, is_over_10k: bool) -> pd.DataFrame:
             worker_name = normalize_worker_name(worker_name)
             current_worker = worker_name
             
-            if is_client_payment_section and (pd.notna(row.iloc[4]) or pd.notna(row.iloc[10])):
-                records.append({
-                    "worker": current_worker,
-                    "order": first_col_str,
-                    "revenue_total": row.iloc[4] if pd.notna(row.iloc[4]) else 0,
-                    "revenue_services": row.iloc[5] if pd.notna(row.iloc[5]) else 0,
-                    "diagnostic": row.iloc[6] if pd.notna(row.iloc[6]) else 0,
-                    "diagnostic_payment": row.iloc[7] if pd.notna(row.iloc[7]) else 0,
-                    "specialist_fee": row.iloc[8] if pd.notna(row.iloc[8]) else 0,
-                    "additional_expenses": row.iloc[9] if pd.notna(row.iloc[9]) else 0,
-                    "service_payment": row.iloc[10] if pd.notna(row.iloc[10]) else 0,
-                    "percent": row.iloc[11],
-                    "is_over_10k": is_over_10k,
-                    "is_client_payment": True,
-                    "is_worker_total": True
-                })
+            # "(оплата клиентом)" строка - это заголовок секции, не записываем её как данные
+            continue
         else:
             if current_worker:
                 records.append({
@@ -343,73 +357,107 @@ def parse_excel_file(file_bytes: bytes, is_over_10k: bool) -> pd.DataFrame:
     return pd.DataFrame(records)
 
 
-def generate_alarms(data: List[dict], config: dict) -> List[Dict]:
-    """Generate warning alarms for manual review - AFTER calculation"""
-    alarms = []
+def generate_alarms(data: List[dict], config: dict) -> Dict[str, List[Dict]]:
+    """Generate warning alarms for manual review - AFTER calculation, grouped by category"""
+    alarms = {
+        "high_payment": [],
+        "non_standard_percent": [],
+        "high_specialist_fee": [],
+        "high_fuel": []
+    }
     
     for row in data:
         worker = row.get("worker", "")
         order = row.get("order", "")
+        is_client_payment = row.get("is_client_payment", False)
         
-        # Full row data for display
-        row_info = {
-            "Монтажник": worker,
-            "Заказ": order[:80] + "..." if len(str(order)) > 80 else order,
-            "Выручка итого": row.get("revenue_total", ""),
-            "Выручка от услуг": row.get("revenue_services", ""),
-            "Диагностика": row.get("diagnostic", ""),
-            "Оплата диагностики": row.get("diagnostic_payment", ""),
-            "Выручка (выезд)": row.get("specialist_fee", ""),
-            "Доп. расходы": row.get("additional_expenses", ""),
-            "Сумма оплаты": row.get("service_payment", ""),
-            "Процент": row.get("percent", ""),
-            "Оплата бензина": row.get("fuel_payment", ""),
-            "Транспортные": row.get("transport", ""),
-            "Итого": row.get("total", ""),
-            "Диагностика -50%": row.get("diagnostic_50", "")
-        }
+        # Skip worker total rows
+        if row.get("is_worker_total"):
+            continue
+        
+        # Determine section type for display
+        section = "оплата клиентом" if is_client_payment else "основная"
+        
+        # Full row data for display - filter out zeros and empty values
+        row_info = {}
+        fields = [
+            ("Монтажник", worker),
+            ("Секция", section),
+            ("Заказ", order),
+            ("Выручка итого", row.get("revenue_total", "")),
+            ("Выручка от услуг", row.get("revenue_services", "")),
+            ("Диагностика", row.get("diagnostic", "")),
+            ("Оплата диагностики", row.get("diagnostic_payment", "")),
+            ("Выручка (выезд)", row.get("specialist_fee", "")),
+            ("Доп. расходы", row.get("additional_expenses", "")),
+            ("Сумма оплаты", row.get("service_payment", "")),
+            ("Процент", row.get("percent", "")),
+            ("Оплата бензина", row.get("fuel_payment", "")),
+            ("Транспортные", row.get("transport", "")),
+            ("Итого", row.get("total", "")),
+            ("Диагностика -50%", row.get("diagnostic_50", ""))
+        ]
+        
+        for key, val in fields:
+            if val is not None and val != "" and val != 0 and not (isinstance(val, float) and pd.isna(val)):
+                row_info[key] = val
         
         # Alarm 1: service_payment > 20000
         service_payment = row.get("service_payment", 0)
         if pd.notna(service_payment) and service_payment != "" and float(service_payment) > 20000:
-            alarms.append({
+            alarms["high_payment"].append({
                 "type": "high_payment",
-                "message": f"⚠️ Сумма оплаты > 20000: {service_payment}",
+                "message": f"Сумма оплаты > 20000: {service_payment}",
                 "worker": worker,
                 "order": order,
+                "section": section,
                 "row_info": row_info
             })
         
         # Alarm 2: non-standard percent (not 30, 50, 100)
         percent = parse_percent(row.get("percent", 0))
         if percent > 0 and round(percent, 0) not in [30, 50, 100]:
-            alarms.append({
-                "type": "non_standard_percent",
-                "message": f"⚠️ Нестандартный процент: {percent:.1f}%",
-                "worker": worker,
-                "order": order,
-                "row_info": row_info
-            })
+            specialist_fee = float(row.get("specialist_fee", 0)) if pd.notna(row.get("specialist_fee")) and row.get("specialist_fee") != "" else 0
+            revenue_total = float(row.get("revenue_total", 0)) if pd.notna(row.get("revenue_total")) and row.get("revenue_total") != "" else 0
+            total = float(row.get("total", 0)) if pd.notna(row.get("total")) and row.get("total") != "" else 0
+            
+            # Check if specialist_fee >= 50% of revenue_total
+            should_skip = False
+            if revenue_total > 0 and specialist_fee >= (revenue_total * 0.5):
+                if total <= revenue_total:
+                    should_skip = True
+            
+            if not should_skip:
+                alarms["non_standard_percent"].append({
+                    "type": "non_standard_percent",
+                    "message": f"Нестандартный процент: {percent:.1f}%",
+                    "worker": worker,
+                    "order": order,
+                    "section": section,
+                    "row_info": row_info
+                })
         
         # Alarm 3: specialist_fee > 3500
         specialist_fee = row.get("specialist_fee", 0)
         if pd.notna(specialist_fee) and specialist_fee != "" and float(specialist_fee) > 3500:
-            alarms.append({
+            alarms["high_specialist_fee"].append({
                 "type": "high_specialist_fee",
-                "message": f"⚠️ Выручка (выезд) > 3500: {specialist_fee}",
+                "message": f"Выручка (выезд) > 3500: {specialist_fee}",
                 "worker": worker,
                 "order": order,
+                "section": section,
                 "row_info": row_info
             })
         
-        # Alarm 4: fuel_payment > 2000
+        # Alarm 4: fuel_payment > warning threshold
         fuel_payment = row.get("fuel_payment", 0)
         if pd.notna(fuel_payment) and fuel_payment != "" and float(fuel_payment) > config.get("fuel_warning", 2000):
-            alarms.append({
+            alarms["high_fuel"].append({
                 "type": "high_fuel",
-                "message": f"⚠️ Оплата бензина > {config.get('fuel_warning', 2000)}: {fuel_payment}",
+                "message": f"Оплата бензина > {config.get('fuel_warning', 2000)}: {fuel_payment}",
                 "worker": worker,
                 "order": order,
+                "section": section,
                 "row_info": row_info
             })
     
@@ -452,15 +500,15 @@ async def calculate_row(row: dict, config: dict, days_map: dict) -> dict:
         days = days_map.get(order, 1)
         result["fuel_payment"] = await calculate_fuel_cost(address, config, days)
     
-    # 2. Transport - only for montazh over 10k with 20-40% commission
-    if revenue_services > config["transport_min_revenue"] and config["transport_percent_min"] <= percent <= config["transport_percent_max"]:
+    # 2. Transport - only for revenue > 10k with percent < 50%
+    if revenue_services > config["transport_min_revenue"] and percent < 50:
         result["transport"] = config["transport_amount"]
     
     # 3. Diagnostic -50% - only for "оплата клиентом" rows with diagnostic
     if row.get("is_client_payment") and diagnostic > 0:
         result["diagnostic_50"] = diagnostic * config["diagnostic_percent"] / 100
     
-    # 4. Total
+    # 4. Total = service_payment + fuel + transport
     result["total"] = service_payment + result["fuel_payment"] + result["transport"]
     
     return result
@@ -472,21 +520,34 @@ def create_excel_report(data: List[dict], period: str, config: dict) -> bytes:
     ws = wb.active
     ws.title = "Лист_1"
     
-    # Styles matching the original format
-    header_font = Font(bold=True, size=10)
-    header_fill = PatternFill("solid", fgColor="DAEEF3")
-    data_font = Font(size=9)
-    worker_font = Font(bold=True, size=10)
-    total_font = Font(bold=True, size=10)
-    border = Border(
-        left=Side(style='thin', color='B8B8B8'),
-        right=Side(style='thin', color='B8B8B8'),
-        top=Side(style='thin', color='B8B8B8'),
-        bottom=Side(style='thin', color='B8B8B8')
-    )
+    # Colors
+    HEADER_BLUE = "4574A0"
+    ROW_LIGHT_BLUE = "C6E2FF"
+    DIAGNOSTIC_RED = "FF0000"
     
-    # Header rows (matching original file format)
-    ws['A1'] = ""
+    # Styles
+    header_font = Font(bold=True, size=9, color="FFFFFF")
+    header_fill = PatternFill("solid", fgColor=HEADER_BLUE)
+    data_font = Font(size=9)
+    worker_font = Font(bold=True, size=9)
+    worker_fill = PatternFill("solid", fgColor=ROW_LIGHT_BLUE)
+    diagnostic_header_fill = PatternFill("solid", fgColor=DIAGNOSTIC_RED)
+    
+    alignment_wrap = Alignment(horizontal='left', vertical='top', wrap_text=True)
+    alignment_center = Alignment(horizontal='center', vertical='center', wrap_text=True)
+    
+    # Column widths
+    column_widths = {
+        'A': 55, 'B': 0.5, 'C': 0.5, 'D': 0.5,
+        'E': 12, 'F': 13, 'G': 12, 'H': 13,
+        'I': 13, 'J': 15, 'K': 15, 'L': 14,
+        'M': 12, 'N': 12, 'O': 12, 'P': 14
+    }
+    
+    for col, width in column_widths.items():
+        ws.column_dimensions[col].width = width
+    
+    # Header rows
     ws['A2'] = "Параметры:"
     ws['C2'] = f"Период: {period}"
     ws['C3'] = f"Процент оплаты диагностики: 0,{config['diagnostic_percent']}"
@@ -494,35 +555,31 @@ def create_excel_report(data: List[dict], period: str, config: dict) -> bytes:
     
     # Column headers (row 6)
     headers = [
-        ("A", "Монтажник", 80),
-        ("B", "", 3),
-        ("C", "", 3),
-        ("D", "", 3),
-        ("E", "Выручка итого", 14),
-        ("F", "Выручка от услуг", 16),
-        ("G", "Диагностика", 12),
-        ("H", "Оплата диагностики", 17),
-        ("I", "Выручка (выезд) специалиста", 24),
-        ("J", "Доп. расходы (Оплата услуг помощников)", 32),
-        ("K", "Сумма оплаты от услуг", 20),
-        ("L", "Процент от выручки по услугам", 26),
-        ("M", "Оплата бензина", 14),
-        ("N", "Транспортные", 12),
-        ("O", "Итого", 12),
-        ("P", "Диагностика -50%", 16)
+        ("A", "Монтажник"), ("B", ""), ("C", ""), ("D", ""),
+        ("E", "Выручка итого"), ("F", "Выручка от услуг"),
+        ("G", "Диагностика"), ("H", "Оплата диагностики"),
+        ("I", "Выручка (выезд) специалиста"),
+        ("J", "Доп. расходы (Оплата услуг помощников)"),
+        ("K", "Сумма оплаты от услуг"),
+        ("L", "Процент от выручки по услугам"),
+        ("M", "Оплата бензина"), ("N", "Транспортные"),
+        ("O", "Итого"), ("P", "Диагностика -50%")
     ]
     
-    for col_letter, header_text, width in headers:
+    for col_letter, header_text in headers:
         cell = ws[f"{col_letter}6"]
         cell.value = header_text
         cell.font = header_font
-        cell.fill = header_fill
-        cell.border = border
-        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-        ws.column_dimensions[col_letter].width = width
+        cell.fill = header_fill if col_letter != "P" else diagnostic_header_fill
+        cell.alignment = alignment_center
     
     ws['A7'] = "Заказ, Комментарий"
-    ws['A7'].font = data_font
+    ws['A7'].font = Font(bold=True, size=9, color="FFFFFF")
+    ws['A7'].fill = header_fill
+    ws['A7'].alignment = alignment_wrap
+    
+    ws.row_dimensions[6].height = 30
+    ws.row_dimensions[7].height = 20
     
     # Group data by worker
     workers_data = {}
@@ -546,12 +603,19 @@ def create_excel_report(data: List[dict], period: str, config: dict) -> bytes:
         regular_rows = worker_data["regular"]
         client_rows = worker_data["client_payment"]
         
-        # Worker name row with formulas for totals
+        # Worker name row
         worker_name_row = current_row
-        ws.cell(row=current_row, column=1, value=worker).font = worker_font
+        cell = ws.cell(row=current_row, column=1, value=worker)
+        cell.font = worker_font
+        cell.fill = worker_fill
+        cell.alignment = alignment_wrap
+        
+        for col in range(1, 17):
+            ws.cell(row=current_row, column=col).fill = worker_fill
+        
+        ws.row_dimensions[current_row].height = 18
         current_row += 1
         
-        # Track row ranges for formulas
         regular_start = current_row
         
         # Regular orders
@@ -559,7 +623,9 @@ def create_excel_report(data: List[dict], period: str, config: dict) -> bytes:
             if record.get("is_worker_total"):
                 continue
             
-            ws.cell(row=current_row, column=1, value=record.get("order", "")).font = data_font
+            cell = ws.cell(row=current_row, column=1, value=record.get("order", ""))
+            cell.font = data_font
+            cell.alignment = alignment_wrap
             
             for col, key in [(5, "revenue_total"), (6, "revenue_services"), (7, "diagnostic"),
                             (8, "diagnostic_payment"), (9, "specialist_fee"), (10, "additional_expenses"),
@@ -568,30 +634,42 @@ def create_excel_report(data: List[dict], period: str, config: dict) -> bytes:
                 if val != "" and val != 0 and pd.notna(val):
                     ws.cell(row=current_row, column=col, value=val).font = data_font
             
-            # Percent
             ws.cell(row=current_row, column=12, value=record.get("percent", "")).font = data_font
             
-            # Calculated columns
-            for col, key in [(13, "fuel_payment"), (14, "transport"), (15, "total"), (16, "diagnostic_50")]:
-                val = record.get(key, "")
-                if val != "" and val != 0:
-                    ws.cell(row=current_row, column=col, value=val).font = data_font
+            fuel = record.get("fuel_payment", 0)
+            transport = record.get("transport", 0)
+            
+            if fuel and fuel != 0:
+                ws.cell(row=current_row, column=13, value=fuel).font = data_font
+            if transport and transport != 0:
+                ws.cell(row=current_row, column=14, value=transport).font = data_font
+            
+            ws.cell(row=current_row, column=15, value=f"=K{current_row}+M{current_row}+N{current_row}").font = data_font
             
             current_row += 1
         
         regular_end = current_row - 1
         
-        # Add formulas for worker total row (regular)
+        # Formulas for worker total row
         if regular_end >= regular_start:
-            for col in [5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16]:
+            for col in [13, 14]:
                 col_letter = get_column_letter(col)
                 formula = f"=SUM({col_letter}{regular_start}:{col_letter}{regular_end})"
                 ws.cell(row=worker_name_row, column=col, value=formula).font = worker_font
         
         # Client payment section
+        client_name_row = None
         if client_rows:
             client_name_row = current_row
-            ws.cell(row=current_row, column=1, value=f"{worker} (оплата клиентом)").font = worker_font
+            cell = ws.cell(row=current_row, column=1, value=f"{worker} (оплата клиентом)")
+            cell.font = worker_font
+            cell.fill = worker_fill
+            cell.alignment = alignment_wrap
+            
+            for col in range(1, 17):
+                ws.cell(row=current_row, column=col).fill = worker_fill
+            
+            ws.row_dimensions[current_row].height = 18
             current_row += 1
             
             client_start = current_row
@@ -600,7 +678,9 @@ def create_excel_report(data: List[dict], period: str, config: dict) -> bytes:
                 if record.get("is_worker_total"):
                     continue
                 
-                ws.cell(row=current_row, column=1, value=record.get("order", "")).font = data_font
+                cell = ws.cell(row=current_row, column=1, value=record.get("order", ""))
+                cell.font = data_font
+                cell.alignment = alignment_wrap
                 
                 for col, key in [(5, "revenue_total"), (6, "revenue_services"), (7, "diagnostic"),
                                 (8, "diagnostic_payment"), (9, "specialist_fee"), (10, "additional_expenses"),
@@ -610,27 +690,38 @@ def create_excel_report(data: List[dict], period: str, config: dict) -> bytes:
                         ws.cell(row=current_row, column=col, value=val).font = data_font
                 
                 ws.cell(row=current_row, column=12, value=record.get("percent", "")).font = data_font
+                ws.cell(row=current_row, column=15, value=f"=K{current_row}+M{current_row}+N{current_row}").font = data_font
                 
-                for col, key in [(13, "fuel_payment"), (14, "transport"), (15, "total"), (16, "diagnostic_50")]:
-                    val = record.get(key, "")
-                    if val != "" and val != 0:
-                        ws.cell(row=current_row, column=col, value=val).font = data_font
+                diag_50 = record.get("diagnostic_50", 0)
+                if diag_50 and diag_50 != 0:
+                    ws.cell(row=current_row, column=16, value=diag_50).font = data_font
                 
                 current_row += 1
             
             client_end = current_row - 1
             
-            # Add formulas for client payment total row
             if client_end >= client_start:
-                for col in [5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16]:
-                    col_letter = get_column_letter(col)
-                    formula = f"=SUM({col_letter}{client_start}:{col_letter}{client_end})"
-                    ws.cell(row=client_name_row, column=col, value=formula).font = worker_font
+                col_o = get_column_letter(15)
+                col_p = get_column_letter(16)
+                ws.cell(row=client_name_row, column=15, value=f"=SUM({col_o}{client_start}:{col_o}{client_end})").font = worker_font
+                ws.cell(row=client_name_row, column=16, value=f"=SUM({col_p}{client_start}:{col_p}{client_end})").font = worker_font
+                ws.cell(row=client_name_row, column=13, value=0).font = worker_font
+                ws.cell(row=client_name_row, column=14, value=0).font = worker_font
         
-        # Empty row between workers
+        # Main worker row Итого formula
+        if client_rows and client_name_row:
+            if regular_end >= regular_start:
+                formula = f"=SUM(O{regular_start}:O{regular_end})+O{client_name_row}-P{client_name_row}"
+            else:
+                formula = f"=O{client_name_row}-P{client_name_row}"
+            ws.cell(row=worker_name_row, column=15, value=formula).font = worker_font
+        else:
+            if regular_end >= regular_start:
+                formula = f"=SUM(O{regular_start}:O{regular_end})"
+                ws.cell(row=worker_name_row, column=15, value=formula).font = worker_font
+        
         current_row += 1
     
-    # Save to bytes
     output = BytesIO()
     wb.save(output)
     output.seek(0)
@@ -668,13 +759,22 @@ async def upload_files(
         
         combined = pd.concat([df_over, df_under], ignore_index=True)
         
-        # Get unique workers (normalized)
-        workers = list(set([normalize_worker_name(w) for w in combined["worker"].unique() if w and not pd.isna(w)]))
+        workers = list(set([normalize_worker_name(w).replace(" (оплата клиентом)", "") 
+                           for w in combined["worker"].unique() if w and not pd.isna(w)]))
         workers = sorted(workers)
         
-        # Get orders for days input
-        orders = combined[["worker", "order"]].to_dict("records")
-        orders = [o for o in orders if o.get("order") and not str(o.get("order", "")).startswith(("ОБУЧЕНИЕ", "В прошлом"))]
+        orders = []
+        for _, row in combined.iterrows():
+            order = row.get("order", "")
+            worker = row.get("worker", "")
+            if order and not str(order).startswith(("ОБУЧЕНИЕ", "В прошлом")):
+                orders.append({
+                    "worker": worker.replace(" (оплата клиентом)", ""),
+                    "order": order,
+                    "order_short": format_order_short(order)
+                })
+        
+        orders.sort(key=lambda x: x["worker"])
         
         session_id = datetime.now().strftime("%Y%m%d%H%M%S")
         session_data[session_id] = {
@@ -715,13 +815,11 @@ async def calculate_salaries(
         
         full_config = {**DEFAULT_CONFIG, **config}
         
-        # Calculate each row
         calculated_data = []
         for row in session["combined"]:
             calc_row = await calculate_row(row, full_config, days_map)
             calculated_data.append(calc_row)
         
-        # Add extra rows
         for worker, rows in extra_rows.items():
             for extra in rows:
                 calculated_data.append({
@@ -744,16 +842,13 @@ async def calculate_salaries(
                     "total": float(extra.get("amount", 0))
                 })
         
-        # Sort by worker
-        calculated_data.sort(key=lambda x: normalize_worker_name(x.get("worker", "")))
+        calculated_data.sort(key=lambda x: normalize_worker_name(x.get("worker", "")).replace(" (оплата клиентом)", ""))
         
-        # Generate alarms AFTER calculation
         alarms = generate_alarms(calculated_data, full_config)
         
         period = session["period"]
         workers = session["workers"]
         
-        # Create ZIP with all files
         zip_buffer = BytesIO()
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
             main_report = create_excel_report(calculated_data, period, full_config)
@@ -770,7 +865,6 @@ async def calculate_salaries(
         with open(temp_path, "wb") as f:
             f.write(zip_buffer.getvalue())
         
-        # Store alarms for response
         session_data[session_id]["alarms"] = alarms
         
         return JSONResponse({
