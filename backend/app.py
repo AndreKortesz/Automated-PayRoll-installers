@@ -215,23 +215,31 @@ async def get_distance_osrm(lat1: float, lon1: float, lat2: float, lon2: float) 
 
 
 def is_moscow_region(address: str) -> bool:
-    """Check if address is in Moscow or Moscow Oblast"""
+    """Check if address is in Moscow or Moscow Oblast
+    
+    Logic: Consider address as Moscow/MO unless it explicitly mentions another region.
+    This is because most orders are in Moscow area and addresses often don't include city name.
+    """
     if not address:
         return False
+    
     addr_lower = address.lower()
-    moscow_keywords = [
-        "москва", "московская", "мо,", "м.о.", "го ", "г.о.", 
-        "мытищи", "химки", "одинцово", "щелково", "люберцы", "балашиха",
-        "красногорск", "подольск", "королев", "долгопрудный", "реутов",
-        "домодедово", "раменск", "серпухов", "ногинск", "пушкино",
-        "коломна", "электросталь", "орехово-зуево", "сергиев посад",
-        "наро-фоминск", "дмитров", "клин", "солнечногорск", "истра",
-        "волоколамск", "можайск", "руза", "шатура", "егорьевск",
-        "воскресенск", "ступино", "кашира", "озеры", "зарайск",
-        "коттеджный", "снт", "днп", "кп ", "деревня", "село",
-        "поселок", "городской округ", "район"
+    
+    # Explicit non-Moscow regions - if found, return False
+    non_moscow_keywords = [
+        "санкт-петербург", "спб", "ленинградск", "петербург",
+        "краснодар", "сочи", "новосибирск", "екатеринбург", 
+        "казань", "нижний новгород", "челябинск", "самара",
+        "омск", "ростов-на-дону", "уфа", "красноярск", "пермь",
+        "воронеж", "волгоград", "саратов", "тюмень", "тольятти",
+        "крым", "севастополь", "калининград"
     ]
-    return any(kw in addr_lower for kw in moscow_keywords)
+    
+    if any(kw in addr_lower for kw in non_moscow_keywords):
+        return False
+    
+    # If no explicit non-Moscow region, assume it's Moscow/MO area
+    return True
 
 
 async def calculate_fuel_cost(address: str, config: dict, days: int = 1) -> int:
