@@ -44,9 +44,11 @@ DEFAULT_CONFIG = {
     "fuel_warning": 2000,
     "transport_amount": 1000,
     "transport_min_revenue": 10000,
-    "transport_percent_min": 20,
     "transport_percent_max": 50,
     "diagnostic_percent": 50,
+    "alarm_high_payment": 20000,
+    "alarm_high_specialist": 3500,
+    "standard_percents": [30, 50, 100],
     "yandex_api_key": "9c140935-e689-4e9f-ab3a-46473474918e"
 }
 
@@ -442,21 +444,23 @@ def generate_alarms(data: List[dict], config: dict) -> Dict[str, List[Dict]]:
             if val is not None and val != "" and val != 0 and not (isinstance(val, float) and pd.isna(val)):
                 row_info[key] = val
         
-        # Alarm 1: service_payment > 20000
+        # Alarm 1: service_payment > threshold
         service_payment = row.get("service_payment", 0)
-        if pd.notna(service_payment) and service_payment != "" and float(service_payment) > 20000:
+        high_payment_threshold = config.get("alarm_high_payment", 20000)
+        if pd.notna(service_payment) and service_payment != "" and float(service_payment) > high_payment_threshold:
             alarms["high_payment"].append({
                 "type": "high_payment",
-                "message": f"Сумма оплаты > 20000: {service_payment}",
+                "message": f"Сумма оплаты > {high_payment_threshold}: {service_payment}",
                 "worker": worker,
                 "order": order,
                 "section": section,
                 "row_info": row_info
             })
         
-        # Alarm 2: non-standard percent (not 30, 50, 100)
+        # Alarm 2: non-standard percent (configurable)
         percent = parse_percent(row.get("percent", 0))
-        if percent > 0 and round(percent, 0) not in [30, 50, 100]:
+        standard_percents = config.get("standard_percents", [30, 50, 100])
+        if percent > 0 and round(percent, 0) not in standard_percents:
             specialist_fee = float(row.get("specialist_fee", 0)) if pd.notna(row.get("specialist_fee")) and row.get("specialist_fee") != "" else 0
             revenue_total = float(row.get("revenue_total", 0)) if pd.notna(row.get("revenue_total")) and row.get("revenue_total") != "" else 0
             total = float(row.get("total", 0)) if pd.notna(row.get("total")) and row.get("total") != "" else 0
@@ -477,12 +481,13 @@ def generate_alarms(data: List[dict], config: dict) -> Dict[str, List[Dict]]:
                     "row_info": row_info
                 })
         
-        # Alarm 3: specialist_fee > 3500
+        # Alarm 3: specialist_fee > threshold
         specialist_fee = row.get("specialist_fee", 0)
-        if pd.notna(specialist_fee) and specialist_fee != "" and float(specialist_fee) > 3500:
+        high_specialist_threshold = config.get("alarm_high_specialist", 3500)
+        if pd.notna(specialist_fee) and specialist_fee != "" and float(specialist_fee) > high_specialist_threshold:
             alarms["high_specialist_fee"].append({
                 "type": "high_specialist_fee",
-                "message": f"Выручка (выезд) > 3500: {specialist_fee}",
+                "message": f"Выручка (выезд) > {high_specialist_threshold}: {specialist_fee}",
                 "worker": worker,
                 "order": order,
                 "section": section,
