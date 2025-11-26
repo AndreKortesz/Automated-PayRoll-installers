@@ -17,7 +17,7 @@
             padding: 20px;
         }
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
         }
         .card {
@@ -121,92 +121,60 @@
             color: #666;
             font-size: 14px;
         }
-        .alarms {
-            background: #fff3cd;
-            border: 1px solid #ffc107;
-            border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 20px;
-        }
-        .alarms h3 {
-            color: #856404;
-            margin-bottom: 10px;
-        }
-        .alarm-item {
-            background: white;
-            padding: 15px;
-            border-radius: 6px;
-            margin-bottom: 10px;
-            border-left: 4px solid #ffc107;
-        }
-        .alarm-item:last-child {
-            margin-bottom: 0;
-        }
-        .alarm-message {
-            font-weight: bold;
-            color: #856404;
-            margin-bottom: 10px;
-        }
-        .alarm-details {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 8px;
-            font-size: 12px;
-        }
-        .alarm-detail {
-            background: #f8f9fa;
-            padding: 6px 10px;
-            border-radius: 4px;
-        }
-        .alarm-detail-label {
-            font-weight: 600;
-            color: #666;
-        }
-        .alarm-detail-value {
-            color: #333;
-        }
         .settings-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
             gap: 15px;
         }
-        .workers-section {
-            margin-top: 20px;
+        
+        /* Workers horizontal layout */
+        .workers-horizontal {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-top: 15px;
         }
-        .worker-block {
+        .worker-card {
             background: #f8f9fa;
             border-radius: 8px;
             padding: 15px;
-            margin-bottom: 15px;
+            min-width: 280px;
+            flex: 1;
+            max-width: 400px;
         }
         .worker-name {
             font-weight: bold;
             color: #333;
             margin-bottom: 10px;
+            font-size: 14px;
         }
         .extra-row {
             display: flex;
-            gap: 10px;
-            margin-bottom: 10px;
+            gap: 8px;
+            margin-bottom: 8px;
         }
         .extra-row input {
             flex: 1;
+            padding: 8px;
+            font-size: 13px;
         }
         .extra-row input:first-child {
             flex: 2;
         }
         .btn-add {
             background: #28a745;
-            padding: 8px 16px;
-            font-size: 14px;
+            padding: 6px 12px;
+            font-size: 12px;
         }
         .btn-remove {
             background: #dc3545;
-            padding: 8px 12px;
-            font-size: 14px;
+            padding: 6px 10px;
+            font-size: 12px;
         }
+        
+        /* Days table */
         .days-table {
-            max-height: 400px;
+            max-height: 500px;
             overflow-y: auto;
             margin-bottom: 20px;
         }
@@ -225,11 +193,17 @@
             position: sticky;
             top: 0;
         }
+        td.order-cell {
+            max-width: 500px;
+            word-wrap: break-word;
+        }
         .days-input {
             width: 60px;
             padding: 6px;
             text-align: center;
         }
+        
+        /* Loading and success */
         .loading {
             display: none;
             text-align: center;
@@ -287,6 +261,122 @@
         }
         .collapsible.collapsed {
             max-height: 0;
+        }
+        
+        /* Alarms tabs */
+        .alarms-container {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .alarms-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        .alarm-tab {
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: transform 0.2s;
+        }
+        .alarm-tab:hover {
+            transform: translateY(-2px);
+        }
+        .alarm-tab.active {
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        .alarm-tab-count {
+            background: rgba(255,255,255,0.3);
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+        }
+        .alarm-tab.high-payment {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .alarm-tab.non-standard-percent {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .alarm-tab.high-specialist-fee {
+            background: #d4edda;
+            color: #155724;
+        }
+        .alarm-tab.high-fuel {
+            background: #cce5ff;
+            color: #004085;
+        }
+        .alarm-content {
+            display: none;
+        }
+        .alarm-content.active {
+            display: block;
+        }
+        .alarm-item {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border-left: 4px solid #ffc107;
+        }
+        .alarm-item.high-payment {
+            border-left-color: #dc3545;
+        }
+        .alarm-item.non-standard-percent {
+            border-left-color: #ffc107;
+        }
+        .alarm-item.high-specialist-fee {
+            border-left-color: #28a745;
+        }
+        .alarm-item.high-fuel {
+            border-left-color: #007bff;
+        }
+        .alarm-message {
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .alarm-section-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            margin-left: 10px;
+        }
+        .alarm-section-badge.main {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+        .alarm-section-badge.client {
+            background: #fce4ec;
+            color: #c2185b;
+        }
+        .alarm-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 8px;
+            font-size: 12px;
+        }
+        .alarm-detail {
+            background: #f8f9fa;
+            padding: 8px 12px;
+            border-radius: 4px;
+        }
+        .alarm-detail-label {
+            font-weight: 600;
+            color: #666;
+        }
+        .alarm-detail-value {
+            color: #333;
+            word-break: break-word;
         }
     </style>
 </head>
@@ -367,10 +457,10 @@
                     <div class="days-table" id="daysTable"></div>
                 </div>
                 
-                <!-- Extra rows -->
+                <!-- Extra rows - horizontal layout -->
                 <h3 class="toggle-section" onclick="toggleSection('extraContent')">➕ Дополнительные начисления ▼</h3>
                 <div class="collapsible" id="extraContent">
-                    <div id="workersExtra"></div>
+                    <div class="workers-horizontal" id="workersExtra"></div>
                 </div>
                 
                 <div style="margin-top: 20px;">
@@ -394,10 +484,11 @@
                     <a href="#" class="download-link" id="downloadLink">📥 Скачать ZIP архив</a>
                 </div>
                 
-                <!-- Alarms after calculation -->
-                <div class="alarms hidden" id="alarmsSection">
+                <!-- Alarms with tabs -->
+                <div class="alarms-container hidden" id="alarmsSection">
                     <h3>⚠️ Предупреждения для проверки</h3>
-                    <div id="alarmsList"></div>
+                    <div class="alarms-tabs" id="alarmsTabs"></div>
+                    <div id="alarmsContent"></div>
                 </div>
                 
                 <div style="margin-top: 20px;">
@@ -412,6 +503,13 @@
         let workers = [];
         let orders = [];
         let extraRows = {};
+        
+        const alarmTypeNames = {
+            'high_payment': 'Сумма оплаты > 20000',
+            'non_standard_percent': 'Нестандартный процент',
+            'high_specialist_fee': 'Выручка (выезд) > 3500',
+            'high_fuel': 'Высокая оплата бензина'
+        };
         
         function toggleSection(id) {
             const el = document.getElementById(id);
@@ -459,28 +557,27 @@
                         </div>
                     `;
                     
-                    // Build days table
+                    // Build days table - sorted by worker, using short order format
                     let daysHtml = '<table><thead><tr><th>Монтажник</th><th>Заказ</th><th>Дни</th></tr></thead><tbody>';
                     orders.forEach((order, idx) => {
-                        const shortOrder = order.order.length > 60 ? order.order.substring(0, 60) + '...' : order.order;
                         daysHtml += `<tr>
                             <td>${order.worker}</td>
-                            <td title="${order.order}">${shortOrder}</td>
+                            <td class="order-cell">${order.order_short}</td>
                             <td><input type="number" class="days-input" id="days_${idx}" value="1" min="1" data-order="${encodeURIComponent(order.order)}"></td>
                         </tr>`;
                     });
                     daysHtml += '</tbody></table>';
                     document.getElementById('daysTable').innerHTML = daysHtml;
                     
-                    // Build extra rows section
+                    // Build extra rows section - horizontal layout
                     let extraHtml = '';
                     workers.forEach(worker => {
                         extraRows[worker] = [];
                         extraHtml += `
-                            <div class="worker-block">
+                            <div class="worker-card">
                                 <div class="worker-name">${worker}</div>
                                 <div id="extra_${worker.replace(/\s+/g, '_')}"></div>
-                                <button class="btn btn-add" onclick="addExtraRow('${worker}')">+ Добавить строку</button>
+                                <button class="btn btn-add" onclick="addExtraRow('${worker}')">+ Добавить</button>
                             </div>
                         `;
                     });
@@ -504,7 +601,7 @@
             div.className = 'extra-row';
             div.id = `extra_row_${worker.replace(/\s+/g, '_')}_${idx}`;
             div.innerHTML = `
-                <input type="text" placeholder="Описание (напр. Эвакуатор)" id="extra_desc_${worker.replace(/\s+/g, '_')}_${idx}">
+                <input type="text" placeholder="Описание" id="extra_desc_${worker.replace(/\s+/g, '_')}_${idx}">
                 <input type="number" placeholder="Сумма" id="extra_amount_${worker.replace(/\s+/g, '_')}_${idx}">
                 <button class="btn btn-remove" onclick="removeExtraRow('${worker}', ${idx})">✕</button>
             `;
@@ -517,6 +614,14 @@
             const row = document.getElementById(rowId);
             if (row) row.remove();
             extraRows[worker] = extraRows[worker].filter(r => r.idx !== idx);
+        }
+        
+        function showAlarmTab(type) {
+            document.querySelectorAll('.alarm-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.alarm-content').forEach(c => c.classList.remove('active'));
+            
+            document.querySelector(`.alarm-tab.${type}`).classList.add('active');
+            document.getElementById(`alarm-content-${type}`).classList.add('active');
         }
         
         async function calculate() {
@@ -581,32 +686,68 @@
                     document.getElementById('successSection').classList.remove('hidden');
                     document.getElementById('downloadLink').href = data.download_url;
                     
-                    // Show alarms if any
-                    if (data.alarms && data.alarms.length > 0) {
+                    // Show alarms with tabs
+                    const alarms = data.alarms;
+                    const hasAlarms = Object.values(alarms).some(arr => arr.length > 0);
+                    
+                    if (hasAlarms) {
                         document.getElementById('alarmsSection').classList.remove('hidden');
-                        let alarmsHtml = '';
-                        data.alarms.forEach(alarm => {
-                            let detailsHtml = '';
-                            if (alarm.row_info) {
-                                for (const [key, value] of Object.entries(alarm.row_info)) {
-                                    if (value !== '' && value !== null && value !== undefined) {
-                                        detailsHtml += `
-                                            <div class="alarm-detail">
-                                                <span class="alarm-detail-label">${key}:</span>
-                                                <span class="alarm-detail-value">${value}</span>
-                                            </div>
-                                        `;
+                        
+                        // Build tabs
+                        let tabsHtml = '';
+                        let contentHtml = '';
+                        let firstActive = true;
+                        
+                        for (const [type, items] of Object.entries(alarms)) {
+                            if (items.length > 0) {
+                                const activeClass = firstActive ? 'active' : '';
+                                tabsHtml += `
+                                    <div class="alarm-tab ${type.replace(/_/g, '-')} ${activeClass}" onclick="showAlarmTab('${type.replace(/_/g, '-')}')">
+                                        ${alarmTypeNames[type]}
+                                        <span class="alarm-tab-count">${items.length}</span>
+                                    </div>
+                                `;
+                                
+                                let itemsHtml = '';
+                                items.forEach(alarm => {
+                                    const sectionBadge = alarm.section === 'оплата клиентом' 
+                                        ? '<span class="alarm-section-badge client">оплата клиентом</span>'
+                                        : '<span class="alarm-section-badge main">основная</span>';
+                                    
+                                    let detailsHtml = '';
+                                    if (alarm.row_info) {
+                                        for (const [key, value] of Object.entries(alarm.row_info)) {
+                                            if (key !== 'Секция') {
+                                                detailsHtml += `
+                                                    <div class="alarm-detail">
+                                                        <span class="alarm-detail-label">${key}:</span>
+                                                        <span class="alarm-detail-value">${value}</span>
+                                                    </div>
+                                                `;
+                                            }
+                                        }
                                     }
-                                }
+                                    
+                                    itemsHtml += `
+                                        <div class="alarm-item ${type.replace(/_/g, '-')}">
+                                            <div class="alarm-message">${alarm.message} ${sectionBadge}</div>
+                                            <div class="alarm-details">${detailsHtml}</div>
+                                        </div>
+                                    `;
+                                });
+                                
+                                contentHtml += `
+                                    <div class="alarm-content ${activeClass}" id="alarm-content-${type.replace(/_/g, '-')}">
+                                        ${itemsHtml}
+                                    </div>
+                                `;
+                                
+                                firstActive = false;
                             }
-                            alarmsHtml += `
-                                <div class="alarm-item">
-                                    <div class="alarm-message">${alarm.message}</div>
-                                    <div class="alarm-details">${detailsHtml}</div>
-                                </div>
-                            `;
-                        });
-                        document.getElementById('alarmsList').innerHTML = alarmsHtml;
+                        }
+                        
+                        document.getElementById('alarmsTabs').innerHTML = tabsHtml;
+                        document.getElementById('alarmsContent').innerHTML = contentHtml;
                     }
                 } else {
                     alert('Ошибка расчёта: ' + (data.detail || 'Неизвестная ошибка'));
