@@ -767,11 +767,13 @@ async def upload_files(
         for _, row in combined.iterrows():
             order = row.get("order", "")
             worker = row.get("worker", "")
+            is_client = row.get("is_client_payment", False)
             if order and not str(order).startswith(("ОБУЧЕНИЕ", "В прошлом")):
                 orders.append({
                     "worker": worker.replace(" (оплата клиентом)", ""),
                     "order": order,
-                    "order_short": format_order_short(order)
+                    "order_short": format_order_short(order),
+                    "is_client_payment": is_client
                 })
         
         orders.sort(key=lambda x: x["worker"])
