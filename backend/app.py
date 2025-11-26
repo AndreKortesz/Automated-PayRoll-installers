@@ -230,7 +230,8 @@ async def calculate_fuel_cost(address: str, config: dict, days: int = 1) -> int:
         return 0
     
     cost = distance * 2 * config["fuel_coefficient"] * days
-    cost = round(cost / 100) * 100
+    import math
+    cost = math.ceil(cost / 100) * 100
     
     return min(cost, config["fuel_max"])
 
