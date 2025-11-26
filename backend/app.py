@@ -726,8 +726,14 @@ def create_excel_report(data: List[dict], period: str, config: dict, for_workers
             c.font = data_font
             c.border = thin_border
             
-            # Итого formula - column L (12): =H+J+K
-            c = ws.cell(row=current_row, column=12, value=f"=H{current_row}+J{current_row}+K{current_row}")
+            # Итого - column L (12)
+            # For extra rows (additional payments), output value directly
+            # For regular rows, use formula =H+J+K
+            if record.get("is_extra_row"):
+                total_val = to_int(record.get("total", 0))
+                c = ws.cell(row=current_row, column=12, value=total_val if total_val else None)
+            else:
+                c = ws.cell(row=current_row, column=12, value=f"=H{current_row}+J{current_row}+K{current_row}")
             c.font = data_font
             c.border = thin_border
             
@@ -955,6 +961,7 @@ async def calculate_salaries(
                     "is_over_10k": False,
                     "is_client_payment": False,
                     "is_worker_total": False,
+                    "is_extra_row": True,  # Flag for extra rows
                     "fuel_payment": "",
                     "transport": "",
                     "diagnostic_50": "",
