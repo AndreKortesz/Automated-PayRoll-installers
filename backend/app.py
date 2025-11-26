@@ -595,10 +595,11 @@ def create_excel_report(data: List[dict], period: str, config: dict, for_workers
     for col, width in column_widths.items():
         ws.column_dimensions[col].width = width
     
-    # Hide columns for workers version: B (Выручка итого), C (Выручка от услуг), H (Сумма оплаты), I (Процент)
+    # Hide columns for workers version: B (Выручка итого), C (Выручка от услуг), G (Доп. расходы), H (Сумма оплаты), I (Процент)
     if for_workers:
         ws.column_dimensions['B'].hidden = True
         ws.column_dimensions['C'].hidden = True
+        ws.column_dimensions['G'].hidden = True
         ws.column_dimensions['H'].hidden = True
         ws.column_dimensions['I'].hidden = True
     
