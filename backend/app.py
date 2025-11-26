@@ -540,14 +540,26 @@ async def calculate_row(row: dict, config: dict, days_map: dict) -> dict:
     diagnostic = row.get("diagnostic", 0)
     diagnostic = float(diagnostic) if pd.notna(diagnostic) and diagnostic != "" else 0
     
+    # Get worker name for company car check
+    worker = row.get("worker", "").replace(" (оплата клиентом)", "")
+    worker_normalized = normalize_worker_name(worker)
+    
+    # Get list of workers on company car (transport = 0)
+    company_car_workers = config.get("company_car_workers", [])
+    company_car_normalized = [normalize_worker_name(w) for w in company_car_workers]
+    is_on_company_car = worker_normalized in company_car_normalized
+    
     # 1. Fuel payment - only if specialist_fee is empty and has real address in Moscow/MO
     if specialist_fee == 0 and address:
         days = days_map.get(order, 1)
         result["fuel_payment"] = await calculate_fuel_cost(address, config, days)
     
-    # 2. Transport - only for revenue > 10k with percent < 50%
+    # 2. Transport - only for revenue > 10k with percent < 50%, and NOT on company car
     if revenue_services > config["transport_min_revenue"] and percent < 50:
-        result["transport"] = config["transport_amount"]
+        if is_on_company_car:
+            result["transport"] = 0  # On company car - no transport payment
+        else:
+            result["transport"] = config["transport_amount"]
     
     # 3. Diagnostic -50% - only for "оплата клиентом" rows with diagnostic
     if row.get("is_client_payment") and diagnostic > 0:
