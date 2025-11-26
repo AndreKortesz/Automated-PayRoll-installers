@@ -102,7 +102,7 @@ def format_order_short(order_text: str) -> str:
 
 
 def format_order_for_workers(order_text: str) -> str:
-    """Format order text for workers: remove code, keep only date and address with comment"""
+    """Format order text for workers: keep code, date, address and comment. Remove 'Заказ клиента' and time"""
     if not order_text or pd.isna(order_text):
         return ""
     
@@ -113,19 +113,20 @@ def format_order_for_workers(order_text: str) -> str:
         return text
     
     # Pattern: "Заказ клиента КАУТ-001658 от 05.11.2025 23:59:59, адрес, комментарий"
-    # Result: "05.11.2025, адрес, комментарий"
-    match = re.search(r'(?:КАУТ|ИБУТ|ТДУТ)-\d+\s+от\s+(\d{2}\.\d{2}\.\d{4})\s+\d{1,2}:\d{2}:\d{2},?\s*(.*)', text)
+    # Result: "КАУТ-001658, 05.11.2025, адрес, комментарий"
+    match = re.search(r'((?:КАУТ|ИБУТ|ТДУТ)-\d+)\s+от\s+(\d{2}\.\d{2}\.\d{4})\s+\d{1,2}:\d{2}:\d{2},?\s*(.*)', text)
     if match:
-        date = match.group(1)
-        address_and_comment = match.group(2).strip()
+        code = match.group(1)
+        date = match.group(2)
+        address_and_comment = match.group(3).strip()
         # Clean from \n and other artifacts
         address_and_comment = re.sub(r'\\n.*', '', address_and_comment)
         address_and_comment = re.sub(r'\|.*', '', address_and_comment)
-        return f"{date}, {address_and_comment}".strip(', ')
+        return f"{code}, {date}, {address_and_comment}".strip(', ')
     
-    # Fallback: try to extract just date and address
+    # Fallback: just remove "Заказ клиента" and time
     text = re.sub(r'^Заказ клиента\s+', '', text)
-    text = re.sub(r'(?:КАУТ|ИБУТ|ТДУТ)-\d+\s+от\s+', '', text)
+    text = re.sub(r'\s+от\s+', ', ', text)
     # Remove time if present
     text = re.sub(r'\d{1,2}:\d{2}:\d{2},?\s*', '', text)
     return text.strip(', ')
