@@ -421,6 +421,9 @@
                 <!-- Settings -->
                 <h3 class="toggle-section" onclick="toggleSection('settingsContent')">⚙️ Настройки расчёта ▼</h3>
                 <div class="collapsible" id="settingsContent">
+                    
+                    <!-- Fuel settings -->
+                    <h4 style="margin: 15px 0 10px; color: #555;">🚗 Бензин</h4>
                     <div class="settings-grid">
                         <div class="form-group">
                             <label>Базовый адрес:</label>
@@ -428,35 +431,58 @@
                         </div>
                         <div class="form-group">
                             <label>Коэффициент бензина:</label>
-                            <input type="number" id="fuel_coefficient" value="7">
+                            <input type="number" id="fuel_coefficient" value="7" step="0.1">
                         </div>
                         <div class="form-group">
                             <label>Максимум бензина (₽):</label>
                             <input type="number" id="fuel_max" value="3000">
                         </div>
+                    </div>
+                    
+                    <!-- Transport settings -->
+                    <h4 style="margin: 15px 0 10px; color: #555;">🚚 Транспортные</h4>
+                    <div class="settings-grid">
                         <div class="form-group">
-                            <label>Предупреждение бензин (₽):</label>
-                            <input type="number" id="fuel_warning" value="2000">
-                        </div>
-                        <div class="form-group">
-                            <label>Транспортные (₽):</label>
+                            <label>Сумма транспортных (₽):</label>
                             <input type="number" id="transport_amount" value="1000">
                         </div>
                         <div class="form-group">
-                            <label>Мин. выручка для транспортных:</label>
+                            <label>Мин. выручка для транспортных (₽):</label>
                             <input type="number" id="transport_min_revenue" value="10000">
                         </div>
                         <div class="form-group">
-                            <label>Мин. процент для транспортных:</label>
-                            <input type="number" id="transport_percent_min" value="20">
+                            <label>Макс. процент для транспортных (%):</label>
+                            <input type="number" id="transport_percent_max" value="50">
                         </div>
+                    </div>
+                    
+                    <!-- Diagnostic settings -->
+                    <h4 style="margin: 15px 0 10px; color: #555;">🔧 Диагностика</h4>
+                    <div class="settings-grid">
                         <div class="form-group">
-                            <label>Макс. процент для транспортных:</label>
-                            <input type="number" id="transport_percent_max" value="40">
-                        </div>
-                        <div class="form-group">
-                            <label>Процент диагностики:</label>
+                            <label>Процент диагностики -50% (%):</label>
                             <input type="number" id="diagnostic_percent" value="50">
+                        </div>
+                    </div>
+                    
+                    <!-- Alarm thresholds -->
+                    <h4 style="margin: 15px 0 10px; color: #555;">⚠️ Пороги предупреждений</h4>
+                    <div class="settings-grid">
+                        <div class="form-group">
+                            <label>Предупреждение: сумма оплаты > (₽):</label>
+                            <input type="number" id="alarm_high_payment" value="20000">
+                        </div>
+                        <div class="form-group">
+                            <label>Предупреждение: выезд специалиста > (₽):</label>
+                            <input type="number" id="alarm_high_specialist" value="3500">
+                        </div>
+                        <div class="form-group">
+                            <label>Предупреждение: бензин > (₽):</label>
+                            <input type="number" id="fuel_warning" value="2000">
+                        </div>
+                        <div class="form-group">
+                            <label>Стандартные проценты (через запятую):</label>
+                            <input type="text" id="standard_percents" value="30, 50, 100">
                         </div>
                     </div>
                 </div>
@@ -648,14 +674,16 @@
             // Collect config
             const config = {
                 base_address: document.getElementById('base_address').value,
-                fuel_coefficient: parseInt(document.getElementById('fuel_coefficient').value),
+                fuel_coefficient: parseFloat(document.getElementById('fuel_coefficient').value),
                 fuel_max: parseInt(document.getElementById('fuel_max').value),
                 fuel_warning: parseInt(document.getElementById('fuel_warning').value),
                 transport_amount: parseInt(document.getElementById('transport_amount').value),
                 transport_min_revenue: parseInt(document.getElementById('transport_min_revenue').value),
-                transport_percent_min: parseInt(document.getElementById('transport_percent_min').value),
                 transport_percent_max: parseInt(document.getElementById('transport_percent_max').value),
-                diagnostic_percent: parseInt(document.getElementById('diagnostic_percent').value)
+                diagnostic_percent: parseInt(document.getElementById('diagnostic_percent').value),
+                alarm_high_payment: parseInt(document.getElementById('alarm_high_payment').value),
+                alarm_high_specialist: parseInt(document.getElementById('alarm_high_specialist').value),
+                standard_percents: document.getElementById('standard_percents').value.split(',').map(p => parseInt(p.trim())).filter(p => !isNaN(p))
             };
             
             // Collect days
