@@ -101,6 +101,36 @@ def format_order_short(order_text: str) -> str:
     return text
 
 
+def format_order_for_workers(order_text: str) -> str:
+    """Format order text for workers: remove code, keep only date and address with comment"""
+    if not order_text or pd.isna(order_text):
+        return ""
+    
+    text = str(order_text)
+    
+    # Skip special rows
+    if any(p in text for p in ["ОБУЧЕНИЕ", "В прошлом расчете"]):
+        return text
+    
+    # Pattern: "Заказ клиента КАУТ-001658 от 05.11.2025 23:59:59, адрес, комментарий"
+    # Result: "05.11.2025, адрес, комментарий"
+    match = re.search(r'(?:КАУТ|ИБУТ|ТДУТ)-\d+\s+от\s+(\d{2}\.\d{2}\.\d{4})\s+\d{1,2}:\d{2}:\d{2},?\s*(.*)', text)
+    if match:
+        date = match.group(1)
+        address_and_comment = match.group(2).strip()
+        # Clean from \n and other artifacts
+        address_and_comment = re.sub(r'\\n.*', '', address_and_comment)
+        address_and_comment = re.sub(r'\|.*', '', address_and_comment)
+        return f"{date}, {address_and_comment}".strip(', ')
+    
+    # Fallback: try to extract just date and address
+    text = re.sub(r'^Заказ клиента\s+', '', text)
+    text = re.sub(r'(?:КАУТ|ИБУТ|ТДУТ)-\d+\s+от\s+', '', text)
+    # Remove time if present
+    text = re.sub(r'\d{1,2}:\d{2}:\d{2},?\s*', '', text)
+    return text.strip(', ')
+
+
 async def geocode_address_yandex(address: str, api_key: str) -> tuple:
     """Get coordinates from Yandex Geocoder API"""
     try:
@@ -515,8 +545,12 @@ async def calculate_row(row: dict, config: dict, days_map: dict) -> dict:
     return result
 
 
-def create_excel_report(data: List[dict], period: str, config: dict) -> bytes:
-    """Create Excel report with proper formatting and formulas"""
+def create_excel_report(data: List[dict], period: str, config: dict, for_workers: bool = False) -> bytes:
+    """Create Excel report with proper formatting and formulas
+    
+    Args:
+        for_workers: If True, creates simplified version for workers with hidden columns
+    """
     wb = Workbook()
     ws = wb.active
     ws.title = "Лист_1"
@@ -560,6 +594,13 @@ def create_excel_report(data: List[dict], period: str, config: dict) -> bytes:
     for col, width in column_widths.items():
         ws.column_dimensions[col].width = width
     
+    # Hide columns for workers version: B (Выручка итого), C (Выручка от услуг), H (Сумма оплаты), I (Процент)
+    if for_workers:
+        ws.column_dimensions['B'].hidden = True
+        ws.column_dimensions['C'].hidden = True
+        ws.column_dimensions['H'].hidden = True
+        ws.column_dimensions['I'].hidden = True
+    
     # Parameter rows (1-3)
     ws['A1'] = "Параметры:"
     ws['A1'].font = param_font
@@ -589,7 +630,7 @@ def create_excel_report(data: List[dict], period: str, config: dict) -> bytes:
         cell.alignment = alignment_center
         cell.border = thin_border
     
-    ws.row_dimensions[5].height = 30
+    ws.row_dimensions[5].height = 45  # Increased height for headers
     
     # Group data by worker
     workers_data = {}
@@ -649,7 +690,12 @@ def create_excel_report(data: List[dict], period: str, config: dict) -> bytes:
             if record.get("is_worker_total"):
                 continue
             
-            cell = ws.cell(row=current_row, column=1, value=record.get("order", ""))
+            # Format order text based on mode
+            order_text = record.get("order", "")
+            if for_workers:
+                order_text = format_order_for_workers(order_text)
+            
+            cell = ws.cell(row=current_row, column=1, value=order_text)
             cell.font = data_font
             cell.alignment = alignment_wrap
             cell.border = thin_border
@@ -724,7 +770,12 @@ def create_excel_report(data: List[dict], period: str, config: dict) -> bytes:
                 if record.get("is_worker_total"):
                     continue
                 
-                cell = ws.cell(row=current_row, column=1, value=record.get("order", ""))
+                # Format order text based on mode
+                order_text = record.get("order", "")
+                if for_workers:
+                    order_text = format_order_for_workers(order_text)
+                
+                cell = ws.cell(row=current_row, column=1, value=order_text)
                 cell.font = data_font
                 cell.alignment = alignment_wrap
                 cell.border = thin_border
@@ -918,8 +969,13 @@ async def calculate_salaries(
         
         zip_buffer = BytesIO()
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-            main_report = create_excel_report(calculated_data, period, full_config)
+            # Full report (for accounting)
+            main_report = create_excel_report(calculated_data, period, full_config, for_workers=False)
             zf.writestr(f"Общий_отчет {period}.xlsx", main_report)
+            
+            # Simplified report for workers (hidden columns, simplified order text)
+            workers_report = create_excel_report(calculated_data, period, full_config, for_workers=True)
+            zf.writestr(f"Для_монтажников {period}.xlsx", workers_report)
             
             for worker in workers:
                 worker_surname = worker.split()[0] if worker else "Unknown"
