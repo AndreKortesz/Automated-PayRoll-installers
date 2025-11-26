@@ -421,68 +421,29 @@
                 <!-- Settings -->
                 <h3 class="toggle-section" onclick="toggleSection('settingsContent')">⚙️ Настройки расчёта ▼</h3>
                 <div class="collapsible" id="settingsContent">
-                    
-                    <!-- Fuel settings -->
-                    <h4 style="margin: 15px 0 10px; color: #555;">🚗 Бензин</h4>
                     <div class="settings-grid">
                         <div class="form-group">
                             <label>Базовый адрес:</label>
-                            <input type="text" id="base_address" value="Москва, Сходненский тупик 16с4">
+                            <input type="text" id="base_address" value="Москва, Сходненский тупик 16с4" readonly style="background: #f5f5f5; cursor: not-allowed;">
                         </div>
                         <div class="form-group">
                             <label>Коэффициент бензина:</label>
-                            <input type="number" id="fuel_coefficient" value="7" step="0.1">
+                            <input type="number" id="fuel_coefficient" value="7" readonly style="background: #f5f5f5; cursor: not-allowed;">
                         </div>
                         <div class="form-group">
-                            <label>Максимум бензина (₽):</label>
-                            <input type="number" id="fuel_max" value="3000">
-                        </div>
-                    </div>
-                    
-                    <!-- Transport settings -->
-                    <h4 style="margin: 15px 0 10px; color: #555;">🚚 Транспортные</h4>
-                    <div class="settings-grid">
-                        <div class="form-group">
-                            <label>Сумма транспортных (₽):</label>
-                            <input type="number" id="transport_amount" value="1000">
+                            <label>🚗 Сумма транспортных (На своём авто):</label>
+                            <input type="number" id="transport_amount" value="1000" readonly style="background: #f5f5f5; cursor: not-allowed;">
                         </div>
                         <div class="form-group">
-                            <label>Мин. выручка для транспортных (₽):</label>
-                            <input type="number" id="transport_min_revenue" value="10000">
-                        </div>
-                        <div class="form-group">
-                            <label>Макс. процент для транспортных (%):</label>
-                            <input type="number" id="transport_percent_max" value="50">
+                            <label>🏢 Сумма транспортных (На авто компании):</label>
+                            <input type="number" value="0" readonly style="background: #f5f5f5; cursor: not-allowed;">
                         </div>
                     </div>
                     
-                    <!-- Diagnostic settings -->
-                    <h4 style="margin: 15px 0 10px; color: #555;">🔧 Диагностика</h4>
-                    <div class="settings-grid">
-                        <div class="form-group">
-                            <label>Процент диагностики -50% (%):</label>
-                            <input type="number" id="diagnostic_percent" value="50">
-                        </div>
-                    </div>
-                    
-                    <!-- Alarm thresholds -->
-                    <h4 style="margin: 15px 0 10px; color: #555;">⚠️ Пороги предупреждений</h4>
-                    <div class="settings-grid">
-                        <div class="form-group">
-                            <label>Предупреждение: сумма оплаты > (₽):</label>
-                            <input type="number" id="alarm_high_payment" value="20000">
-                        </div>
-                        <div class="form-group">
-                            <label>Предупреждение: выезд специалиста > (₽):</label>
-                            <input type="number" id="alarm_high_specialist" value="3500">
-                        </div>
-                        <div class="form-group">
-                            <label>Предупреждение: бензин > (₽):</label>
-                            <input type="number" id="fuel_warning" value="2000">
-                        </div>
-                        <div class="form-group">
-                            <label>Стандартные проценты (через запятую):</label>
-                            <input type="text" id="standard_percents" value="30, 50, 100">
+                    <div class="form-group" style="margin-top: 15px;">
+                        <label>🏢 Монтажники на авто компании (транспортные = 0₽):</label>
+                        <div id="companyCarWorkers" style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; padding: 10px; background: #f9f9f9; border-radius: 8px; min-height: 40px;">
+                            <span style="color: #999; font-style: italic;">Загрузите файлы для выбора монтажников</span>
                         </div>
                     </div>
                 </div>
@@ -596,6 +557,18 @@
                         </div>
                     `;
                     
+                    // Build company car workers checkboxes
+                    let companyCarHtml = '';
+                    workers.forEach(worker => {
+                        companyCarHtml += `
+                            <label style="display: flex; align-items: center; gap: 5px; padding: 5px 10px; background: white; border-radius: 5px; cursor: pointer; border: 1px solid #ddd;">
+                                <input type="checkbox" class="company-car-checkbox" value="${worker}">
+                                <span>${worker}</span>
+                            </label>
+                        `;
+                    });
+                    document.getElementById('companyCarWorkers').innerHTML = companyCarHtml;
+                    
                     // Build days table - sorted by worker, using short order format
                     // Filter: only orders with transport (revenue > 10k and percent < 50%)
                     const ordersWithTransport = orders.filter(o => !o.is_client_payment && o.has_transport);
@@ -671,19 +644,18 @@
             document.getElementById('successSection').classList.add('hidden');
             document.getElementById('alarmsSection').classList.add('hidden');
             
+            // Collect company car workers (transport = 0)
+            const companyCarWorkers = [];
+            document.querySelectorAll('.company-car-checkbox:checked').forEach(cb => {
+                companyCarWorkers.push(cb.value);
+            });
+            
             // Collect config
             const config = {
                 base_address: document.getElementById('base_address').value,
                 fuel_coefficient: parseFloat(document.getElementById('fuel_coefficient').value),
-                fuel_max: parseInt(document.getElementById('fuel_max').value),
-                fuel_warning: parseInt(document.getElementById('fuel_warning').value),
                 transport_amount: parseInt(document.getElementById('transport_amount').value),
-                transport_min_revenue: parseInt(document.getElementById('transport_min_revenue').value),
-                transport_percent_max: parseInt(document.getElementById('transport_percent_max').value),
-                diagnostic_percent: parseInt(document.getElementById('diagnostic_percent').value),
-                alarm_high_payment: parseInt(document.getElementById('alarm_high_payment').value),
-                alarm_high_specialist: parseInt(document.getElementById('alarm_high_specialist').value),
-                standard_percents: document.getElementById('standard_percents').value.split(',').map(p => parseInt(p.trim())).filter(p => !isNaN(p))
+                company_car_workers: companyCarWorkers
             };
             
             // Collect days
