@@ -571,10 +571,10 @@
                     `;
                     
                     // Build days table - sorted by worker, using short order format
-                    // Filter out client payment orders (they don't need days input)
-                    const regularOrders = orders.filter(o => !o.is_client_payment);
+                    // Filter: only orders with transport (revenue > 10k and percent < 50%)
+                    const ordersWithTransport = orders.filter(o => !o.is_client_payment && o.has_transport);
                     let daysHtml = '<table><thead><tr><th>Монтажник</th><th>Заказ</th><th>Дни</th></tr></thead><tbody>';
-                    regularOrders.forEach((order, idx) => {
+                    ordersWithTransport.forEach((order, idx) => {
                         daysHtml += `<tr>
                             <td>${order.worker}</td>
                             <td class="order-cell">${order.order_short}</td>
