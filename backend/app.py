@@ -891,12 +891,27 @@ async def upload_files(
             order = row.get("order", "")
             worker = row.get("worker", "")
             is_client = row.get("is_client_payment", False)
+            
+            # Get revenue_services and percent for transport check
+            revenue_services = row.get("revenue_services", 0)
+            revenue_services = float(revenue_services) if pd.notna(revenue_services) and revenue_services != "" else 0
+            
+            percent_str = str(row.get("percent", "0%")).replace("%", "").replace(",", ".").strip()
+            try:
+                percent = float(percent_str) if percent_str else 0
+            except:
+                percent = 0
+            
+            # Check if transport will be applied (revenue > 10k and percent < 50%)
+            has_transport = revenue_services > DEFAULT_CONFIG["transport_min_revenue"] and percent < 50
+            
             if order and not str(order).startswith(("ОБУЧЕНИЕ", "В прошлом")):
                 orders.append({
                     "worker": worker.replace(" (оплата клиентом)", ""),
                     "order": order,
                     "order_short": format_order_short(order),
-                    "is_client_payment": is_client
+                    "is_client_payment": is_client,
+                    "has_transport": has_transport
                 })
         
         orders.sort(key=lambda x: x["worker"])
