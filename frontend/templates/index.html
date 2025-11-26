@@ -123,8 +123,18 @@
         }
         .settings-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            grid-template-columns: repeat(5, 1fr);
             gap: 15px;
+        }
+        @media (max-width: 1200px) {
+            .settings-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+        @media (max-width: 768px) {
+            .settings-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
         }
         
         /* Workers horizontal layout */
@@ -558,8 +568,10 @@
                     `;
                     
                     // Build days table - sorted by worker, using short order format
+                    // Filter out client payment orders (they don't need days input)
+                    const regularOrders = orders.filter(o => !o.is_client_payment);
                     let daysHtml = '<table><thead><tr><th>Монтажник</th><th>Заказ</th><th>Дни</th></tr></thead><tbody>';
-                    orders.forEach((order, idx) => {
+                    regularOrders.forEach((order, idx) => {
                         daysHtml += `<tr>
                             <td>${order.worker}</td>
                             <td class="order-cell">${order.order_short}</td>
