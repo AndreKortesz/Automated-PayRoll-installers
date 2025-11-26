@@ -525,62 +525,71 @@ def create_excel_report(data: List[dict], period: str, config: dict) -> bytes:
     HEADER_BLUE = "4574A0"
     ROW_LIGHT_BLUE = "C6E2FF"
     DIAGNOSTIC_RED = "FF0000"
+    YELLOW_TOTAL = "FFFF00"
     
-    # Styles
-    header_font = Font(bold=True, size=9, color="FFFFFF")
+    # Border style
+    thin_border = Border(
+        left=Side(style='thin'),
+        right=Side(style='thin'),
+        top=Side(style='thin'),
+        bottom=Side(style='thin')
+    )
+    
+    # Styles - Arial font
+    header_font = Font(name='Arial', bold=True, size=9, color="FFFFFF")
     header_fill = PatternFill("solid", fgColor=HEADER_BLUE)
-    data_font = Font(size=9)
-    worker_font = Font(bold=True, size=9)
+    data_font = Font(name='Arial', size=9)
+    param_font = Font(name='Arial', size=9)
+    worker_font = Font(name='Arial', bold=True, size=9)
     worker_fill = PatternFill("solid", fgColor=ROW_LIGHT_BLUE)
     diagnostic_header_fill = PatternFill("solid", fgColor=DIAGNOSTIC_RED)
+    yellow_fill = PatternFill("solid", fgColor=YELLOW_TOTAL)
     
     alignment_wrap = Alignment(horizontal='left', vertical='top', wrap_text=True)
     alignment_center = Alignment(horizontal='center', vertical='center', wrap_text=True)
     
-    # Column widths
+    # Column widths - removed B,C,D columns
+    # New mapping: A=Заказ, B=Выручка итого, C=Выручка от услуг, etc.
     column_widths = {
-        'A': 55, 'B': 0.5, 'C': 0.5, 'D': 0.5,
-        'E': 12, 'F': 13, 'G': 12, 'H': 13,
-        'I': 13, 'J': 15, 'K': 15, 'L': 14,
-        'M': 12, 'N': 12, 'O': 12, 'P': 14
+        'A': 55,
+        'B': 12, 'C': 13, 'D': 12, 'E': 13,
+        'F': 13, 'G': 15, 'H': 15, 'I': 14,
+        'J': 12, 'K': 12, 'L': 12, 'M': 14
     }
     
     for col, width in column_widths.items():
         ws.column_dimensions[col].width = width
     
-    # Header rows
-    ws['A2'] = "Параметры:"
-    ws['C2'] = f"Период: {period}"
-    ws['C3'] = f"Процент оплаты диагностики: 0,{config['diagnostic_percent']}"
-    ws['C4'] = "Процент выручки от услуг: 0,3"
+    # Parameter rows (1-3)
+    ws['A1'] = "Параметры:"
+    ws['A1'].font = param_font
+    ws['A2'] = f"Период: {period}"
+    ws['A2'].font = param_font
+    ws['A3'] = f"Процент оплаты диагностики: {config['diagnostic_percent']}%"
+    ws['A3'].font = param_font
     
-    # Column headers (row 6)
+    # Column headers (row 5) - without B,C,D columns
     headers = [
-        ("A", "Монтажник"), ("B", ""), ("C", ""), ("D", ""),
-        ("E", "Выручка итого"), ("F", "Выручка от услуг"),
-        ("G", "Диагностика"), ("H", "Оплата диагностики"),
-        ("I", "Выручка (выезд) специалиста"),
-        ("J", "Доп. расходы (Оплата услуг помощников)"),
-        ("K", "Сумма оплаты от услуг"),
-        ("L", "Процент от выручки по услугам"),
-        ("M", "Оплата бензина"), ("N", "Транспортные"),
-        ("O", "Итого"), ("P", "Диагностика -50%")
+        ("A", "Монтажник"),
+        ("B", "Выручка итого"), ("C", "Выручка от услуг"),
+        ("D", "Диагностика"), ("E", "Оплата диагностики"),
+        ("F", "Выручка (выезд) специалиста"),
+        ("G", "Доп. расходы (Оплата услуг помощников)"),
+        ("H", "Сумма оплаты от услуг"),
+        ("I", "Процент от выручки по услугам"),
+        ("J", "Оплата бензина"), ("K", "Транспортные"),
+        ("L", "Итого"), ("M", "Диагностика -50%")
     ]
     
     for col_letter, header_text in headers:
-        cell = ws[f"{col_letter}6"]
+        cell = ws[f"{col_letter}5"]
         cell.value = header_text
         cell.font = header_font
-        cell.fill = header_fill if col_letter != "P" else diagnostic_header_fill
+        cell.fill = header_fill if col_letter != "M" else diagnostic_header_fill
         cell.alignment = alignment_center
+        cell.border = thin_border
     
-    ws['A7'] = "Заказ, Комментарий"
-    ws['A7'].font = Font(bold=True, size=9, color="FFFFFF")
-    ws['A7'].fill = header_fill
-    ws['A7'].alignment = alignment_wrap
-    
-    ws.row_dimensions[6].height = 30
-    ws.row_dimensions[7].height = 20
+    ws.row_dimensions[5].height = 30
     
     # Group data by worker
     workers_data = {}
@@ -594,7 +603,20 @@ def create_excel_report(data: List[dict], period: str, config: dict) -> bytes:
         else:
             workers_data[worker]["regular"].append(record)
     
-    current_row = 8
+    current_row = 6
+    
+    def to_int(val):
+        """Convert value to integer, return empty string if invalid"""
+        if val is None or val == "" or (isinstance(val, float) and pd.isna(val)):
+            return ""
+        try:
+            return int(round(float(val)))
+        except:
+            return ""
+    
+    # New column mapping (old -> new after removing B,C,D)
+    # Old: A=1, E=5, F=6, G=7, H=8, I=9, J=10, K=11, L=12, M=13, N=14, O=15, P=16
+    # New: A=1, B=2, C=3, D=4, E=5, F=6, G=7, H=8, I=9, J=10, K=11, L=12, M=13
     
     for worker in sorted(workers_data.keys()):
         if not worker:
@@ -610,9 +632,12 @@ def create_excel_report(data: List[dict], period: str, config: dict) -> bytes:
         cell.font = worker_font
         cell.fill = worker_fill
         cell.alignment = alignment_wrap
+        cell.border = thin_border
         
-        for col in range(1, 17):
-            ws.cell(row=current_row, column=col).fill = worker_fill
+        for col in range(2, 14):
+            c = ws.cell(row=current_row, column=col)
+            c.fill = worker_fill
+            c.border = thin_border
         
         ws.row_dimensions[current_row].height = 18
         current_row += 1
@@ -627,36 +652,53 @@ def create_excel_report(data: List[dict], period: str, config: dict) -> bytes:
             cell = ws.cell(row=current_row, column=1, value=record.get("order", ""))
             cell.font = data_font
             cell.alignment = alignment_wrap
+            cell.border = thin_border
             
-            for col, key in [(5, "revenue_total"), (6, "revenue_services"), (7, "diagnostic"),
-                            (8, "diagnostic_payment"), (9, "specialist_fee"), (10, "additional_expenses"),
-                            (11, "service_payment")]:
-                val = record.get(key, "")
-                if val != "" and val != 0 and pd.notna(val):
-                    ws.cell(row=current_row, column=col, value=val).font = data_font
+            # Data columns (new positions)
+            for col, key in [(2, "revenue_total"), (3, "revenue_services"), (4, "diagnostic"),
+                            (5, "diagnostic_payment"), (6, "specialist_fee"), (7, "additional_expenses"),
+                            (8, "service_payment")]:
+                val = to_int(record.get(key, ""))
+                c = ws.cell(row=current_row, column=col, value=val if val != "" else None)
+                c.font = data_font
+                c.border = thin_border
             
-            ws.cell(row=current_row, column=12, value=record.get("percent", "")).font = data_font
+            # Percent - keep as is (not integer) - column I (9)
+            c = ws.cell(row=current_row, column=9, value=record.get("percent", ""))
+            c.font = data_font
+            c.border = thin_border
             
-            fuel = record.get("fuel_payment", 0)
-            transport = record.get("transport", 0)
+            fuel = to_int(record.get("fuel_payment", 0))
+            transport = to_int(record.get("transport", 0))
             
-            if fuel and fuel != 0:
-                ws.cell(row=current_row, column=13, value=fuel).font = data_font
-            if transport and transport != 0:
-                ws.cell(row=current_row, column=14, value=transport).font = data_font
+            c = ws.cell(row=current_row, column=10, value=fuel if fuel else None)  # J
+            c.font = data_font
+            c.border = thin_border
             
-            ws.cell(row=current_row, column=15, value=f"=K{current_row}+M{current_row}+N{current_row}").font = data_font
+            c = ws.cell(row=current_row, column=11, value=transport if transport else None)  # K
+            c.font = data_font
+            c.border = thin_border
+            
+            # Итого formula - column L (12): =H+J+K
+            c = ws.cell(row=current_row, column=12, value=f"=H{current_row}+J{current_row}+K{current_row}")
+            c.font = data_font
+            c.border = thin_border
+            
+            # Diagnostic -50% column M (13)
+            c = ws.cell(row=current_row, column=13)
+            c.border = thin_border
             
             current_row += 1
         
         regular_end = current_row - 1
         
-        # Formulas for worker total row
+        # Formulas for worker total row (fuel J, transport K sums)
         if regular_end >= regular_start:
-            for col in [13, 14]:
+            for col in [10, 11]:  # J, K
                 col_letter = get_column_letter(col)
                 formula = f"=SUM({col_letter}{regular_start}:{col_letter}{regular_end})"
-                ws.cell(row=worker_name_row, column=col, value=formula).font = worker_font
+                c = ws.cell(row=worker_name_row, column=col, value=formula)
+                c.font = worker_font
         
         # Client payment section
         client_name_row = None
@@ -666,9 +708,12 @@ def create_excel_report(data: List[dict], period: str, config: dict) -> bytes:
             cell.font = worker_font
             cell.fill = worker_fill
             cell.alignment = alignment_wrap
+            cell.border = thin_border
             
-            for col in range(1, 17):
-                ws.cell(row=current_row, column=col).fill = worker_fill
+            for col in range(2, 14):
+                c = ws.cell(row=current_row, column=col)
+                c.fill = worker_fill
+                c.border = thin_border
             
             ws.row_dimensions[current_row].height = 18
             current_row += 1
@@ -682,44 +727,55 @@ def create_excel_report(data: List[dict], period: str, config: dict) -> bytes:
                 cell = ws.cell(row=current_row, column=1, value=record.get("order", ""))
                 cell.font = data_font
                 cell.alignment = alignment_wrap
+                cell.border = thin_border
                 
-                for col, key in [(5, "revenue_total"), (6, "revenue_services"), (7, "diagnostic"),
-                                (8, "diagnostic_payment"), (9, "specialist_fee"), (10, "additional_expenses"),
-                                (11, "service_payment")]:
-                    val = record.get(key, "")
-                    if val != "" and val != 0 and pd.notna(val):
-                        ws.cell(row=current_row, column=col, value=val).font = data_font
+                for col, key in [(2, "revenue_total"), (3, "revenue_services"), (4, "diagnostic"),
+                                (5, "diagnostic_payment"), (6, "specialist_fee"), (7, "additional_expenses"),
+                                (8, "service_payment")]:
+                    val = to_int(record.get(key, ""))
+                    c = ws.cell(row=current_row, column=col, value=val if val != "" else None)
+                    c.font = data_font
+                    c.border = thin_border
                 
-                ws.cell(row=current_row, column=12, value=record.get("percent", "")).font = data_font
-                ws.cell(row=current_row, column=15, value=f"=K{current_row}+M{current_row}+N{current_row}").font = data_font
+                c = ws.cell(row=current_row, column=9, value=record.get("percent", ""))
+                c.font = data_font
+                c.border = thin_border
                 
-                diag_50 = record.get("diagnostic_50", 0)
-                if diag_50 and diag_50 != 0:
-                    ws.cell(row=current_row, column=16, value=diag_50).font = data_font
+                # Columns J, K empty for client payment
+                for col in [10, 11]:
+                    ws.cell(row=current_row, column=col).border = thin_border
+                
+                # Итого = just service payment (H)
+                c = ws.cell(row=current_row, column=12, value=f"=H{current_row}")
+                c.font = data_font
+                c.border = thin_border
+                
+                diag_50 = to_int(record.get("diagnostic_50", 0))
+                c = ws.cell(row=current_row, column=13, value=diag_50 if diag_50 else None)
+                c.font = data_font
+                c.border = thin_border
                 
                 current_row += 1
             
             client_end = current_row - 1
             
+            # Client section totals
             if client_end >= client_start:
-                col_o = get_column_letter(15)
-                col_p = get_column_letter(16)
-                ws.cell(row=client_name_row, column=15, value=f"=SUM({col_o}{client_start}:{col_o}{client_end})").font = worker_font
-                ws.cell(row=client_name_row, column=16, value=f"=SUM({col_p}{client_start}:{col_p}{client_end})").font = worker_font
-                ws.cell(row=client_name_row, column=13, value=0).font = worker_font
-                ws.cell(row=client_name_row, column=14, value=0).font = worker_font
+                ws.cell(row=client_name_row, column=12, value=f"=SUM(L{client_start}:L{client_end})").font = worker_font
+                ws.cell(row=client_name_row, column=13, value=f"=SUM(M{client_start}:M{client_end})").font = worker_font
         
-        # Main worker row Итого formula
-        if client_rows and client_name_row:
-            if regular_end >= regular_start:
-                formula = f"=SUM(O{regular_start}:O{regular_end})+O{client_name_row}-P{client_name_row}"
-            else:
-                formula = f"=O{client_name_row}-P{client_name_row}"
-            ws.cell(row=worker_name_row, column=15, value=formula).font = worker_font
+        # Main worker row Итого formula - WITHOUT client payment section
+        if regular_end >= regular_start:
+            formula = f"=SUM(L{regular_start}:L{regular_end})"
+            c = ws.cell(row=worker_name_row, column=12, value=formula)
+            c.font = worker_font
+            c.fill = yellow_fill
+            c.border = thin_border
         else:
-            if regular_end >= regular_start:
-                formula = f"=SUM(O{regular_start}:O{regular_end})"
-                ws.cell(row=worker_name_row, column=15, value=formula).font = worker_font
+            c = ws.cell(row=worker_name_row, column=12, value=0)
+            c.font = worker_font
+            c.fill = yellow_fill
+            c.border = thin_border
         
         current_row += 1
     
