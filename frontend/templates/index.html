@@ -730,23 +730,35 @@
                                         ? '<span class="alarm-section-badge client">оплата клиентом</span>'
                                         : '<span class="alarm-section-badge main">основная</span>';
                                     
+                                    // Fields that should be bold and have "рублей" suffix
+                                    const moneyFields = ['Выручка итого', 'Выручка от услуг', 'Итого', 'Сумма оплаты', 'Оплата бензина', 'Транспортные', 'Выручка (выезд)', 'Доп. расходы'];
+                                    
                                     let detailsHtml = '';
                                     if (alarm.row_info) {
                                         for (const [key, value] of Object.entries(alarm.row_info)) {
                                             if (key !== 'Секция') {
+                                                const isMoney = moneyFields.some(f => key.includes(f));
+                                                const displayValue = isMoney && value && !String(value).includes('%') 
+                                                    ? `<strong>${value} рублей</strong>` 
+                                                    : value;
                                                 detailsHtml += `
                                                     <div class="alarm-detail">
                                                         <span class="alarm-detail-label">${key}:</span>
-                                                        <span class="alarm-detail-value">${value}</span>
+                                                        <span class="alarm-detail-value">${displayValue}</span>
                                                     </div>
                                                 `;
                                             }
                                         }
                                     }
                                     
+                                    // Also make the main message amount bold
+                                    let messageHtml = alarm.message;
+                                    // Match patterns like ": 49526.7" and make bold with "рублей"
+                                    messageHtml = messageHtml.replace(/: (\d+\.?\d*)\s*$/g, ': <strong>$1 рублей</strong>');
+                                    
                                     itemsHtml += `
                                         <div class="alarm-item ${type.replace(/_/g, '-')}">
-                                            <div class="alarm-message">${alarm.message} ${sectionBadge}</div>
+                                            <div class="alarm-message">${messageHtml} ${sectionBadge}</div>
                                             <div class="alarm-details">${detailsHtml}</div>
                                         </div>
                                     `;
