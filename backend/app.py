@@ -764,15 +764,23 @@ def create_excel_report(data: List[dict], period: str, config: dict) -> bytes:
                 ws.cell(row=client_name_row, column=12, value=f"=SUM(L{client_start}:L{client_end})").font = worker_font
                 ws.cell(row=client_name_row, column=13, value=f"=SUM(M{client_start}:M{client_end})").font = worker_font
         
-        # Main worker row Итого formula - WITHOUT client payment section
+        # Main worker row Итого formula - subtract diagnostic -50% from client section
         if regular_end >= regular_start:
-            formula = f"=SUM(L{regular_start}:L{regular_end})"
+            if client_name_row:
+                # Has client section - subtract M (diagnostic -50%) from client row
+                formula = f"=SUM(L{regular_start}:L{regular_end})-M{client_name_row}"
+            else:
+                formula = f"=SUM(L{regular_start}:L{regular_end})"
             c = ws.cell(row=worker_name_row, column=12, value=formula)
             c.font = worker_font
             c.fill = yellow_fill
             c.border = thin_border
         else:
-            c = ws.cell(row=worker_name_row, column=12, value=0)
+            if client_name_row:
+                formula = f"=-M{client_name_row}"
+                c = ws.cell(row=worker_name_row, column=12, value=formula)
+            else:
+                c = ws.cell(row=worker_name_row, column=12, value=0)
             c.font = worker_font
             c.fill = yellow_fill
             c.border = thin_border
