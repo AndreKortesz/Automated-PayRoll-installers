@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Детали монтажника</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        h1 {
+            color: white;
+            font-size: 24px;
+        }
+        .btn {
+            background: white;
+            color: #667eea;
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 500;
+            transition: transform 0.2s;
+        }
+        .btn:hover {
+            transform: scale(1.05);
+        }
+        .btn-secondary {
+            background: rgba(255,255,255,0.2);
+            color: white;
+        }
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .summary-item {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        .summary-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+        }
+        .summary-label {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 12px 10px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #333;
+            position: sticky;
+            top: 0;
+        }
+        tr:hover {
+            background: #f8f9fa;
+        }
+        .order-code {
+            font-weight: 600;
+            color: #667eea;
+        }
+        .address {
+            max-width: 250px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .number {
+            text-align: right;
+            font-family: 'Monaco', 'Consolas', monospace;
+        }
+        .total-row {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+            color: white;
+            font-weight: bold;
+        }
+        .total-row td {
+            border: none;
+        }
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        .badge-client {
+            background: #ffeaa7;
+            color: #d68910;
+        }
+        .badge-over10k {
+            background: #dfe6e9;
+            color: #636e72;
+        }
+        .table-wrapper {
+            overflow-x: auto;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .highlight {
+            background: #fff3cd;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 id="pageTitle">👷 Загрузка...</h1>
+            <div>
+                <a href="javascript:history.back()" class="btn btn-secondary">← Назад</a>
+                <a href="/history" class="btn">История</a>
+            </div>
+        </div>
+        
+        <div id="content">
+            <div class="card">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Загрузка данных...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const uploadId = {{ upload_id }};
+        const urlParams = new URLSearchParams(window.location.search);
+        const workerName = urlParams.get('worker');
+        
+        async function loadWorkerData() {
+            if (!workerName) {
+                document.getElementById('content').innerHTML = `
+                    <div class="card"><p>Монтажник не указан</p></div>
+                `;
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/upload/${uploadId}/worker/${workerName}`);
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Failed to load');
+                }
+                
+                document.getElementById('pageTitle').textContent = `👷 ${data.worker}`;
+                
+                const orders = data.orders || [];
+                
+                // Calculate totals
+                let totalRevenue = 0;
+                let totalPayment = 0;
+                let totalFuel = 0;
+                let totalTransport = 0;
+                let totalFinal = 0;
+                
+                orders.forEach(order => {
+                    totalRevenue += order.revenue_services || 0;
+                    totalPayment += order.service_payment || 0;
+                    const calc = order.calculation || {};
+                    totalFuel += calc.fuel_payment || 0;
+                    totalTransport += calc.transport || 0;
+                    totalFinal += calc.total || 0;
+                });
+                
+                // Summary
+                let summaryHtml = `
+                    <div class="summary-grid">
+                        <div class="summary-item">
+                            <div class="summary-value">${orders.length}</div>
+                            <div class="summary-label">Заказов</div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="summary-value">${Math.round(totalRevenue).toLocaleString('ru-RU')}</div>
+                            <div class="summary-label">Выручка ₽</div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="summary-value">${Math.round(totalPayment).toLocaleString('ru-RU')}</div>
+                            <div class="summary-label">Оплата услуг ₽</div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="summary-value">${Math.round(totalFuel).toLocaleString('ru-RU')}</div>
+                            <div class="summary-label">Бензин ₽</div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="summary-value">${Math.round(totalTransport).toLocaleString('ru-RU')}</div>
+                            <div class="summary-label">Транспортные ₽</div>
+                        </div>
+                        <div class="summary-item" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                            <div class="summary-value" style="color: white;">${Math.round(totalFinal).toLocaleString('ru-RU')}</div>
+                            <div class="summary-label" style="color: rgba(255,255,255,0.8);">ИТОГО ₽</div>
+                        </div>
+                    </div>
+                `;
+                
+                // Table
+                let tableHtml = `
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Заказ</th>
+                                    <th>Адрес</th>
+                                    <th class="number">Выручка</th>
+                                    <th class="number">Оплата</th>
+                                    <th>%</th>
+                                    <th class="number">Бензин</th>
+                                    <th class="number">Трансп.</th>
+                                    <th class="number">Итого</th>
+                                    <th>Тип</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+                
+                orders.forEach(order => {
+                    const calc = order.calculation || {};
+                    const badges = [];
+                    if (order.is_client_payment) badges.push('<span class="badge badge-client">Оплата клиентом</span>');
+                    if (order.is_over_10k) badges.push('<span class="badge badge-over10k">>10k</span>');
+                    
+                    tableHtml += `
+                        <tr>
+                            <td class="order-code">${order.order_code || '-'}</td>
+                            <td class="address" title="${order.address || ''}">${order.address || '-'}</td>
+                            <td class="number">${formatNumber(order.revenue_services)}</td>
+                            <td class="number">${formatNumber(order.service_payment)}</td>
+                            <td>${order.percent || '-'}</td>
+                            <td class="number">${formatNumber(calc.fuel_payment)}</td>
+                            <td class="number">${formatNumber(calc.transport)}</td>
+                            <td class="number"><strong>${formatNumber(calc.total)}</strong></td>
+                            <td>${badges.join(' ')}</td>
+                        </tr>
+                    `;
+                });
+                
+                // Total row
+                tableHtml += `
+                    <tr class="total-row">
+                        <td colspan="2">ИТОГО</td>
+                        <td class="number">${formatNumber(totalRevenue)}</td>
+                        <td class="number">${formatNumber(totalPayment)}</td>
+                        <td></td>
+                        <td class="number">${formatNumber(totalFuel)}</td>
+                        <td class="number">${formatNumber(totalTransport)}</td>
+                        <td class="number">${formatNumber(totalFinal)}</td>
+                        <td></td>
+                    </tr>
+                `;
+                
+                tableHtml += '</tbody></table></div>';
+                
+                document.getElementById('content').innerHTML = `
+                    <div class="card">
+                        ${summaryHtml}
+                        ${tableHtml}
+                    </div>
+                `;
+                
+            } catch (error) {
+                document.getElementById('content').innerHTML = `
+                    <div class="card"><p>❌ Ошибка: ${error.message}</p></div>
+                `;
+            }
+        }
+        
+        function formatNumber(val) {
+            if (val === null || val === undefined || val === 0) return '-';
+            return Math.round(val).toLocaleString('ru-RU');
+        }
+        
+        loadWorkerData();
+    </script>
+</body>
+</html>

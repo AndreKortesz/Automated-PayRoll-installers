@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Детали периода</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        h1 {
+            color: white;
+            font-size: 28px;
+        }
+        .btn {
+            background: white;
+            color: #667eea;
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 500;
+            transition: transform 0.2s;
+            border: none;
+            cursor: pointer;
+        }
+        .btn:hover {
+            transform: scale(1.05);
+        }
+        .btn-secondary {
+            background: rgba(255,255,255,0.2);
+            color: white;
+        }
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+        .card-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .version-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .version-tab {
+            padding: 10px 20px;
+            border-radius: 8px;
+            background: #f0f0f0;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .version-tab.active {
+            background: #667eea;
+            color: white;
+        }
+        .version-tab:hover:not(.active) {
+            background: #e0e0e0;
+        }
+        .workers-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 15px;
+        }
+        .worker-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 12px;
+            transition: transform 0.2s, box-shadow 0.2s;
+            cursor: pointer;
+        }
+        .worker-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+        .worker-name {
+            font-weight: bold;
+            font-size: 16px;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .worker-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        .worker-stat {
+            text-align: center;
+        }
+        .worker-stat-value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #667eea;
+        }
+        .worker-stat-label {
+            font-size: 12px;
+            color: #666;
+        }
+        .changes-list {
+            margin-top: 15px;
+        }
+        .change-item {
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .change-item.added {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+        }
+        .change-item.deleted {
+            background: #f8d7da;
+            border-left: 4px solid #dc3545;
+        }
+        .change-item.modified {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+        }
+        .change-icon {
+            font-size: 20px;
+        }
+        .change-text {
+            flex: 1;
+        }
+        .change-field {
+            font-size: 12px;
+            color: #666;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .no-changes {
+            color: #28a745;
+            padding: 15px;
+            background: #d4edda;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .total-row {
+            margin-top: 20px;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 10px;
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .total-label {
+            font-weight: 500;
+        }
+        .total-value {
+            font-size: 24px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 id="pageTitle">📋 Загрузка...</h1>
+            <div>
+                <a href="/history" class="btn btn-secondary">← История</a>
+                <a href="/" class="btn">Новый расчёт</a>
+            </div>
+        </div>
+        
+        <div id="content">
+            <div class="card">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Загрузка данных...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const periodId = {{ period_id }};
+        let currentUploadId = null;
+        let uploadsData = [];
+        
+        async function loadPeriod() {
+            try {
+                const response = await fetch(`/api/period/${periodId}`);
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Failed to load');
+                }
+                
+                document.getElementById('pageTitle').textContent = `📋 Период: ${data.data.period.name}`;
+                uploadsData = data.data.uploads;
+                
+                if (uploadsData.length > 0) {
+                    currentUploadId = uploadsData[0].id;
+                    renderContent();
+                } else {
+                    document.getElementById('content').innerHTML = `
+                        <div class="card">
+                            <p>Нет загрузок для этого периода</p>
+                        </div>
+                    `;
+                }
+                
+            } catch (error) {
+                document.getElementById('content').innerHTML = `
+                    <div class="card">
+                        <p>❌ Ошибка: ${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        async function renderContent() {
+            // Render version tabs
+            let tabsHtml = '<div class="version-tabs">';
+            uploadsData.forEach(upload => {
+                const isActive = upload.id === currentUploadId ? 'active' : '';
+                const date = upload.created_at ? new Date(upload.created_at).toLocaleString('ru-RU') : '';
+                tabsHtml += `
+                    <div class="version-tab ${isActive}" onclick="selectUpload(${upload.id})">
+                        Версия ${upload.version}
+                        <div style="font-size: 11px; opacity: 0.7;">${date}</div>
+                    </div>
+                `;
+            });
+            tabsHtml += '</div>';
+            
+            // Load upload details
+            const response = await fetch(`/api/upload/${currentUploadId}`);
+            const data = await response.json();
+            
+            if (!data.success) {
+                document.getElementById('content').innerHTML = tabsHtml + `<div class="card"><p>Ошибка загрузки</p></div>`;
+                return;
+            }
+            
+            const upload = data.data;
+            const workerTotals = upload.worker_totals || [];
+            const changes = upload.changes || [];
+            
+            // Calculate grand total
+            const grandTotal = workerTotals.reduce((sum, w) => sum + (w.total_amount || 0), 0);
+            
+            // Render workers
+            let workersHtml = '<div class="workers-grid">';
+            workerTotals.forEach(wt => {
+                workersHtml += `
+                    <div class="worker-card" onclick="viewWorker('${encodeURIComponent(wt.worker)}')">
+                        <div class="worker-name">👷 ${wt.worker}</div>
+                        <div class="worker-stats">
+                            <div class="worker-stat">
+                                <div class="worker-stat-value">${Math.round(wt.total_amount || 0).toLocaleString('ru-RU')}</div>
+                                <div class="worker-stat-label">Итого ₽</div>
+                            </div>
+                            <div class="worker-stat">
+                                <div class="worker-stat-value">${wt.orders_count || 0}</div>
+                                <div class="worker-stat-label">Заказов</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            workersHtml += '</div>';
+            
+            // Total row
+            workersHtml += `
+                <div class="total-row">
+                    <span class="total-label">💰 Общий итог:</span>
+                    <span class="total-value">${Math.round(grandTotal).toLocaleString('ru-RU')} ₽</span>
+                </div>
+            `;
+            
+            // Render changes
+            let changesHtml = '';
+            if (changes.length > 0) {
+                changesHtml = '<div class="card"><div class="card-title">🔄 Изменения</div><div class="changes-list">';
+                changes.forEach(change => {
+                    const icons = { added: '➕', deleted: '➖', modified: '✏️' };
+                    const icon = icons[change.change_type] || '•';
+                    let text = `${change.order_code} - ${change.worker}`;
+                    let fieldInfo = '';
+                    if (change.change_type === 'modified' && change.field_name) {
+                        fieldInfo = `<div class="change-field">${change.field_name}: ${change.old_value} → ${change.new_value}</div>`;
+                    }
+                    changesHtml += `
+                        <div class="change-item ${change.change_type}">
+                            <span class="change-icon">${icon}</span>
+                            <div class="change-text">
+                                ${text}
+                                ${fieldInfo}
+                            </div>
+                        </div>
+                    `;
+                });
+                changesHtml += '</div></div>';
+            } else if (uploadsData.length > 1) {
+                changesHtml = '<div class="card"><div class="no-changes">✅ Изменений нет</div></div>';
+            }
+            
+            document.getElementById('content').innerHTML = `
+                ${tabsHtml}
+                <div class="card">
+                    <div class="card-title">👥 Монтажники</div>
+                    ${workersHtml}
+                </div>
+                ${changesHtml}
+            `;
+        }
+        
+        function selectUpload(uploadId) {
+            currentUploadId = uploadId;
+            renderContent();
+        }
+        
+        function viewWorker(workerEncoded) {
+            window.location.href = `/upload/${currentUploadId}?worker=${workerEncoded}`;
+        }
+        
+        loadPeriod();
+    </script>
+</body>
+</html>
