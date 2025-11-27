@@ -399,6 +399,72 @@
             color: #333;
             word-break: break-word;
         }
+        /* Changes section styles */
+        .changes-box {
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 15px;
+        }
+        .changes-box.no-changes {
+            background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+            border: 1px solid #28a745;
+        }
+        .changes-box.has-changes {
+            background: linear-gradient(135deg, #fff3cd 0%, #ffeeba 100%);
+            border: 1px solid #ffc107;
+        }
+        .changes-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+        .changes-header .icon {
+            font-size: 24px;
+        }
+        .changes-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 15px;
+        }
+        .change-category {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+        }
+        .change-category-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .change-category-title.added { color: #28a745; }
+        .change-category-title.deleted { color: #dc3545; }
+        .change-category-title.modified { color: #fd7e14; }
+        .change-item {
+            padding: 8px;
+            margin-bottom: 5px;
+            border-radius: 5px;
+            font-size: 13px;
+        }
+        .change-item.added { background: #d4edda; }
+        .change-item.deleted { background: #f8d7da; }
+        .change-item.modified { background: #fff3cd; }
+        .change-item-code {
+            font-weight: 600;
+        }
+        .change-item-worker {
+            color: #666;
+            font-size: 12px;
+        }
+        .change-item-fields {
+            font-size: 11px;
+            color: #856404;
+            margin-top: 4px;
+        }
     </style>
 </head>
 <body>
@@ -431,6 +497,9 @@
                 <h2>Шаг 2: Настройки и проверка</h2>
                 
                 <div class="stats" id="statsSection"></div>
+                
+                <!-- Changes section -->
+                <div id="changesSection" class="hidden" style="margin-bottom: 20px;"></div>
                 
                 <!-- Settings -->
                 <h3 class="toggle-section" onclick="toggleSection('settingsContent')">⚙️ Настройки расчёта ▼</h3>
@@ -570,6 +639,96 @@
                             <div class="stat-label">Период</div>
                         </div>
                     `;
+                    
+                    // Show changes if any
+                    const changesSection = document.getElementById('changesSection');
+                    const changes = data.changes || {};
+                    
+                    if (changes.has_previous) {
+                        const totalChanges = (changes.added?.length || 0) + (changes.deleted?.length || 0) + (changes.modified?.length || 0);
+                        
+                        if (totalChanges === 0) {
+                            changesSection.innerHTML = `
+                                <div class="changes-box no-changes">
+                                    <div class="changes-header">
+                                        <span class="icon">✅</span>
+                                        <span>Изменений нет</span>
+                                    </div>
+                                    <p style="margin: 0; color: #155724;">Данные совпадают с предыдущей загрузкой (версия ${changes.previous_version})</p>
+                                </div>
+                            `;
+                        } else {
+                            let changesHtml = `
+                                <div class="changes-box has-changes">
+                                    <div class="changes-header">
+                                        <span class="icon">🔄</span>
+                                        <span>Обнаружены изменения (${totalChanges})</span>
+                                    </div>
+                                    <p style="margin: 0 0 15px; color: #856404;">Сравнение с версией ${changes.previous_version}</p>
+                                    <div class="changes-grid">
+                            `;
+                            
+                            // Added
+                            if (changes.added?.length > 0) {
+                                changesHtml += `
+                                    <div class="change-category">
+                                        <div class="change-category-title added">➕ Добавлено (${changes.added.length})</div>
+                                `;
+                                changes.added.forEach(item => {
+                                    changesHtml += `
+                                        <div class="change-item added">
+                                            <div class="change-item-code">${item.order_code}</div>
+                                            <div class="change-item-worker">${item.worker}</div>
+                                        </div>
+                                    `;
+                                });
+                                changesHtml += `</div>`;
+                            }
+                            
+                            // Deleted
+                            if (changes.deleted?.length > 0) {
+                                changesHtml += `
+                                    <div class="change-category">
+                                        <div class="change-category-title deleted">➖ Удалено (${changes.deleted.length})</div>
+                                `;
+                                changes.deleted.forEach(item => {
+                                    changesHtml += `
+                                        <div class="change-item deleted">
+                                            <div class="change-item-code">${item.order_code}</div>
+                                            <div class="change-item-worker">${item.worker}</div>
+                                        </div>
+                                    `;
+                                });
+                                changesHtml += `</div>`;
+                            }
+                            
+                            // Modified
+                            if (changes.modified?.length > 0) {
+                                changesHtml += `
+                                    <div class="change-category">
+                                        <div class="change-category-title modified">✏️ Изменено (${changes.modified.length})</div>
+                                `;
+                                changes.modified.forEach(item => {
+                                    const fieldsText = item.changes.map(c => `${c.field}: ${c.old} → ${c.new}`).join(', ');
+                                    changesHtml += `
+                                        <div class="change-item modified">
+                                            <div class="change-item-code">${item.order_code}</div>
+                                            <div class="change-item-worker">${item.worker}</div>
+                                            <div class="change-item-fields">${fieldsText}</div>
+                                        </div>
+                                    `;
+                                });
+                                changesHtml += `</div>`;
+                            }
+                            
+                            changesHtml += `</div></div>`;
+                            changesSection.innerHTML = changesHtml;
+                        }
+                        changesSection.classList.remove('hidden');
+                    } else {
+                        changesSection.classList.add('hidden');
+                        changesSection.innerHTML = '';
+                    }
                     
                     // Build company car workers checkboxes
                     let companyCarHtml = '';
