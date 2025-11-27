@@ -973,13 +973,119 @@ async def upload_files(
             "workers": workers
         }
         
+        # ===== CHECK FOR CHANGES FROM PREVIOUS UPLOAD =====
+        changes_summary = {
+            "has_previous": False,
+            "added": [],
+            "deleted": [],
+            "modified": []
+        }
+        
+        try:
+            if database and database.is_connected:
+                from database import get_or_create_period, get_period_details, get_orders_by_upload
+                
+                # Check if this period exists
+                period_id = await get_or_create_period(period)
+                period_details = await get_period_details(period_id)
+                
+                if period_details and period_details.get("uploads"):
+                    uploads = period_details["uploads"]
+                    if len(uploads) > 0:
+                        # Get orders from latest upload
+                        latest_upload_id = uploads[0]["id"]
+                        old_orders = await get_orders_by_upload(latest_upload_id)
+                        
+                        if old_orders:
+                            changes_summary["has_previous"] = True
+                            changes_summary["previous_version"] = uploads[0]["version"]
+                            changes_summary["previous_date"] = str(uploads[0].get("created_at", ""))
+                            
+                            # Build maps for comparison
+                            old_map = {}
+                            for o in old_orders:
+                                key = (o.get("order_code", ""), o.get("worker", ""))
+                                old_map[key] = o
+                            
+                            new_map = {}
+                            for _, row in combined.iterrows():
+                                order_text = str(row.get("order", ""))
+                                order_code_match = re.search(r'(КАУТ|ИБУТ|ТДУТ)-\d+', order_text)
+                                order_code = order_code_match.group(0) if order_code_match else ""
+                                worker = normalize_worker_name(str(row.get("worker", ""))).replace(" (оплата клиентом)", "")
+                                
+                                key = (order_code, worker)
+                                new_map[key] = {
+                                    "order_code": order_code,
+                                    "worker": worker,
+                                    "revenue_services": row.get("revenue_services", 0),
+                                    "service_payment": row.get("service_payment", 0),
+                                    "percent": str(row.get("percent", "")),
+                                }
+                            
+                            # Find added
+                            for key, order in new_map.items():
+                                if key[0] and key not in old_map:  # Has order_code and not in old
+                                    changes_summary["added"].append({
+                                        "order_code": order["order_code"],
+                                        "worker": order["worker"]
+                                    })
+                            
+                            # Find deleted
+                            for key, order in old_map.items():
+                                if key[0] and key not in new_map:  # Has order_code and not in new
+                                    changes_summary["deleted"].append({
+                                        "order_code": order.get("order_code", ""),
+                                        "worker": order.get("worker", "")
+                                    })
+                            
+                            # Find modified
+                            compare_fields = ["revenue_services", "service_payment", "percent"]
+                            for key in new_map:
+                                if key[0] and key in old_map:  # Both exist
+                                    old_order = old_map[key]
+                                    new_order = new_map[key]
+                                    
+                                    field_changes = []
+                                    for field in compare_fields:
+                                        old_val = old_order.get(field)
+                                        new_val = new_order.get(field)
+                                        
+                                        # Normalize for comparison
+                                        try:
+                                            if field != "percent":
+                                                old_val = float(old_val) if old_val else 0
+                                                new_val = float(new_val) if new_val else 0
+                                            else:
+                                                old_val = str(old_val or "")
+                                                new_val = str(new_val or "")
+                                        except:
+                                            pass
+                                        
+                                        if old_val != new_val:
+                                            field_changes.append({
+                                                "field": field,
+                                                "old": str(old_val),
+                                                "new": str(new_val)
+                                            })
+                                    
+                                    if field_changes:
+                                        changes_summary["modified"].append({
+                                            "order_code": new_order["order_code"],
+                                            "worker": new_order["worker"],
+                                            "changes": field_changes
+                                        })
+        except Exception as e:
+            print(f"⚠️ Changes comparison error (non-critical): {e}")
+        
         return JSONResponse({
             "success": True,
             "session_id": session_id,
             "period": period,
             "workers": workers,
             "orders": orders,
-            "total_records": len(combined)
+            "total_records": len(combined),
+            "changes": changes_summary
         })
         
     except Exception as e:
