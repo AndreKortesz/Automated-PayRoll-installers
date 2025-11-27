@@ -4,10 +4,11 @@ FastAPI backend for processing Excel files and calculating salaries
 """
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.requests import Request
+from contextlib import asynccontextmanager
 import pandas as pd
 import numpy as np
 from openpyxl import Workbook, load_workbook
@@ -25,7 +26,30 @@ from typing import Optional, Dict, List, Any
 import tempfile
 import shutil
 
-app = FastAPI(title="Salary Calculator", description="Расчёт зарплаты монтажников")
+# Database imports
+from database import (
+    database, create_tables, connect_db, disconnect_db,
+    get_or_create_period, create_upload, save_order, save_calculation,
+    save_worker_total, save_change, get_previous_upload, compare_uploads,
+    get_orders_by_upload, get_all_periods, get_period_details,
+    get_upload_details, get_worker_orders, get_months_summary
+)
+
+# Lifespan for database connection
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    create_tables()
+    await connect_db()
+    yield
+    # Shutdown
+    await disconnect_db()
+
+app = FastAPI(
+    title="Salary Calculator", 
+    description="Расчёт зарплаты монтажников",
+    lifespan=lifespan
+)
 
 # Templates and static files
 templates = Jinja2Templates(directory="../frontend/templates")
@@ -1054,6 +1078,121 @@ async def calculate_salaries(
         
         session_data[session_id]["alarms"] = alarms
         
+        # ===== SAVE TO DATABASE =====
+        try:
+            if database:
+                # 1. Get or create period
+                period_id = await get_or_create_period(period)
+                
+                # 2. Create upload
+                upload_id = await create_upload(period_id, full_config)
+                
+                # 3. Check for previous upload and compare
+                prev_upload_id = await get_previous_upload(period_id, 
+                    (await get_period_details(period_id))["uploads"][0]["version"] if (await get_period_details(period_id))["uploads"] else 1
+                )
+                
+                # 4. Save orders and calculations
+                order_id_map = {}  # To map order to its DB id
+                for row in calculated_data:
+                    if row.get("is_extra_row"):
+                        continue  # Skip extra rows for now
+                    
+                    # Extract order code from order text
+                    order_text = row.get("order", "")
+                    order_code_match = re.search(r'(КАУТ|ИБУТ|ТДУТ)-\d+', order_text)
+                    order_code = order_code_match.group(0) if order_code_match else ""
+                    
+                    # Save order
+                    order_data = {
+                        "worker": row.get("worker", ""),
+                        "order_code": order_code,
+                        "order": order_text,
+                        "address": extract_address_from_order(order_text),
+                        "revenue_total": row.get("revenue_total", 0),
+                        "revenue_services": row.get("revenue_services", 0),
+                        "diagnostic": row.get("diagnostic", 0),
+                        "diagnostic_payment": row.get("diagnostic_payment", 0),
+                        "specialist_fee": row.get("specialist_fee", 0),
+                        "additional_expenses": row.get("additional_expenses", 0),
+                        "service_payment": row.get("service_payment", 0),
+                        "percent": row.get("percent", ""),
+                        "is_client_payment": row.get("is_client_payment", False),
+                        "is_over_10k": row.get("is_over_10k", False),
+                    }
+                    order_id = await save_order(upload_id, order_data)
+                    order_id_map[order_text] = order_id
+                    
+                    # Save calculation
+                    calc_data = {
+                        "worker": row.get("worker", ""),
+                        "fuel_payment": row.get("fuel_payment", 0),
+                        "transport": row.get("transport", 0),
+                        "diagnostic_50": row.get("diagnostic_50", 0),
+                        "total": row.get("total", 0),
+                    }
+                    await save_calculation(upload_id, order_id, calc_data)
+                
+                # 5. Calculate and save worker totals
+                worker_totals_dict = {}
+                for row in calculated_data:
+                    worker = normalize_worker_name(row.get("worker", "").replace(" (оплата клиентом)", ""))
+                    if worker not in worker_totals_dict:
+                        worker_totals_dict[worker] = {
+                            "total": 0,
+                            "count": 0,
+                            "fuel": 0,
+                            "transport": 0
+                        }
+                    
+                    total = row.get("total", 0)
+                    if isinstance(total, (int, float)):
+                        worker_totals_dict[worker]["total"] += total
+                    worker_totals_dict[worker]["count"] += 1
+                    
+                    fuel = row.get("fuel_payment", 0)
+                    if isinstance(fuel, (int, float)):
+                        worker_totals_dict[worker]["fuel"] += fuel
+                    
+                    transport = row.get("transport", 0)
+                    if isinstance(transport, (int, float)):
+                        worker_totals_dict[worker]["transport"] += transport
+                
+                for worker, totals in worker_totals_dict.items():
+                    await save_worker_total(
+                        upload_id, 
+                        worker, 
+                        totals["total"],
+                        totals["count"],
+                        totals["fuel"],
+                        totals["transport"]
+                    )
+                
+                # 6. Compare with previous upload if exists
+                if prev_upload_id:
+                    changes_list = await compare_uploads(prev_upload_id, upload_id)
+                    for change in changes_list:
+                        if change["type"] == "added":
+                            await save_change(upload_id, change["order_code"], change["worker"], "added")
+                        elif change["type"] == "deleted":
+                            await save_change(upload_id, change["order_code"], change["worker"], "deleted")
+                        elif change["type"] == "modified":
+                            for field_change in change.get("changes", []):
+                                await save_change(
+                                    upload_id, 
+                                    change["order_code"], 
+                                    change["worker"], 
+                                    "modified",
+                                    field_change["field"],
+                                    str(field_change["old"]),
+                                    str(field_change["new"])
+                                )
+                
+                print(f"✅ Saved to database: period={period}, upload_id={upload_id}")
+        except Exception as db_error:
+            print(f"⚠️ Database save error (non-critical): {db_error}")
+            # Don't fail the request if DB save fails
+        
         return JSONResponse({
             "success": True,
             "download_url_full": f"/download/{session_id}/full",
@@ -1091,6 +1230,114 @@ async def download_report(session_id: str, archive_type: str):
         media_type="application/zip",
         filename=filename
     )
+
+
+# ============== HISTORY API ENDPOINTS ==============
+
+@app.get("/history")
+async def history_page(request: Request):
+    """History page - view all periods by month"""
+    return templates.TemplateResponse("history.html", {"request": request})
+
+
+@app.get("/api/periods")
+async def api_get_periods():
+    """Get all periods grouped by month"""
+    try:
+        periods = await get_all_periods()
+        
+        # Group by month
+        months = {}
+        for p in periods:
+            month_key = p["month"]
+            if month_key not in months:
+                months[month_key] = {
+                    "month": month_key,
+                    "year": p["year"],
+                    "periods": []
+                }
+            months[month_key]["periods"].append(p)
+        
+        return JSONResponse({
+            "success": True,
+            "months": list(months.values())
+        })
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)})
+
+
+@app.get("/api/period/{period_id}")
+async def api_get_period(period_id: int):
+    """Get period details with uploads"""
+    try:
+        details = await get_period_details(period_id)
+        if not details:
+            raise HTTPException(status_code=404, detail="Period not found")
+        
+        return JSONResponse({
+            "success": True,
+            "data": details
+        })
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)})
+
+
+@app.get("/api/upload/{upload_id}")
+async def api_get_upload(upload_id: int):
+    """Get upload details with worker totals"""
+    try:
+        details = await get_upload_details(upload_id)
+        if not details:
+            raise HTTPException(status_code=404, detail="Upload not found")
+        
+        return JSONResponse({
+            "success": True,
+            "data": details
+        })
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)})
+
+
+@app.get("/api/upload/{upload_id}/worker/{worker}")
+async def api_get_worker_orders(upload_id: int, worker: str):
+    """Get all orders for a worker"""
+    try:
+        from urllib.parse import unquote
+        worker_decoded = unquote(worker)
+        orders = await get_worker_orders(upload_id, worker_decoded)
+        
+        return JSONResponse({
+            "success": True,
+            "worker": worker_decoded,
+            "orders": orders
+        })
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)})
+
+
+@app.get("/api/months-summary")
+async def api_months_summary():
+    """Get summary by months for dashboard"""
+    try:
+        summary = await get_months_summary()
+        return JSONResponse({
+            "success": True,
+            "summary": summary
+        })
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)})
+
+
+@app.get("/period/{period_id}")
+async def period_page(request: Request, period_id: int):
+    """Period details page"""
+    return templates.TemplateResponse("period.html", {"request": request, "period_id": period_id})
+
+
+@app.get("/upload/{upload_id}")
+async def upload_page(request: Request, upload_id: int):
+    """Upload details page"""
+    return templates.TemplateResponse("upload.html", {"request": request, "upload_id": upload_id})
 
 
 if __name__ == "__main__":
