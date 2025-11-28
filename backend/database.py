@@ -155,7 +155,11 @@ worker_totals = Table(
     Column("upload_id", Integer, ForeignKey("uploads.id"), nullable=False),
     Column("worker", String(100), nullable=False),
     Column("total_amount", Float, default=0),
+    Column("company_amount", Float, default=0),   # Оплата компанией
+    Column("client_amount", Float, default=0),    # Оплата клиентом
     Column("orders_count", Integer, default=0),
+    Column("company_orders_count", Integer, default=0),
+    Column("client_orders_count", Integer, default=0),
     Column("fuel_total", Float, default=0),
     Column("transport_total", Float, default=0),
 )
@@ -277,13 +281,28 @@ async def save_calculation(upload_id: int, order_id: int, calc_data: dict):
     )
     await database.execute(query)
 
-async def save_worker_total(upload_id: int, worker: str, total: float, orders_count: int, fuel: float, transport: float):
-    """Save worker total"""
+async def save_worker_total(
+    upload_id: int, 
+    worker: str, 
+    total: float, 
+    orders_count: int, 
+    fuel: float, 
+    transport: float,
+    company_amount: float = 0,
+    client_amount: float = 0,
+    company_orders_count: int = 0,
+    client_orders_count: int = 0
+):
+    """Save worker total with company/client breakdown"""
     query = worker_totals.insert().values(
         upload_id=upload_id,
         worker=worker,
         total_amount=total,
+        company_amount=company_amount,
+        client_amount=client_amount,
         orders_count=orders_count,
+        company_orders_count=company_orders_count,
+        client_orders_count=client_orders_count,
         fuel_total=fuel,
         transport_total=transport,
     )
