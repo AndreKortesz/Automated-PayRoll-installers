@@ -213,13 +213,18 @@ async def geocode_address(address: str, api_key: str) -> tuple:
     
     lat, lon = await geocode_address_yandex(address, api_key)
     if lat and lon:
+        print(f"  📍 Yandex OK: {address[:40]}... -> ({lat:.4f}, {lon:.4f})")
         distance_cache[cache_key] = (lat, lon)
         return lat, lon
     
     lat, lon = await geocode_address_nominatim(address)
     if lat and lon:
+        print(f"  📍 Nominatim OK: {address[:40]}... -> ({lat:.4f}, {lon:.4f})")
         distance_cache[cache_key] = (lat, lon)
-    return lat, lon
+        return lat, lon
+    
+    print(f"  ❌ Геокодинг FAILED: {address[:50]}")
+    return None, None
 
 
 async def get_distance_osrm(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -250,17 +255,37 @@ def is_moscow_region(address: str) -> bool:
     
     addr_lower = address.lower()
     
+    # Explicit Moscow markers - if found, definitely Moscow
+    moscow_markers = [
+        "москва", "московская обл", "московской обл", "мо,", "мо ", "м.о.",
+        "московский", "подмосков"
+    ]
+    if any(marker in addr_lower for marker in moscow_markers):
+        return True
+    
+    # Moscow street patterns that might be confused with other cities
+    # (e.g. "Севастопольский проспект" is in Moscow, not Sevastopol)
+    moscow_streets = [
+        "севастопольский", "крымский", "симферопольск", "ялтинск",
+        "одесская", "киевское шоссе", "калининградск"
+    ]
+    if any(street in addr_lower for street in moscow_streets):
+        return True
+    
     # Explicit non-Moscow regions - if found, return False
-    non_moscow_keywords = [
-        "санкт-петербург", "спб", "ленинградск", "петербург",
-        "краснодар", "сочи", "новосибирск", "екатеринбург", 
-        "казань", "нижний новгород", "челябинск", "самара",
-        "омск", "ростов-на-дону", "уфа", "красноярск", "пермь",
+    # But check full city names to avoid false matches with street names
+    non_moscow_patterns = [
+        "санкт-петербург", " спб,", " спб ", "г.спб", "г. спб",
+        "ленинградская обл", "петербург",
+        "краснодар", "г.сочи", "г. сочи", "новосибирск", "екатеринбург", 
+        "г.казань", "г. казань", "нижний новгород", "челябинск", "самара",
+        "омск", "ростов-на-дону", "г.уфа", "г. уфа", "красноярск", "пермь",
         "воронеж", "волгоград", "саратов", "тюмень", "тольятти",
-        "крым", "севастополь", "калининград"
+        "республика крым", "г.севастополь", "г. севастополь", 
+        "калининградская обл"
     ]
     
-    if any(kw in addr_lower for kw in non_moscow_keywords):
+    if any(pattern in addr_lower for pattern in non_moscow_patterns):
         return False
     
     # If no explicit non-Moscow region, assume it's Moscow/MO area
@@ -270,34 +295,41 @@ def is_moscow_region(address: str) -> bool:
 async def calculate_fuel_cost(address: str, config: dict, days: int = 1) -> int:
     """Calculate fuel cost for round trip - only for Moscow and MO"""
     if not address or pd.isna(address):
+        print(f"⛽ Бензин: пропуск (нет адреса)")
         return 0
     
     # Only calculate for Moscow and Moscow Oblast
     if not is_moscow_region(address):
+        print(f"⛽ Бензин: пропуск (не Москва/МО): {address[:50]}")
         return 0
     
     # Add "Москва" or "Московская область" if not present for better geocoding
     addr_for_geocode = address
     if "москва" not in address.lower() and "московская" not in address.lower():
-        addr_for_geocode = f"Московская область, {address}"
+        addr_for_geocode = f"Москва, {address}"
     
     base_lat, base_lon = await geocode_address(config["base_address"], config["yandex_api_key"])
     if not base_lat:
+        print(f"⛽ Бензин: не удалось геокодировать базовый адрес")
         return 0
     
     dest_lat, dest_lon = await geocode_address(addr_for_geocode, config["yandex_api_key"])
     if not dest_lat:
+        print(f"⛽ Бензин: не удалось геокодировать адрес: {addr_for_geocode[:60]}")
         return 0
     
     distance = await get_distance_osrm(base_lat, base_lon, dest_lat, dest_lon)
     if distance == 0:
+        print(f"⛽ Бензин: не удалось рассчитать расстояние для {address[:50]}")
         return 0
     
     cost = distance * 2 * config["fuel_coefficient"] * days
     import math
     cost = math.ceil(cost / 100) * 100
     
-    return min(cost, config["fuel_max"])
+    result = min(cost, config["fuel_max"])
+    print(f"⛽ Бензин: {address[:40]}... -> {distance:.1f} км -> {result} руб")
+    return result
 
 
 def extract_address_from_order(order_text: str) -> str:
@@ -312,6 +344,7 @@ def extract_address_from_order(order_text: str) -> str:
         if pattern in text:
             return ""
     
+    # Pattern 1: Full datetime format "27.10.2025 0:00:00, address"
     match = re.search(r'\d{2}\.\d{2}\.\d{4}\s+\d{1,2}:\d{2}:\d{2},\s*(.+?)(?:\n|$)', text)
     if match:
         addr = match.group(1).strip()
@@ -319,7 +352,16 @@ def extract_address_from_order(order_text: str) -> str:
         addr = re.sub(r'\|.*', '', addr)
         return addr.strip()
     
+    # Pattern 2: Short time format "0:00:00, address"
     match = re.search(r'\d:\d{2}:\d{2},\s*(.+?)(?:\n|$)', text)
+    if match:
+        addr = match.group(1).strip()
+        addr = re.sub(r'\\n.*', '', addr)
+        addr = re.sub(r'\|.*', '', addr)
+        return addr.strip()
+    
+    # Pattern 3: Date only format "27.10.2025, address" (no time)
+    match = re.search(r'\d{2}\.\d{2}\.\d{4},\s*(.+?)(?:\n|$)', text)
     if match:
         addr = match.group(1).strip()
         addr = re.sub(r'\\n.*', '', addr)
