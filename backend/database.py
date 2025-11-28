@@ -428,8 +428,33 @@ async def get_upload_details(upload_id: int) -> dict:
     query = changes.select().where(changes.c.upload_id == upload_id)
     change_list = await database.fetch_all(query)
     
-    # Filter changes to only valid workers
-    filtered_changes = [dict(c) for c in change_list if is_valid_worker_name(c["worker"])]
+    # Filter changes to only valid workers and enrich with order details
+    filtered_changes = []
+    for c in change_list:
+        if not is_valid_worker_name(c["worker"]):
+            continue
+        
+        change_dict = dict(c)
+        
+        # Get order details for this change
+        order_query = orders.select().where(
+            (orders.c.upload_id == upload_id) & 
+            (orders.c.order_code == c["order_code"]) &
+            (orders.c.worker.like(f"%{c['worker']}%"))
+        )
+        order = await database.fetch_one(order_query)
+        
+        if order:
+            # Add order details to change
+            change_dict["address"] = order["address"] or ""
+            change_dict["revenue_total"] = order["revenue_total"] or 0
+            change_dict["revenue_services"] = order["revenue_services"] or 0
+            change_dict["service_payment"] = order["service_payment"] or 0
+            change_dict["percent"] = order["percent"] or ""
+            change_dict["diagnostic"] = order["diagnostic"] or 0
+            change_dict["specialist_fee"] = order["specialist_fee"] or 0
+        
+        filtered_changes.append(change_dict)
     
     return {
         "upload": dict(upload),
