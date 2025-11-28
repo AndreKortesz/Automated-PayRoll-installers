@@ -1584,9 +1584,31 @@ async def api_get_periods():
     try:
         periods = await get_all_periods()
         
+        # Enrich periods with total_amount and latest_upload_id
+        enriched_periods = []
+        for p in periods:
+            period_details = await get_period_details(p["id"])
+            total_amount = 0
+            latest_upload_id = None
+            
+            if period_details and period_details.get("uploads"):
+                latest_upload = period_details["uploads"][0]
+                latest_upload_id = latest_upload["id"]
+                
+                upload_details = await get_upload_details(latest_upload_id)
+                if upload_details:
+                    worker_totals = upload_details.get("worker_totals", [])
+                    total_amount = sum(wt.get("total_amount", 0) for wt in worker_totals)
+            
+            enriched_periods.append({
+                **p,
+                "total_amount": total_amount,
+                "latest_upload_id": latest_upload_id
+            })
+        
         # Group by month
         months = {}
-        for p in periods:
+        for p in enriched_periods:
             month_key = p["month"]
             if month_key not in months:
                 months[month_key] = {
@@ -1601,6 +1623,8 @@ async def api_get_periods():
             "months": list(months.values())
         })
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return JSONResponse({"success": False, "error": str(e)})
 
 
@@ -1664,6 +1688,268 @@ async def api_months_summary():
         })
     except Exception as e:
         return JSONResponse({"success": False, "error": str(e)})
+
+
+@app.get("/api/comparison")
+async def api_comparison():
+    """Get comparison data for all periods and workers"""
+    try:
+        periods = await get_all_periods()
+        
+        # Get all unique workers and worker totals for each period
+        all_workers = set()
+        periods_with_totals = []
+        
+        for period in periods:
+            period_details = await get_period_details(period["id"])
+            if period_details and period_details.get("uploads"):
+                latest_upload = period_details["uploads"][0]
+                upload_details = await get_upload_details(latest_upload["id"])
+                
+                worker_totals = upload_details.get("worker_totals", [])
+                for wt in worker_totals:
+                    all_workers.add(wt["worker"])
+                
+                periods_with_totals.append({
+                    "id": period["id"],
+                    "name": period["name"],
+                    "month": period["month"],
+                    "worker_totals": worker_totals
+                })
+        
+        # Group by months
+        months_map = {}
+        for p in periods_with_totals:
+            month = p["month"]
+            if month not in months_map:
+                months_map[month] = {
+                    "month": month,
+                    "worker_totals": []
+                }
+            # Aggregate worker totals by month
+            for wt in p["worker_totals"]:
+                existing = next((w for w in months_map[month]["worker_totals"] if w["worker"] == wt["worker"]), None)
+                if existing:
+                    existing["total_amount"] = existing.get("total_amount", 0) + wt.get("total_amount", 0)
+                    existing["company_amount"] = existing.get("company_amount", 0) + wt.get("company_amount", 0)
+                    existing["client_amount"] = existing.get("client_amount", 0) + wt.get("client_amount", 0)
+                else:
+                    months_map[month]["worker_totals"].append({
+                        "worker": wt["worker"],
+                        "total_amount": wt.get("total_amount", 0),
+                        "company_amount": wt.get("company_amount", 0),
+                        "client_amount": wt.get("client_amount", 0)
+                    })
+        
+        months_list = sorted(months_map.values(), key=lambda x: x["month"], reverse=True)
+        
+        return JSONResponse({
+            "success": True,
+            "data": {
+                "periods": periods_with_totals,
+                "months": months_list,
+                "workers": sorted(list(all_workers))
+            }
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JSONResponse({"success": False, "error": str(e)})
+
+
+@app.get("/api/comparison/export")
+async def api_comparison_export():
+    """Export comparison table to Excel"""
+    try:
+        # Get comparison data
+        periods = await get_all_periods()
+        
+        all_workers = set()
+        periods_with_totals = []
+        
+        for period in periods:
+            period_details = await get_period_details(period["id"])
+            if period_details and period_details.get("uploads"):
+                latest_upload = period_details["uploads"][0]
+                upload_details = await get_upload_details(latest_upload["id"])
+                
+                worker_totals = upload_details.get("worker_totals", [])
+                for wt in worker_totals:
+                    all_workers.add(wt["worker"])
+                
+                periods_with_totals.append({
+                    "id": period["id"],
+                    "name": period["name"],
+                    "month": period["month"],
+                    "worker_totals": worker_totals
+                })
+        
+        workers = sorted(list(all_workers))
+        
+        # Create Excel
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Сравнение по периодам"
+        
+        # Header style
+        header_fill = PatternFill(start_color="667eea", end_color="667eea", fill_type="solid")
+        header_font = Font(color="FFFFFF", bold=True)
+        
+        # Headers
+        ws.cell(row=1, column=1, value="Монтажник").fill = header_fill
+        ws.cell(row=1, column=1).font = header_font
+        
+        for col, period in enumerate(periods_with_totals, start=2):
+            cell = ws.cell(row=1, column=col, value=period["name"])
+            cell.fill = header_fill
+            cell.font = header_font
+        
+        total_col = len(periods_with_totals) + 2
+        ws.cell(row=1, column=total_col, value="Всего").fill = header_fill
+        ws.cell(row=1, column=total_col).font = header_font
+        
+        # Data rows
+        for row, worker in enumerate(workers, start=2):
+            ws.cell(row=row, column=1, value=worker)
+            worker_total = 0
+            
+            for col, period in enumerate(periods_with_totals, start=2):
+                wt = next((w for w in period["worker_totals"] if w["worker"] == worker), None)
+                value = wt.get("total_amount", 0) if wt else 0
+                worker_total += value
+                ws.cell(row=row, column=col, value=round(value))
+            
+            ws.cell(row=row, column=total_col, value=round(worker_total))
+        
+        # Total row
+        total_row = len(workers) + 2
+        ws.cell(row=total_row, column=1, value="ИТОГО").font = Font(bold=True)
+        
+        for col, period in enumerate(periods_with_totals, start=2):
+            period_total = sum(w.get("total_amount", 0) for w in period["worker_totals"])
+            ws.cell(row=total_row, column=col, value=round(period_total)).font = Font(bold=True)
+        
+        grand_total = sum(
+            sum(w.get("total_amount", 0) for w in p["worker_totals"])
+            for p in periods_with_totals
+        )
+        ws.cell(row=total_row, column=total_col, value=round(grand_total)).font = Font(bold=True)
+        
+        # Auto-width
+        for col in ws.columns:
+            max_length = 0
+            column = col[0].column_letter
+            for cell in col:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            ws.column_dimensions[column].width = max_length + 2
+        
+        # Save to bytes
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+        
+        from fastapi.responses import StreamingResponse
+        return StreamingResponse(
+            output,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": "attachment; filename=comparison.xlsx"}
+        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JSONResponse({"success": False, "error": str(e)})
+
+
+@app.get("/api/period/{period_id}/download/{archive_type}")
+async def download_period_archive(period_id: int, archive_type: str):
+    """Download archive for a specific period"""
+    try:
+        period_details = await get_period_details(period_id)
+        if not period_details or not period_details.get("uploads"):
+            raise HTTPException(status_code=404, detail="Period not found")
+        
+        latest_upload = period_details["uploads"][0]
+        upload_details = await get_upload_details(latest_upload["id"])
+        
+        # Reconstruct data for Excel generation
+        worker_totals = upload_details.get("worker_totals", [])
+        
+        # Get all orders for this upload
+        all_orders = []
+        for wt in worker_totals:
+            worker_orders = await get_worker_orders(latest_upload["id"], wt["worker"])
+            all_orders.extend(worker_orders)
+        
+        # Reconstruct data structure
+        data = []
+        for order in all_orders:
+            calc = order.get("calculation", {})
+            row = {
+                "worker": order["worker"],
+                "order": order.get("order_text", ""),
+                "revenue_total": order.get("revenue_total", 0),
+                "revenue_services": order.get("revenue_services", 0),
+                "diagnostic": order.get("diagnostic", 0),
+                "diagnostic_payment": order.get("diagnostic_payment", 0),
+                "specialist_fee": order.get("specialist_fee", 0),
+                "extra_expenses": order.get("extra_expenses", 0),
+                "service_payment": order.get("service_payment", 0),
+                "percent": order.get("percent", 0),
+                "is_client_payment": order.get("is_client_payment", False),
+                "fuel_payment": calc.get("fuel_payment", 0),
+                "transport": calc.get("transport", 0),
+                "diagnostic_50": calc.get("diagnostic_50", 0),
+                "total": calc.get("total", 0),
+            }
+            data.append(row)
+        
+        # Add worker totals
+        for wt in worker_totals:
+            data.append({
+                "worker": wt["worker"],
+                "is_worker_total": True,
+                "total": wt.get("total_amount", 0)
+            })
+        
+        period_name = period_details["period"]["name"]
+        for_workers = (archive_type == "workers")
+        
+        # Generate Excel
+        excel_data = create_excel_report(data, period_name, DEFAULT_CONFIG, for_workers=for_workers)
+        
+        # Create ZIP
+        zip_buffer = BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            filename = f"Общий_отчет_{period_name.replace('.', '_')}.xlsx"
+            if for_workers:
+                filename = f"Для_монтажников_{period_name.replace('.', '_')}.xlsx"
+            zf.writestr(filename, excel_data)
+        
+        zip_buffer.seek(0)
+        
+        from fastapi.responses import StreamingResponse
+        archive_name = f"{'workers' if for_workers else 'full'}_{period_name.replace('.', '_')}.zip"
+        return StreamingResponse(
+            zip_buffer,
+            media_type="application/zip",
+            headers={"Content-Disposition": f"attachment; filename={archive_name}"}
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/comparison")
+async def comparison_page(request: Request):
+    """Comparison table page"""
+    return templates.TemplateResponse("comparison.html", {"request": request})
 
 
 @app.get("/period/{period_id}")
