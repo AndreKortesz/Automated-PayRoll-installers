@@ -343,6 +343,60 @@ def parse_percent(value) -> float:
         return 0
 
 
+# Groups to exclude from salary calculation (not real workers)
+EXCLUDED_GROUPS = {
+    "доставка",
+    "доставка лестницы",
+    "осмотр без оплаты (оплачен ранее)",
+    "осмотр без оплаты",
+    "помощник",
+    "итого",
+    "параметры:",
+    "отбор:",
+    "монтажник",
+    "заказ, комментарий",
+}
+
+
+def is_valid_worker_name(name: str) -> bool:
+    """Check if name looks like a real person name (ФИО)
+    
+    Valid: "Ветренко Дмитрий", "Романюк Алексей Юрьевич"
+    Invalid: "Доставка", "Помощник", "Итого"
+    """
+    # Remove "(оплата клиентом)" suffix for checking
+    clean_name = name.replace(" (оплата клиентом)", "").strip().lower()
+    
+    # Check against blacklist
+    if clean_name in EXCLUDED_GROUPS:
+        return False
+    
+    # Check if starts with any excluded word
+    for excluded in EXCLUDED_GROUPS:
+        if clean_name.startswith(excluded):
+            return False
+    
+    # Additional check: real name should have at least 2 words (Фамилия Имя)
+    # and each word should start with uppercase letter in original
+    original_clean = name.replace(" (оплата клиентом)", "").strip()
+    words = original_clean.split()
+    
+    if len(words) < 2:
+        return False
+    
+    # Check that first word looks like a surname (starts with uppercase, mostly letters)
+    first_word = words[0]
+    if not first_word[0].isupper():
+        return False
+    
+    # Check that it contains mostly Cyrillic or Latin letters
+    letter_count = sum(1 for c in first_word if c.isalpha())
+    if letter_count < len(first_word) * 0.8:
+        return False
+    
+    return True
+
+
 def extract_period(df: pd.DataFrame) -> str:
     """Extract period from dataframe header"""
     for i in range(min(5, len(df))):
@@ -373,6 +427,7 @@ def parse_excel_file(file_bytes: bytes, is_over_10k: bool) -> pd.DataFrame:
     records = []
     current_worker = None
     is_client_payment_section = False
+    is_valid_worker = False  # Track if current group is a valid worker
     
     for i in range(header_row + 2, len(df)):
         row = df.iloc[i]
@@ -389,20 +444,29 @@ def parse_excel_file(file_bytes: bytes, is_over_10k: bool) -> pd.DataFrame:
                    "В прошлом расчете" in first_col_str)
         
         if not is_order:
+            # This is a group header (worker name or service category)
             is_client_payment_section = "(оплата клиентом)" in first_col_str
             worker_name = first_col_str.replace(" (оплата клиентом)", "").strip()
             
             if worker_name == "Монтажник":
                 continue
             
-            # Normalize worker name
-            worker_name = normalize_worker_name(worker_name)
-            current_worker = worker_name
+            # Check if this is a valid worker (not a service category like "Доставка")
+            is_valid_worker = is_valid_worker_name(first_col_str)
+            
+            if is_valid_worker:
+                # Normalize worker name
+                worker_name = normalize_worker_name(worker_name)
+                current_worker = worker_name
+            else:
+                # Skip this group - it's not a real worker
+                current_worker = None
             
             # "(оплата клиентом)" строка - это заголовок секции, не записываем её как данные
             continue
         else:
-            if current_worker:
+            # This is an order row - only add if current worker is valid
+            if current_worker and is_valid_worker:
                 records.append({
                     "worker": normalize_worker_name(current_worker),
                     "order": first_col_str,
@@ -1017,65 +1081,125 @@ async def upload_files(
                                 order_code = order_code_match.group(0) if order_code_match else ""
                                 worker = normalize_worker_name(str(row.get("worker", ""))).replace(" (оплата клиентом)", "")
                                 
+                                # Extract address from order text
+                                address = ""
+                                if ", " in order_text:
+                                    parts = order_text.split(", ", 1)
+                                    if len(parts) > 1:
+                                        address = parts[1].split("\n")[0][:80]  # First 80 chars of address
+                                
                                 key = (order_code, worker)
+                                
+                                # Collect all numeric fields
+                                revenue_total = float(row.get("revenue_total", 0) or 0)
+                                revenue_services = float(row.get("revenue_services", 0) or 0)
+                                diagnostic = float(row.get("diagnostic", 0) or 0)
+                                specialist_fee = float(row.get("specialist_fee", 0) or 0)
+                                additional_expenses = float(row.get("additional_expenses", 0) or 0)
+                                service_payment = float(row.get("service_payment", 0) or 0)
+                                percent_val = parse_percent(row.get("percent", 0))
+                                
                                 new_map[key] = {
                                     "order_code": order_code,
+                                    "order_full": order_text,
+                                    "address": address,
                                     "worker": worker,
-                                    "revenue_services": row.get("revenue_services", 0),
-                                    "service_payment": row.get("service_payment", 0),
-                                    "percent": str(row.get("percent", "")),
+                                    "revenue_total": revenue_total,
+                                    "revenue_services": revenue_services,
+                                    "diagnostic": diagnostic,
+                                    "specialist_fee": specialist_fee,
+                                    "additional_expenses": additional_expenses,
+                                    "service_payment": service_payment,
+                                    "percent": percent_val,
                                 }
                             
-                            # Find added
+                            # Find added - include all details
                             for key, order in new_map.items():
                                 if key[0] and key not in old_map:  # Has order_code and not in old
+                                    # Build details dict with non-zero values
+                                    details = {}
+                                    if order["revenue_total"] > 0:
+                                        details["Выручка итого"] = f"{order['revenue_total']:,.0f}".replace(",", " ")
+                                    if order["revenue_services"] != 0:
+                                        details["Выручка от услуг"] = f"{order['revenue_services']:,.0f}".replace(",", " ")
+                                    if order["diagnostic"] > 0:
+                                        details["Диагностика"] = f"{order['diagnostic']:,.0f}".replace(",", " ")
+                                    if order["specialist_fee"] > 0:
+                                        details["Выезд специалиста"] = f"{order['specialist_fee']:,.0f}".replace(",", " ")
+                                    if order["additional_expenses"] != 0:
+                                        details["Доп. расходы"] = f"{order['additional_expenses']:,.0f}".replace(",", " ")
+                                    if order["service_payment"] != 0:
+                                        details["Оплата услуг"] = f"{order['service_payment']:,.0f}".replace(",", " ")
+                                    if order["percent"] > 0:
+                                        details["Процент"] = f"{order['percent']:.0f}%"
+                                    
                                     changes_summary["added"].append({
                                         "order_code": order["order_code"],
-                                        "worker": order["worker"]
+                                        "worker": order["worker"],
+                                        "address": order["address"],
+                                        "details": details
                                     })
                             
-                            # Find deleted
+                            # Find deleted - include address from old data
                             for key, order in old_map.items():
                                 if key[0] and key not in new_map:  # Has order_code and not in new
+                                    # Build details from old order
+                                    details = {}
+                                    if float(order.get("revenue_total", 0) or 0) > 0:
+                                        details["Выручка итого"] = f"{float(order.get('revenue_total', 0)):,.0f}".replace(",", " ")
+                                    if float(order.get("revenue_services", 0) or 0) != 0:
+                                        details["Выручка от услуг"] = f"{float(order.get('revenue_services', 0)):,.0f}".replace(",", " ")
+                                    if float(order.get("service_payment", 0) or 0) != 0:
+                                        details["Оплата услуг"] = f"{float(order.get('service_payment', 0)):,.0f}".replace(",", " ")
+                                    if float(order.get("percent", 0) or 0) > 0:
+                                        details["Процент"] = f"{float(order.get('percent', 0)):.0f}%"
+                                    
                                     changes_summary["deleted"].append({
                                         "order_code": order.get("order_code", ""),
-                                        "worker": order.get("worker", "")
+                                        "worker": order.get("worker", ""),
+                                        "address": order.get("address", ""),
+                                        "details": details
                                     })
                             
-                            # Find modified
-                            compare_fields = ["revenue_services", "service_payment", "percent"]
+                            # Find modified - compare all fields
+                            compare_fields = [
+                                ("revenue_total", "Выручка итого"),
+                                ("revenue_services", "Выручка от услуг"),
+                                ("diagnostic", "Диагностика"),
+                                ("specialist_fee", "Выезд специалиста"),
+                                ("additional_expenses", "Доп. расходы"),
+                                ("service_payment", "Оплата услуг"),
+                                ("percent", "Процент"),
+                            ]
                             for key in new_map:
                                 if key[0] and key in old_map:  # Both exist
                                     old_order = old_map[key]
                                     new_order = new_map[key]
                                     
                                     field_changes = []
-                                    for field in compare_fields:
-                                        old_val = old_order.get(field)
-                                        new_val = new_order.get(field)
+                                    for field_key, field_name in compare_fields:
+                                        old_val = float(old_order.get(field_key, 0) or 0)
+                                        new_val = float(new_order.get(field_key, 0) or 0)
                                         
-                                        # Normalize for comparison
-                                        try:
-                                            if field != "percent":
-                                                old_val = float(old_val) if old_val else 0
-                                                new_val = float(new_val) if new_val else 0
+                                        if abs(old_val - new_val) > 0.01:  # Compare with tolerance
+                                            if field_key == "percent":
+                                                field_changes.append({
+                                                    "field": field_name,
+                                                    "old": f"{old_val:.0f}%",
+                                                    "new": f"{new_val:.0f}%"
+                                                })
                                             else:
-                                                old_val = str(old_val or "")
-                                                new_val = str(new_val or "")
-                                        except:
-                                            pass
-                                        
-                                        if old_val != new_val:
-                                            field_changes.append({
-                                                "field": field,
-                                                "old": str(old_val),
-                                                "new": str(new_val)
-                                            })
+                                                field_changes.append({
+                                                    "field": field_name,
+                                                    "old": f"{old_val:,.0f}".replace(",", " "),
+                                                    "new": f"{new_val:,.0f}".replace(",", " ")
+                                                })
                                     
                                     if field_changes:
                                         changes_summary["modified"].append({
                                             "order_code": new_order["order_code"],
                                             "worker": new_order["worker"],
+                                            "address": new_order["address"],
                                             "changes": field_changes
                                         })
         except Exception as e:
