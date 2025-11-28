@@ -426,13 +426,15 @@
         }
         .changes-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
             gap: 15px;
         }
         .change-category {
             background: white;
             border-radius: 8px;
             padding: 15px;
+            max-height: 400px;
+            overflow-y: auto;
         }
         .change-category-title {
             font-weight: bold;
@@ -440,30 +442,67 @@
             display: flex;
             align-items: center;
             gap: 8px;
+            position: sticky;
+            top: 0;
+            background: white;
+            padding: 5px 0;
         }
         .change-category-title.added { color: #28a745; }
         .change-category-title.deleted { color: #dc3545; }
         .change-category-title.modified { color: #fd7e14; }
         .change-item {
-            padding: 8px;
-            margin-bottom: 5px;
+            padding: 10px;
+            margin-bottom: 8px;
             border-radius: 5px;
             font-size: 13px;
         }
-        .change-item.added { background: #d4edda; }
-        .change-item.deleted { background: #f8d7da; }
-        .change-item.modified { background: #fff3cd; }
+        .change-item.added { background: #d4edda; border-left: 3px solid #28a745; }
+        .change-item.deleted { background: #f8d7da; border-left: 3px solid #dc3545; }
+        .change-item.modified { background: #fff3cd; border-left: 3px solid #fd7e14; }
         .change-item-code {
             font-weight: 600;
+            font-size: 14px;
         }
         .change-item-worker {
             color: #666;
             font-size: 12px;
+            margin-top: 2px;
+        }
+        .change-item-address {
+            color: #495057;
+            font-size: 11px;
+            margin-top: 4px;
+            font-style: italic;
+        }
+        .change-item-details {
+            margin-top: 6px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+        .detail-tag {
+            background: rgba(0,0,0,0.08);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+            white-space: nowrap;
         }
         .change-item-fields {
-            font-size: 11px;
+            font-size: 12px;
             color: #856404;
-            margin-top: 4px;
+            margin-top: 6px;
+        }
+        .field-change {
+            display: inline-block;
+            margin-right: 8px;
+            margin-bottom: 2px;
+        }
+        .field-change s {
+            color: #dc3545;
+            text-decoration: line-through;
+        }
+        .field-change b {
+            color: #28a745;
         }
     </style>
 </head>
@@ -668,6 +707,14 @@
                                     <div class="changes-grid">
                             `;
                             
+                            // Helper function to format details
+                            const formatDetails = (details) => {
+                                if (!details || Object.keys(details).length === 0) return '';
+                                return Object.entries(details)
+                                    .map(([key, val]) => `<span class="detail-tag">${key}: ${val}</span>`)
+                                    .join(' ');
+                            };
+                            
                             // Added
                             if (changes.added?.length > 0) {
                                 changesHtml += `
@@ -679,6 +726,8 @@
                                         <div class="change-item added">
                                             <div class="change-item-code">${item.order_code}</div>
                                             <div class="change-item-worker">${item.worker}</div>
+                                            ${item.address ? `<div class="change-item-address">📍 ${item.address}</div>` : ''}
+                                            ${item.details ? `<div class="change-item-details">${formatDetails(item.details)}</div>` : ''}
                                         </div>
                                     `;
                                 });
@@ -696,6 +745,8 @@
                                         <div class="change-item deleted">
                                             <div class="change-item-code">${item.order_code}</div>
                                             <div class="change-item-worker">${item.worker}</div>
+                                            ${item.address ? `<div class="change-item-address">📍 ${item.address}</div>` : ''}
+                                            ${item.details ? `<div class="change-item-details">${formatDetails(item.details)}</div>` : ''}
                                         </div>
                                     `;
                                 });
@@ -709,11 +760,12 @@
                                         <div class="change-category-title modified">✏️ Изменено (${changes.modified.length})</div>
                                 `;
                                 changes.modified.forEach(item => {
-                                    const fieldsText = item.changes.map(c => `${c.field}: ${c.old} → ${c.new}`).join(', ');
+                                    const fieldsText = item.changes.map(c => `<span class="field-change">${c.field}: <s>${c.old}</s> → <b>${c.new}</b></span>`).join(' ');
                                     changesHtml += `
                                         <div class="change-item modified">
                                             <div class="change-item-code">${item.order_code}</div>
                                             <div class="change-item-worker">${item.worker}</div>
+                                            ${item.address ? `<div class="change-item-address">📍 ${item.address}</div>` : ''}
                                             <div class="change-item-fields">${fieldsText}</div>
                                         </div>
                                     `;
