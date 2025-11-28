@@ -1383,14 +1383,27 @@ async def calculate_salaries(
                     if worker not in worker_totals_dict:
                         worker_totals_dict[worker] = {
                             "total": 0,
+                            "company_total": 0,
+                            "client_total": 0,
                             "count": 0,
+                            "company_count": 0,
+                            "client_count": 0,
                             "fuel": 0,
                             "transport": 0
                         }
                     
                     total = row.get("total", 0)
+                    is_client = row.get("is_client_payment", False)
+                    
                     if isinstance(total, (int, float)):
                         worker_totals_dict[worker]["total"] += total
+                        if is_client:
+                            worker_totals_dict[worker]["client_total"] += total
+                            worker_totals_dict[worker]["client_count"] += 1
+                        else:
+                            worker_totals_dict[worker]["company_total"] += total
+                            worker_totals_dict[worker]["company_count"] += 1
+                    
                     worker_totals_dict[worker]["count"] += 1
                     
                     fuel = row.get("fuel_payment", 0)
@@ -1408,7 +1421,11 @@ async def calculate_salaries(
                         totals["total"],
                         totals["count"],
                         totals["fuel"],
-                        totals["transport"]
+                        totals["transport"],
+                        totals["company_total"],
+                        totals["client_total"],
+                        totals["company_count"],
+                        totals["client_count"]
                     )
                 
                 # 6. Compare with previous upload if exists
