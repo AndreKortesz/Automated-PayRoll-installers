@@ -200,6 +200,34 @@ def create_tables():
         engine = create_engine(DATABASE_URL)
         metadata.create_all(engine)
         print("✅ Tables created")
+        
+        # Run migrations for new columns
+        try:
+            import psycopg2
+            conn = psycopg2.connect(DATABASE_URL)
+            cur = conn.cursor()
+            
+            # Add new columns if they don't exist
+            migrations = [
+                "ALTER TABLE worker_totals ADD COLUMN IF NOT EXISTS company_amount FLOAT DEFAULT 0",
+                "ALTER TABLE worker_totals ADD COLUMN IF NOT EXISTS client_amount FLOAT DEFAULT 0",
+                "ALTER TABLE worker_totals ADD COLUMN IF NOT EXISTS company_orders_count INTEGER DEFAULT 0",
+                "ALTER TABLE worker_totals ADD COLUMN IF NOT EXISTS client_orders_count INTEGER DEFAULT 0",
+            ]
+            
+            for migration in migrations:
+                try:
+                    cur.execute(migration)
+                    conn.commit()
+                except Exception as e:
+                    conn.rollback()
+                    print(f"Migration skipped (may already exist): {e}")
+            
+            cur.close()
+            conn.close()
+            print("✅ Migrations completed")
+        except Exception as e:
+            print(f"⚠️ Migration error (non-critical): {e}")
 
 async def get_or_create_period(name: str) -> int:
     """Get existing period or create new one"""
@@ -430,56 +458,77 @@ async def get_period_details(period_id: int) -> dict:
 
 async def get_upload_details(upload_id: int) -> dict:
     """Get upload with worker totals and orders"""
-    # Get upload
-    query = uploads.select().where(uploads.c.id == upload_id)
-    upload = await database.fetch_one(query)
-    if not upload:
-        return None
-    
-    # Get worker totals - FILTER out non-workers
-    query = worker_totals.select().where(worker_totals.c.upload_id == upload_id).order_by(worker_totals.c.worker)
-    totals = await database.fetch_all(query)
-    
-    # Filter to only valid workers
-    filtered_totals = [dict(t) for t in totals if is_valid_worker_name(t["worker"])]
-    
-    # Get changes for this upload - FILTER out non-workers
-    query = changes.select().where(changes.c.upload_id == upload_id)
-    change_list = await database.fetch_all(query)
-    
-    # Filter changes to only valid workers and enrich with order details
-    filtered_changes = []
-    for c in change_list:
-        if not is_valid_worker_name(c["worker"]):
-            continue
+    try:
+        # Get upload
+        query = uploads.select().where(uploads.c.id == upload_id)
+        upload = await database.fetch_one(query)
+        if not upload:
+            return None
         
-        change_dict = dict(c)
+        # Get worker totals - FILTER out non-workers
+        query = worker_totals.select().where(worker_totals.c.upload_id == upload_id).order_by(worker_totals.c.worker)
+        totals = await database.fetch_all(query)
         
-        # Get order details for this change
-        order_query = orders.select().where(
-            (orders.c.upload_id == upload_id) & 
-            (orders.c.order_code == c["order_code"]) &
-            (orders.c.worker.like(f"%{c['worker']}%"))
-        )
-        order = await database.fetch_one(order_query)
+        # Filter to only valid workers and add default values for new columns
+        filtered_totals = []
+        for t in totals:
+            if not is_valid_worker_name(t["worker"]):
+                continue
+            t_dict = dict(t)
+            # Add defaults for new columns if they don't exist
+            if "company_amount" not in t_dict:
+                t_dict["company_amount"] = t_dict.get("total_amount", 0)
+            if "client_amount" not in t_dict:
+                t_dict["client_amount"] = 0
+            if "company_orders_count" not in t_dict:
+                t_dict["company_orders_count"] = t_dict.get("orders_count", 0)
+            if "client_orders_count" not in t_dict:
+                t_dict["client_orders_count"] = 0
+            filtered_totals.append(t_dict)
         
-        if order:
-            # Add order details to change
-            change_dict["address"] = order["address"] or ""
-            change_dict["revenue_total"] = order["revenue_total"] or 0
-            change_dict["revenue_services"] = order["revenue_services"] or 0
-            change_dict["service_payment"] = order["service_payment"] or 0
-            change_dict["percent"] = order["percent"] or ""
-            change_dict["diagnostic"] = order["diagnostic"] or 0
-            change_dict["specialist_fee"] = order["specialist_fee"] or 0
+        # Get changes for this upload - FILTER out non-workers
+        query = changes.select().where(changes.c.upload_id == upload_id)
+        change_list = await database.fetch_all(query)
         
-        filtered_changes.append(change_dict)
-    
-    return {
-        "upload": dict(upload),
-        "worker_totals": filtered_totals,
-        "changes": filtered_changes
-    }
+        # Filter changes to only valid workers and enrich with order details
+        filtered_changes = []
+        for c in change_list:
+            if not is_valid_worker_name(c["worker"]):
+                continue
+            
+            change_dict = dict(c)
+            
+            # Try to get order details for this change
+            try:
+                order_query = orders.select().where(
+                    (orders.c.upload_id == upload_id) & 
+                    (orders.c.order_code == c["order_code"]) &
+                    (orders.c.worker.like(f"%{c['worker']}%"))
+                )
+                order = await database.fetch_one(order_query)
+                
+                if order:
+                    # Add order details to change
+                    change_dict["address"] = order["address"] or ""
+                    change_dict["revenue_total"] = order["revenue_total"] or 0
+                    change_dict["revenue_services"] = order["revenue_services"] or 0
+                    change_dict["service_payment"] = order["service_payment"] or 0
+                    change_dict["percent"] = order["percent"] or ""
+                    change_dict["diagnostic"] = order["diagnostic"] or 0
+                    change_dict["specialist_fee"] = order["specialist_fee"] or 0
+            except Exception as e:
+                print(f"Warning: Could not get order details for change: {e}")
+            
+            filtered_changes.append(change_dict)
+        
+        return {
+            "upload": dict(upload),
+            "worker_totals": filtered_totals,
+            "changes": filtered_changes
+        }
+    except Exception as e:
+        print(f"Error in get_upload_details: {e}")
+        raise
 
 async def get_worker_orders(upload_id: int, worker: str) -> List[dict]:
     """Get all orders for a worker in an upload"""
