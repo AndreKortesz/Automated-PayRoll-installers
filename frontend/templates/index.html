@@ -604,6 +604,10 @@
                         <a href="#" class="download-link" id="downloadLinkFull">📥 Полный архив (Не урезанный)</a>
                         <a href="#" class="download-link" id="downloadLinkWorkers" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">📥 Для монтажников (Сокращенный)</a>
                     </div>
+                    <div style="margin-top: 15px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+                        <button class="btn btn-secondary" onclick="goToStep(2)">✏️ Редактировать данные</button>
+                        <button class="btn btn-secondary" onclick="goToStep(1)">📁 Загрузить другие файлы</button>
+                    </div>
                 </div>
                 
                 <!-- Alarms with tabs -->
@@ -611,11 +615,6 @@
                     <h3>⚠️ Предупреждения для проверки</h3>
                     <div class="alarms-tabs" id="alarmsTabs"></div>
                     <div id="alarmsContent"></div>
-                </div>
-                
-                <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
-                    <button class="btn" onclick="goToStep(2)">✏️ Редактировать данные</button>
-                    <button class="btn btn-secondary" onclick="goToStep(1)">📁 Загрузить другие файлы</button>
                 </div>
             </div>
         </div>

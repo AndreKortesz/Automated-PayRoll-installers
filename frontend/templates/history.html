@@ -21,10 +21,17 @@
             justify-content: space-between;
             align-items: center;
             margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 15px;
         }
         h1 {
             color: white;
             font-size: 28px;
+        }
+        .header-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
         }
         .btn {
             background: white;
@@ -34,9 +41,16 @@
             text-decoration: none;
             font-weight: 500;
             transition: transform 0.2s;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
         }
         .btn:hover {
             transform: scale(1.05);
+        }
+        .btn-primary {
+            background: #28a745;
+            color: white;
         }
         .card {
             background: white;
@@ -80,6 +94,9 @@
         .period-item:hover {
             background: #e9ecef;
         }
+        .period-info {
+            flex: 1;
+        }
         .period-name {
             font-weight: 500;
             color: #333;
@@ -88,10 +105,41 @@
             color: #666;
             font-size: 14px;
         }
+        .period-stats {
+            font-size: 13px;
+            color: #667eea;
+            margin-top: 4px;
+        }
+        .period-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
         .period-link {
             color: #667eea;
             text-decoration: none;
             font-weight: 500;
+            padding: 8px 12px;
+            border-radius: 6px;
+            transition: background 0.2s;
+        }
+        .period-link:hover {
+            background: rgba(102, 126, 234, 0.1);
+        }
+        .download-btn {
+            background: #28a745;
+            color: white;
+            padding: 6px 10px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 12px;
+            transition: transform 0.2s;
+        }
+        .download-btn:hover {
+            transform: scale(1.05);
+        }
+        .download-btn.secondary {
+            background: #6c757d;
         }
         .empty-state {
             text-align: center;
@@ -149,7 +197,10 @@
     <div class="container">
         <div class="header">
             <h1>📊 История расчётов</h1>
-            <a href="/" class="btn">← Новый расчёт</a>
+            <div class="header-buttons">
+                <a href="/comparison" class="btn btn-primary">📈 Сравнительная таблица</a>
+                <a href="/" class="btn">← Новый расчёт</a>
+            </div>
         </div>
         
         <div id="summarySection" class="summary-grid"></div>
@@ -188,7 +239,13 @@
                 
                 // Calculate summary
                 let totalPeriods = 0;
-                months.forEach(m => totalPeriods += m.periods.length);
+                let totalAmount = 0;
+                months.forEach(m => {
+                    totalPeriods += m.periods.length;
+                    m.periods.forEach(p => {
+                        totalAmount += p.total_amount || 0;
+                    });
+                });
                 
                 document.getElementById('summarySection').innerHTML = `
                     <div class="summary-card">
@@ -198,6 +255,10 @@
                     <div class="summary-card">
                         <div class="summary-value">${totalPeriods}</div>
                         <div class="summary-label">Периодов</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-value">${Math.round(totalAmount).toLocaleString('ru-RU')}</div>
+                        <div class="summary-label">Общая сумма ₽</div>
                     </div>
                 `;
                 
@@ -224,13 +285,23 @@
                     
                     month.periods.forEach(period => {
                         const createdDate = period.created_at ? new Date(period.created_at).toLocaleDateString('ru-RU') : '';
+                        const totalAmt = period.total_amount ? Math.round(period.total_amount).toLocaleString('ru-RU') : '0';
+                        const uploadId = period.latest_upload_id;
+                        
                         html += `
                             <div class="period-item">
-                                <div>
+                                <div class="period-info">
                                     <div class="period-name">${period.name}</div>
                                     <div class="period-date">Создан: ${createdDate}</div>
+                                    <div class="period-stats">💰 Итого: ${totalAmt} ₽</div>
                                 </div>
-                                <a href="/period/${period.id}" class="period-link">Подробнее →</a>
+                                <div class="period-actions">
+                                    ${uploadId ? `
+                                        <a href="/api/period/${period.id}/download/full" class="download-btn" title="Полный архив">📥</a>
+                                        <a href="/api/period/${period.id}/download/workers" class="download-btn secondary" title="Для монтажников">👷</a>
+                                    ` : ''}
+                                    <a href="/period/${period.id}" class="period-link">Подробнее →</a>
+                                </div>
                             </div>
                         `;
                     });
