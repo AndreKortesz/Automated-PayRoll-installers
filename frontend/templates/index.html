@@ -613,8 +613,9 @@
                     <div id="alarmsContent"></div>
                 </div>
                 
-                <div style="margin-top: 20px;">
-                    <button class="btn btn-secondary" onclick="goToStep(1)">← Новый расчёт</button>
+                <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+                    <button class="btn" onclick="goToStep(2)">✏️ Редактировать данные</button>
+                    <button class="btn btn-secondary" onclick="goToStep(1)">📁 Загрузить другие файлы</button>
                 </div>
             </div>
         </div>
@@ -641,6 +642,13 @@
         function goToStep(step) {
             document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
             document.getElementById('step' + step).classList.add('active');
+            
+            // При возврате на шаг 2, сбрасываем состояние загрузки на шаге 3
+            if (step === 2) {
+                document.getElementById('loadingSection').classList.remove('hidden');
+                document.getElementById('successSection').classList.add('hidden');
+                document.getElementById('alarmsSection').classList.add('hidden');
+            }
         }
         
         document.getElementById('uploadForm').addEventListener('submit', async (e) => {
