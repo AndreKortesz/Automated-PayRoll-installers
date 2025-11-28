@@ -4,7 +4,7 @@ FastAPI backend for processing Excel files and calculating salaries
 """
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
-from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.requests import Request
@@ -23,8 +23,6 @@ import zipfile
 from io import BytesIO
 from datetime import datetime
 from typing import Optional, Dict, List, Any
-import tempfile
-import shutil
 
 # Database imports
 from database import (
@@ -68,7 +66,8 @@ DEFAULT_CONFIG = {
     "fuel_warning": 2000,
     "transport_amount": 1000,
     "transport_min_revenue": 10000,
-    "transport_percent_max": 50,
+    "transport_percent_min": 20,
+    "transport_percent_max": 40,
     "diagnostic_percent": 50,
     "alarm_high_payment": 20000,
     "alarm_high_specialist": 3500,
@@ -578,8 +577,10 @@ async def calculate_row(row: dict, config: dict, days_map: dict) -> dict:
         days = days_map.get(order, 1)
         result["fuel_payment"] = await calculate_fuel_cost(address, config, days)
     
-    # 2. Transport - only for revenue > 10k with percent < 50%, and NOT on company car
-    if revenue_services > config["transport_min_revenue"] and percent < 50:
+    # 2. Transport - only for revenue > 10k with percent between 20% and 40%, and NOT on company car
+    percent_min = config.get("transport_percent_min", 20)
+    percent_max = config.get("transport_percent_max", 40)
+    if revenue_services > config["transport_min_revenue"] and percent_min <= percent <= percent_max:
         if is_on_company_car:
             result["transport"] = 0  # On company car - no transport payment
         else:
@@ -952,8 +953,10 @@ async def upload_files(
             except:
                 percent = 0
             
-            # Check if transport will be applied (revenue > 10k and percent < 50%)
-            has_transport = revenue_services > DEFAULT_CONFIG["transport_min_revenue"] and percent < 50
+            # Check if transport will be applied (revenue > 10k and percent between 20% and 40%)
+            percent_min = DEFAULT_CONFIG["transport_percent_min"]
+            percent_max = DEFAULT_CONFIG["transport_percent_max"]
+            has_transport = revenue_services > DEFAULT_CONFIG["transport_min_revenue"] and percent_min <= percent <= percent_max
             
             if order and not str(order).startswith(("ОБУЧЕНИЕ", "В прошлом")):
                 orders.append({
