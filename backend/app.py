@@ -1325,11 +1325,16 @@ async def calculate_salaries(
                     (await get_period_details(period_id))["uploads"][0]["version"] if (await get_period_details(period_id))["uploads"] else 1
                 )
                 
-                # 4. Save orders and calculations
+                # 4. Save orders and calculations - ONLY for valid workers
                 order_id_map = {}  # To map order to its DB id
                 for row in calculated_data:
                     if row.get("is_extra_row"):
                         continue  # Skip extra rows for now
+                    
+                    # Skip non-worker groups (Доставка, Помощник, etc.)
+                    worker = normalize_worker_name(row.get("worker", "").replace(" (оплата клиентом)", ""))
+                    if not is_valid_worker_name(worker):
+                        continue
                     
                     # Extract order code from order text
                     order_text = row.get("order", "")
@@ -1366,10 +1371,15 @@ async def calculate_salaries(
                     }
                     await save_calculation(upload_id, order_id, calc_data)
                 
-                # 5. Calculate and save worker totals
+                # 5. Calculate and save worker totals - ONLY for valid workers
                 worker_totals_dict = {}
                 for row in calculated_data:
                     worker = normalize_worker_name(row.get("worker", "").replace(" (оплата клиентом)", ""))
+                    
+                    # Skip non-worker groups (Доставка, Помощник, etc.)
+                    if not is_valid_worker_name(worker):
+                        continue
+                    
                     if worker not in worker_totals_dict:
                         worker_totals_dict[worker] = {
                             "total": 0,
