@@ -29,6 +29,63 @@ database = Database(ASYNC_DATABASE_URL) if ASYNC_DATABASE_URL else None
 # Metadata
 metadata = MetaData()
 
+
+# ============== WORKER FILTERING ==============
+# Groups to exclude from salary calculation (not real workers)
+EXCLUDED_GROUPS = {
+    "доставка",
+    "доставка лестницы",
+    "осмотр без оплаты (оплачен ранее)",
+    "осмотр без оплаты",
+    "помощник",
+    "итого",
+    "параметры:",
+    "отбор:",
+    "монтажник",
+    "заказ, комментарий",
+}
+
+
+def is_valid_worker_name(name: str) -> bool:
+    """Check if name looks like a real person name (ФИО)
+    
+    Valid: "Ветренко Дмитрий", "Романюк Алексей Юрьевич"
+    Invalid: "Доставка", "Помощник", "Итого"
+    """
+    if not name:
+        return False
+        
+    # Remove "(оплата клиентом)" suffix for checking
+    clean_name = name.replace(" (оплата клиентом)", "").strip().lower()
+    
+    # Check against blacklist
+    if clean_name in EXCLUDED_GROUPS:
+        return False
+    
+    # Check if starts with any excluded word
+    for excluded in EXCLUDED_GROUPS:
+        if clean_name.startswith(excluded):
+            return False
+    
+    # Additional check: real name should have at least 2 words (Фамилия Имя)
+    original_clean = name.replace(" (оплата клиентом)", "").strip()
+    words = original_clean.split()
+    
+    if len(words) < 2:
+        return False
+    
+    # Check that first word looks like a surname (starts with uppercase, mostly letters)
+    first_word = words[0]
+    if not first_word or not first_word[0].isupper():
+        return False
+    
+    # Check that it contains mostly Cyrillic or Latin letters
+    letter_count = sum(1 for c in first_word if c.isalpha())
+    if letter_count < len(first_word) * 0.8:
+        return False
+    
+    return True
+
 # ============== TABLES ==============
 
 # Periods table (периоды расчёта: 01-15.11.25, 16-30.11.25)
@@ -360,18 +417,24 @@ async def get_upload_details(upload_id: int) -> dict:
     if not upload:
         return None
     
-    # Get worker totals
+    # Get worker totals - FILTER out non-workers
     query = worker_totals.select().where(worker_totals.c.upload_id == upload_id).order_by(worker_totals.c.worker)
     totals = await database.fetch_all(query)
     
-    # Get changes for this upload
+    # Filter to only valid workers
+    filtered_totals = [dict(t) for t in totals if is_valid_worker_name(t["worker"])]
+    
+    # Get changes for this upload - FILTER out non-workers
     query = changes.select().where(changes.c.upload_id == upload_id)
     change_list = await database.fetch_all(query)
     
+    # Filter changes to only valid workers
+    filtered_changes = [dict(c) for c in change_list if is_valid_worker_name(c["worker"])]
+    
     return {
         "upload": dict(upload),
-        "worker_totals": [dict(t) for t in totals],
-        "changes": [dict(c) for c in change_list]
+        "worker_totals": filtered_totals,
+        "changes": filtered_changes
     }
 
 async def get_worker_orders(upload_id: int, worker: str) -> List[dict]:
