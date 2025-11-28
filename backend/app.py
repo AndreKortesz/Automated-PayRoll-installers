@@ -339,7 +339,8 @@ def extract_address_from_order(order_text: str) -> str:
     
     text = str(order_text)
     
-    skip_patterns = ["ОБУЧЕНИЕ", "обучение", "двойная оплата", "В прошлом расчете"]
+    skip_patterns = ["ОБУЧЕНИЕ", "обучение", "двойная оплата", "В прошлом расчете", 
+                     "комплекты интернета", "комплект интернета"]
     for pattern in skip_patterns:
         if pattern in text:
             return ""
@@ -350,6 +351,7 @@ def extract_address_from_order(order_text: str) -> str:
         addr = match.group(1).strip()
         addr = re.sub(r'\\n.*', '', addr)
         addr = re.sub(r'\|.*', '', addr)
+        addr = clean_address_for_geocoding(addr)
         return addr.strip()
     
     # Pattern 2: Short time format "0:00:00, address"
@@ -358,6 +360,7 @@ def extract_address_from_order(order_text: str) -> str:
         addr = match.group(1).strip()
         addr = re.sub(r'\\n.*', '', addr)
         addr = re.sub(r'\|.*', '', addr)
+        addr = clean_address_for_geocoding(addr)
         return addr.strip()
     
     # Pattern 3: Date only format "27.10.2025, address" (no time)
@@ -366,9 +369,34 @@ def extract_address_from_order(order_text: str) -> str:
         addr = match.group(1).strip()
         addr = re.sub(r'\\n.*', '', addr)
         addr = re.sub(r'\|.*', '', addr)
+        addr = clean_address_for_geocoding(addr)
         return addr.strip()
     
     return ""
+
+
+def clean_address_for_geocoding(addr: str) -> str:
+    """Clean address from garbage that prevents geocoding"""
+    if not addr:
+        return ""
+    
+    # Remove OZON/DDX prefixes - they prevent geocoding
+    addr = re.sub(r'^OZON\s+', '', addr)
+    addr = re.sub(r'^DDX\s*-?\s*', '', addr)
+    
+    # Remove garbage suffixes (comments after address)
+    garbage_patterns = [
+        r',?\s*зарплата\s+монтажник.*$',
+        r',?\s*диагностика\s+.*$', 
+        r',?\s*тест\s+делаем.*$',
+        r'\s+диагностика\s+\w+$',
+        r'\s*\(эатж.*\)$',  # typo "эатж" = "этаж"
+        r'\s*\(этаж.*\)$',
+    ]
+    for pattern in garbage_patterns:
+        addr = re.sub(pattern, '', addr, flags=re.IGNORECASE)
+    
+    return addr.strip()
 
 
 def parse_percent(value) -> float:
