@@ -154,6 +154,25 @@
             font-size: 12px;
             color: #666;
         }
+        .change-address {
+            font-size: 11px;
+            color: #495057;
+            font-style: italic;
+            margin-top: 3px;
+        }
+        .change-details {
+            margin-top: 5px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+        .detail-tag {
+            background: rgba(0,0,0,0.08);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            white-space: nowrap;
+        }
         .loading {
             text-align: center;
             padding: 40px;
@@ -319,19 +338,64 @@
             let changesHtml = '';
             if (changes.length > 0) {
                 changesHtml = '<div class="card"><div class="card-title">🔄 Изменения</div><div class="changes-list">';
+                
+                // Helper to format number
+                const formatNum = (n) => {
+                    if (!n || n === 0) return '';
+                    return Math.round(n).toLocaleString('ru-RU');
+                };
+                
                 changes.forEach(change => {
                     const icons = { added: '➕', deleted: '➖', modified: '✏️' };
                     const icon = icons[change.change_type] || '•';
                     let text = `${change.order_code} - ${change.worker}`;
+                    
+                    // Address
+                    let addressHtml = '';
+                    if (change.address) {
+                        addressHtml = `<div class="change-address">📍 ${change.address}</div>`;
+                    }
+                    
+                    // Details tags
+                    let detailsHtml = '';
+                    let details = [];
+                    if (change.revenue_total && change.revenue_total > 0) {
+                        details.push(`Выручка: ${formatNum(change.revenue_total)}`);
+                    }
+                    if (change.revenue_services && change.revenue_services !== 0) {
+                        details.push(`От услуг: ${formatNum(change.revenue_services)}`);
+                    }
+                    if (change.service_payment && change.service_payment !== 0) {
+                        details.push(`Оплата: ${formatNum(change.service_payment)}`);
+                    }
+                    if (change.percent) {
+                        const pct = parseFloat(change.percent) || 0;
+                        if (pct > 0) details.push(`${Math.round(pct)}%`);
+                    }
+                    if (change.diagnostic && change.diagnostic > 0) {
+                        details.push(`Диагн: ${formatNum(change.diagnostic)}`);
+                    }
+                    if (change.specialist_fee && change.specialist_fee > 0) {
+                        details.push(`Выезд: ${formatNum(change.specialist_fee)}`);
+                    }
+                    
+                    if (details.length > 0) {
+                        detailsHtml = `<div class="change-details">${details.map(d => `<span class="detail-tag">${d}</span>`).join('')}</div>`;
+                    }
+                    
+                    // Field change info (for modified)
                     let fieldInfo = '';
                     if (change.change_type === 'modified' && change.field_name) {
                         fieldInfo = `<div class="change-field">${change.field_name}: ${change.old_value} → ${change.new_value}</div>`;
                     }
+                    
                     changesHtml += `
                         <div class="change-item ${change.change_type}">
                             <span class="change-icon">${icon}</span>
                             <div class="change-text">
                                 ${text}
+                                ${addressHtml}
+                                ${detailsHtml}
                                 ${fieldInfo}
                             </div>
                         </div>
