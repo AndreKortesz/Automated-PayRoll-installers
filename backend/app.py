@@ -167,8 +167,11 @@ async def geocode_address_yandex(address: str, api_key: str) -> tuple:
                 "geocode": address,
                 "format": "json"
             }
+            print(f"  🔍 Yandex запрос: {address[:50]}...")
             response = await client.get(url, params=params, timeout=10)
+            print(f"  🔍 Yandex ответ: HTTP {response.status_code}")
             if response.status_code != 200:
+                print(f"  ❌ Yandex ошибка: {response.text[:200]}")
                 return None, None
             data = response.json()
             
@@ -176,15 +179,16 @@ async def geocode_address_yandex(address: str, api_key: str) -> tuple:
             if pos:
                 coords = pos[0]["GeoObject"]["Point"]["pos"].split()
                 return float(coords[1]), float(coords[0])  # lat, lon
+            print(f"  ⚠️ Yandex: нет результатов для {address[:40]}")
     except Exception as e:
-        pass
+        print(f"  ❌ Yandex exception: {e}")
     return None, None
 
 
 async def geocode_address_nominatim(address: str) -> tuple:
     """Get coordinates from Nominatim (OpenStreetMap) - free"""
     try:
-        await asyncio.sleep(1)
+        await asyncio.sleep(1)  # Rate limiting
         async with httpx.AsyncClient() as client:
             url = "https://nominatim.openstreetmap.org/search"
             params = {
@@ -193,15 +197,19 @@ async def geocode_address_nominatim(address: str) -> tuple:
                 "limit": 1
             }
             headers = {"User-Agent": "SalaryCalculator/1.0"}
+            print(f"  🔍 Nominatim запрос: {address[:50]}...")
             response = await client.get(url, params=params, headers=headers, timeout=10)
+            print(f"  🔍 Nominatim ответ: HTTP {response.status_code}")
             if response.status_code != 200:
+                print(f"  ❌ Nominatim ошибка: {response.text[:200]}")
                 return None, None
             data = response.json()
             
             if data:
                 return float(data[0]["lat"]), float(data[0]["lon"])
+            print(f"  ⚠️ Nominatim: нет результатов для {address[:40]}")
     except Exception as e:
-        pass
+        print(f"  ❌ Nominatim exception: {e}")
     return None, None
 
 
