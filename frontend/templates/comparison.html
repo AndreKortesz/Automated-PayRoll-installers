@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Сравнительная таблица</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        h1 {
+            color: white;
+            font-size: 28px;
+        }
+        .header-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        .btn {
+            background: white;
+            color: #667eea;
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 500;
+            transition: transform 0.2s;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .btn:hover {
+            transform: scale(1.05);
+        }
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            overflow-x: auto;
+        }
+        .card-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .view-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .view-tab {
+            padding: 10px 20px;
+            border-radius: 8px;
+            background: #f0f0f0;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+            font-size: 14px;
+        }
+        .view-tab.active {
+            background: #667eea;
+            color: white;
+        }
+        .view-tab:hover:not(.active) {
+            background: #e0e0e0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        th, td {
+            padding: 12px 10px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+        th {
+            background: #667eea;
+            color: white;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            white-space: nowrap;
+        }
+        th.period-header {
+            text-align: center;
+            min-width: 120px;
+        }
+        tr:hover {
+            background: #f8f9fa;
+        }
+        tr.total-row {
+            background: #e8f5e9;
+            font-weight: bold;
+        }
+        tr.total-row:hover {
+            background: #c8e6c9;
+        }
+        td.worker-name {
+            font-weight: 500;
+            white-space: nowrap;
+            position: sticky;
+            left: 0;
+            background: white;
+            z-index: 1;
+        }
+        tr:hover td.worker-name {
+            background: #f8f9fa;
+        }
+        tr.total-row td.worker-name {
+            background: #e8f5e9;
+        }
+        td.number {
+            text-align: right;
+            font-family: 'SF Mono', Monaco, monospace;
+        }
+        td.number.positive {
+            color: #28a745;
+        }
+        td.number.negative {
+            color: #dc3545;
+        }
+        .delta {
+            font-size: 11px;
+            margin-left: 5px;
+        }
+        .delta.up {
+            color: #28a745;
+        }
+        .delta.down {
+            color: #dc3545;
+        }
+        .loading {
+            text-align: center;
+            padding: 60px;
+            color: #666;
+        }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .empty-state {
+            text-align: center;
+            padding: 60px;
+            color: #666;
+        }
+        .summary-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .summary-item {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        .summary-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+        }
+        .summary-label {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        .filter-row {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .filter-row label {
+            font-weight: 500;
+            color: #333;
+        }
+        .filter-row select {
+            padding: 8px 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📈 Сравнительная таблица</h1>
+            <div class="header-buttons">
+                <button class="btn btn-success" onclick="exportToExcel()">📥 Экспорт в Excel</button>
+                <a href="/history" class="btn">← История</a>
+                <a href="/" class="btn">🏠 Главная</a>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="view-tabs">
+                <button class="view-tab active" onclick="setView('periods')">По периодам</button>
+                <button class="view-tab" onclick="setView('months')">По месяцам</button>
+                <button class="view-tab" onclick="setView('workers')">По монтажникам</button>
+            </div>
+            
+            <div class="filter-row" id="filterRow">
+                <label>Показать:</label>
+                <select id="showType" onchange="renderTable()">
+                    <option value="total">Общий итог</option>
+                    <option value="company">Оплата компанией</option>
+                    <option value="client">Оплата клиентом</option>
+                </select>
+            </div>
+            
+            <div id="content">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Загрузка данных...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let comparisonData = null;
+        let currentView = 'periods';
+        
+        const monthNames = {
+            '01': 'Январь', '02': 'Февраль', '03': 'Март', '04': 'Апрель',
+            '05': 'Май', '06': 'Июнь', '07': 'Июль', '08': 'Август',
+            '09': 'Сентябрь', '10': 'Октябрь', '11': 'Ноябрь', '12': 'Декабрь'
+        };
+        
+        async function loadData() {
+            try {
+                const response = await fetch('/api/comparison');
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Failed to load');
+                }
+                
+                comparisonData = data.data;
+                renderTable();
+                
+            } catch (error) {
+                document.getElementById('content').innerHTML = `
+                    <div class="empty-state">
+                        <h2>❌ Ошибка загрузки</h2>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        function setView(view) {
+            currentView = view;
+            document.querySelectorAll('.view-tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            renderTable();
+        }
+        
+        function formatNumber(n) {
+            if (!n || n === 0) return '—';
+            return Math.round(n).toLocaleString('ru-RU');
+        }
+        
+        function renderTable() {
+            if (!comparisonData) return;
+            
+            const showType = document.getElementById('showType').value;
+            const content = document.getElementById('content');
+            
+            if (currentView === 'periods') {
+                renderPeriodsView(showType);
+            } else if (currentView === 'months') {
+                renderMonthsView(showType);
+            } else if (currentView === 'workers') {
+                renderWorkersView(showType);
+            }
+        }
+        
+        function renderPeriodsView(showType) {
+            const { periods, workers } = comparisonData;
+            
+            if (!periods || periods.length === 0) {
+                document.getElementById('content').innerHTML = '<div class="empty-state"><p>Нет данных для отображения</p></div>';
+                return;
+            }
+            
+            // Build table: workers as rows, periods as columns
+            let html = '<table><thead><tr><th>Монтажник</th>';
+            
+            periods.forEach(p => {
+                html += `<th class="period-header">${p.name}</th>`;
+            });
+            html += '<th class="period-header">Всего</th></tr></thead><tbody>';
+            
+            // Get value based on showType
+            const getValue = (wt) => {
+                if (showType === 'company') return wt.company_amount || 0;
+                if (showType === 'client') return wt.client_amount || 0;
+                return wt.total_amount || 0;
+            };
+            
+            // Calculate totals per period
+            const periodTotals = {};
+            periods.forEach(p => { periodTotals[p.id] = 0; });
+            let grandTotal = 0;
+            
+            // Render workers
+            workers.forEach(workerName => {
+                let workerTotal = 0;
+                html += `<tr><td class="worker-name">👷 ${workerName}</td>`;
+                
+                periods.forEach(period => {
+                    const wt = period.worker_totals.find(w => w.worker === workerName);
+                    const value = wt ? getValue(wt) : 0;
+                    workerTotal += value;
+                    periodTotals[period.id] += value;
+                    
+                    html += `<td class="number">${formatNumber(value)}</td>`;
+                });
+                
+                grandTotal += workerTotal;
+                html += `<td class="number" style="font-weight: bold;">${formatNumber(workerTotal)}</td>`;
+                html += '</tr>';
+            });
+            
+            // Total row
+            html += '<tr class="total-row"><td class="worker-name">📊 ИТОГО</td>';
+            periods.forEach(p => {
+                html += `<td class="number">${formatNumber(periodTotals[p.id])}</td>`;
+            });
+            html += `<td class="number">${formatNumber(grandTotal)}</td>`;
+            html += '</tr>';
+            
+            html += '</tbody></table>';
+            
+            // Summary
+            const summaryHtml = `
+                <div class="summary-row">
+                    <div class="summary-item">
+                        <div class="summary-value">${periods.length}</div>
+                        <div class="summary-label">Периодов</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-value">${workers.length}</div>
+                        <div class="summary-label">Монтажников</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-value">${formatNumber(grandTotal)} ₽</div>
+                        <div class="summary-label">Общая сумма</div>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('content').innerHTML = summaryHtml + html;
+        }
+        
+        function renderMonthsView(showType) {
+            const { months, workers } = comparisonData;
+            
+            if (!months || months.length === 0) {
+                document.getElementById('content').innerHTML = '<div class="empty-state"><p>Нет данных для отображения</p></div>';
+                return;
+            }
+            
+            let html = '<table><thead><tr><th>Монтажник</th>';
+            
+            months.forEach(m => {
+                const [year, monthNum] = m.month.split('-');
+                html += `<th class="period-header">${monthNames[monthNum]} ${year}</th>`;
+            });
+            html += '<th class="period-header">Всего</th></tr></thead><tbody>';
+            
+            const getValue = (wt) => {
+                if (showType === 'company') return wt.company_amount || 0;
+                if (showType === 'client') return wt.client_amount || 0;
+                return wt.total_amount || 0;
+            };
+            
+            const monthTotals = {};
+            months.forEach(m => { monthTotals[m.month] = 0; });
+            let grandTotal = 0;
+            
+            workers.forEach(workerName => {
+                let workerTotal = 0;
+                html += `<tr><td class="worker-name">👷 ${workerName}</td>`;
+                
+                months.forEach(month => {
+                    const wt = month.worker_totals.find(w => w.worker === workerName);
+                    const value = wt ? getValue(wt) : 0;
+                    workerTotal += value;
+                    monthTotals[month.month] += value;
+                    
+                    html += `<td class="number">${formatNumber(value)}</td>`;
+                });
+                
+                grandTotal += workerTotal;
+                html += `<td class="number" style="font-weight: bold;">${formatNumber(workerTotal)}</td>`;
+                html += '</tr>';
+            });
+            
+            html += '<tr class="total-row"><td class="worker-name">📊 ИТОГО</td>';
+            months.forEach(m => {
+                html += `<td class="number">${formatNumber(monthTotals[m.month])}</td>`;
+            });
+            html += `<td class="number">${formatNumber(grandTotal)}</td>`;
+            html += '</tr></tbody></table>';
+            
+            const summaryHtml = `
+                <div class="summary-row">
+                    <div class="summary-item">
+                        <div class="summary-value">${months.length}</div>
+                        <div class="summary-label">Месяцев</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-value">${workers.length}</div>
+                        <div class="summary-label">Монтажников</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-value">${formatNumber(grandTotal)} ₽</div>
+                        <div class="summary-label">Общая сумма</div>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('content').innerHTML = summaryHtml + html;
+        }
+        
+        function renderWorkersView(showType) {
+            const { periods, workers } = comparisonData;
+            
+            if (!workers || workers.length === 0) {
+                document.getElementById('content').innerHTML = '<div class="empty-state"><p>Нет данных для отображения</p></div>';
+                return;
+            }
+            
+            // Transpose: periods as rows, workers as columns
+            let html = '<table><thead><tr><th>Период</th>';
+            
+            workers.forEach(w => {
+                html += `<th class="period-header">${w.split(' ')[0]}</th>`;
+            });
+            html += '<th class="period-header">Итого</th></tr></thead><tbody>';
+            
+            const getValue = (wt) => {
+                if (showType === 'company') return wt.company_amount || 0;
+                if (showType === 'client') return wt.client_amount || 0;
+                return wt.total_amount || 0;
+            };
+            
+            const workerTotals = {};
+            workers.forEach(w => { workerTotals[w] = 0; });
+            let grandTotal = 0;
+            
+            periods.forEach(period => {
+                let periodTotal = 0;
+                html += `<tr><td class="worker-name">📅 ${period.name}</td>`;
+                
+                workers.forEach(workerName => {
+                    const wt = period.worker_totals.find(w => w.worker === workerName);
+                    const value = wt ? getValue(wt) : 0;
+                    periodTotal += value;
+                    workerTotals[workerName] += value;
+                    
+                    html += `<td class="number">${formatNumber(value)}</td>`;
+                });
+                
+                grandTotal += periodTotal;
+                html += `<td class="number" style="font-weight: bold;">${formatNumber(periodTotal)}</td>`;
+                html += '</tr>';
+            });
+            
+            html += '<tr class="total-row"><td class="worker-name">📊 ИТОГО</td>';
+            workers.forEach(w => {
+                html += `<td class="number">${formatNumber(workerTotals[w])}</td>`;
+            });
+            html += `<td class="number">${formatNumber(grandTotal)}</td>`;
+            html += '</tr></tbody></table>';
+            
+            const summaryHtml = `
+                <div class="summary-row">
+                    <div class="summary-item">
+                        <div class="summary-value">${periods.length}</div>
+                        <div class="summary-label">Периодов</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-value">${workers.length}</div>
+                        <div class="summary-label">Монтажников</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-value">${formatNumber(grandTotal)} ₽</div>
+                        <div class="summary-label">Общая сумма</div>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('content').innerHTML = summaryHtml + html;
+        }
+        
+        function exportToExcel() {
+            window.location.href = '/api/comparison/export';
+        }
+        
+        loadData();
+    </script>
+</body>
+</html>
