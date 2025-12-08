@@ -1375,14 +1375,14 @@ async def upload_files(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.post("/calculate")
-async def calculate_salaries(
+@app.post("/preview")
+async def preview_calculation(
     session_id: str = Form(...),
     config_json: str = Form(...),
     days_json: str = Form(...),
     extra_rows_json: str = Form(...)
 ):
-    """Calculate all salaries and generate files"""
+    """Preview calculation without saving to database"""
     try:
         if session_id not in session_data:
             raise HTTPException(status_code=400, detail="Session expired")
@@ -1393,7 +1393,7 @@ async def calculate_salaries(
         extra_rows = json.loads(extra_rows_json)
         
         full_config = {**DEFAULT_CONFIG, **config}
-        name_map = session.get("name_map", {})  # Get name_map from session
+        name_map = session.get("name_map", {})
         
         calculated_data = []
         for row in session["combined"]:
@@ -1402,6 +1402,141 @@ async def calculate_salaries(
         
         for worker, rows in extra_rows.items():
             for extra in rows:
+                calculated_data.append({
+                    "worker": normalize_worker_name(worker, name_map),
+                    "order": extra.get("description", ""),
+                    "order_id": f"extra_{worker}_{extra.get('description', '')[:20]}",
+                    "revenue_total": "",
+                    "revenue_services": "",
+                    "diagnostic": "",
+                    "diagnostic_payment": "",
+                    "specialist_fee": "",
+                    "additional_expenses": "",
+                    "service_payment": "",
+                    "percent": "",
+                    "is_over_10k": False,
+                    "is_client_payment": False,
+                    "is_worker_total": False,
+                    "is_extra_row": True,
+                    "fuel_payment": "",
+                    "transport": "",
+                    "diagnostic_50": "",
+                    "total": float(extra.get("amount", 0))
+                })
+        
+        calculated_data.sort(key=lambda x: normalize_worker_name(x.get("worker", ""), name_map).replace(" (оплата клиентом)", ""))
+        
+        # Generate unique IDs for each row for deletion
+        preview_rows = []
+        for idx, row in enumerate(calculated_data):
+            order_code = ""
+            order_text = row.get("order", "")
+            match = re.search(r'((?:КАУТ|ИБУТ|ТДУТ)-\d+)', order_text)
+            if match:
+                order_code = match.group(1)
+            
+            # Extract address
+            address = extract_address_from_order(order_text)
+            if not address:
+                address = order_text[:50] + "..." if len(order_text) > 50 else order_text
+            
+            preview_rows.append({
+                "id": idx,
+                "worker": row.get("worker", "").replace(" (оплата клиентом)", ""),
+                "order_code": order_code,
+                "address": address,
+                "revenue_total": row.get("revenue_total", ""),
+                "revenue_services": row.get("revenue_services", ""),
+                "service_payment": row.get("service_payment", ""),
+                "percent": row.get("percent", ""),
+                "fuel_payment": row.get("fuel_payment", ""),
+                "transport": row.get("transport", ""),
+                "total": row.get("total", 0),
+                "is_client_payment": row.get("is_client_payment", False),
+                "is_over_10k": row.get("is_over_10k", False),
+                "is_extra_row": row.get("is_extra_row", False)
+            })
+        
+        # Store calculated data in session for later finalization
+        session["calculated_data"] = calculated_data
+        session["config"] = full_config
+        
+        # Group by worker for summary
+        workers_summary = {}
+        for row in preview_rows:
+            worker = row["worker"]
+            if worker not in workers_summary:
+                workers_summary[worker] = {
+                    "total": 0,
+                    "count": 0,
+                    "fuel": 0,
+                    "transport": 0
+                }
+            total = row.get("total", 0)
+            if isinstance(total, (int, float)):
+                workers_summary[worker]["total"] += total
+            workers_summary[worker]["count"] += 1
+            fuel = row.get("fuel_payment", 0)
+            if isinstance(fuel, (int, float)):
+                workers_summary[worker]["fuel"] += fuel
+            transport = row.get("transport", 0)
+            if isinstance(transport, (int, float)):
+                workers_summary[worker]["transport"] += transport
+        
+        alarms = generate_alarms(calculated_data, full_config)
+        
+        return JSONResponse({
+            "success": True,
+            "rows": preview_rows,
+            "workers_summary": workers_summary,
+            "alarms": alarms,
+            "period": session["period"]
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/calculate")
+async def calculate_salaries(
+    session_id: str = Form(...),
+    config_json: str = Form(...),
+    days_json: str = Form(...),
+    extra_rows_json: str = Form(...),
+    deleted_rows_json: str = Form("[]")
+):
+    """Calculate all salaries and generate files"""
+    try:
+        if session_id not in session_data:
+            raise HTTPException(status_code=400, detail="Session expired")
+        
+        session = session_data[session_id]
+        config = json.loads(config_json)
+        days_map = json.loads(days_json)
+        extra_rows = json.loads(extra_rows_json)
+        deleted_rows = json.loads(deleted_rows_json)  # List of row IDs to delete
+        
+        full_config = {**DEFAULT_CONFIG, **config}
+        name_map = session.get("name_map", {})  # Get name_map from session
+        
+        calculated_data = []
+        for idx, row in enumerate(session["combined"]):
+            if idx in deleted_rows:
+                continue  # Skip deleted rows
+            calc_row = await calculate_row(row, full_config, days_map)
+            calculated_data.append(calc_row)
+        
+        # Count how many original rows we have (for extra row indexing)
+        original_count = len(session["combined"])
+        extra_idx = original_count
+        
+        for worker, rows in extra_rows.items():
+            for extra in rows:
+                if extra_idx in deleted_rows:
+                    extra_idx += 1
+                    continue  # Skip deleted extra rows
                 calculated_data.append({
                     "worker": normalize_worker_name(worker, name_map),
                     "order": extra.get("description", ""),
@@ -1416,12 +1551,13 @@ async def calculate_salaries(
                     "is_over_10k": False,
                     "is_client_payment": False,
                     "is_worker_total": False,
-                    "is_extra_row": True,  # Flag for extra rows
+                    "is_extra_row": True,
                     "fuel_payment": "",
                     "transport": "",
                     "diagnostic_50": "",
                     "total": float(extra.get("amount", 0))
                 })
+                extra_idx += 1
         
         calculated_data.sort(key=lambda x: normalize_worker_name(x.get("worker", ""), name_map).replace(" (оплата клиентом)", ""))
         
