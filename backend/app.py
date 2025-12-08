@@ -114,10 +114,12 @@ def build_worker_name_map(all_names: set) -> dict:
     return name_map
 
 
-def normalize_worker_name(name: str, name_map: dict) -> str:
+def normalize_worker_name(name: str, name_map: dict = None) -> str:
     """Normalize worker name using the provided map"""
     if not name:
         return name
+    if name_map is None:
+        name_map = {}
     clean_name = name.replace(" (оплата клиентом)", "").strip()
     normalized = name_map.get(clean_name, clean_name)
     if "(оплата клиентом)" in name:
@@ -1391,6 +1393,7 @@ async def calculate_salaries(
         extra_rows = json.loads(extra_rows_json)
         
         full_config = {**DEFAULT_CONFIG, **config}
+        name_map = session.get("name_map", {})  # Get name_map from session
         
         calculated_data = []
         for row in session["combined"]:
@@ -1400,7 +1403,7 @@ async def calculate_salaries(
         for worker, rows in extra_rows.items():
             for extra in rows:
                 calculated_data.append({
-                    "worker": normalize_worker_name(worker),
+                    "worker": normalize_worker_name(worker, name_map),
                     "order": extra.get("description", ""),
                     "revenue_total": "",
                     "revenue_services": "",
@@ -1420,7 +1423,7 @@ async def calculate_salaries(
                     "total": float(extra.get("amount", 0))
                 })
         
-        calculated_data.sort(key=lambda x: normalize_worker_name(x.get("worker", "")).replace(" (оплата клиентом)", ""))
+        calculated_data.sort(key=lambda x: normalize_worker_name(x.get("worker", ""), name_map).replace(" (оплата клиентом)", ""))
         
         alarms = generate_alarms(calculated_data, full_config)
         
