@@ -5,21 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Расчёт зарплаты монтажников</title>
     <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             padding: 20px;
         }
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-        }
+        .container { max-width: 1400px; margin: 0 auto; }
         .card {
             background: white;
             border-radius: 16px;
@@ -27,578 +20,309 @@
             margin-bottom: 20px;
             box-shadow: 0 10px 40px rgba(0,0,0,0.2);
         }
-        h1 {
-            color: #333;
-            margin-bottom: 10px;
-        }
-        h2 {
-            color: #555;
-            margin-bottom: 15px;
-            font-size: 1.3em;
-        }
-        h3 {
-            color: #666;
-            margin-bottom: 10px;
-            font-size: 1.1em;
-        }
-        .subtitle {
-            color: #666;
+        h1 { color: #333; margin-bottom: 10px; }
+        h2 { color: #555; margin-bottom: 15px; font-size: 1.3em; }
+        h3 { color: #666; margin-bottom: 10px; font-size: 1.1em; }
+        .subtitle { color: #666; margin-bottom: 20px; }
+        .step { display: none; }
+        .step.active { display: block; }
+        .header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 15px;
         }
-        .step {
-            display: none;
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: 500; color: #444; }
+        input[type="file"], input[type="text"], input[type="number"] {
+            width: 100%; padding: 12px; border: 2px solid #e0e0e0;
+            border-radius: 8px; font-size: 14px; transition: border-color 0.3s;
         }
-        .step.active {
-            display: block;
-        }
-        .form-group {
-            margin-bottom: 20px;
-        }
-        label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 500;
-            color: #444;
-        }
-        input[type="file"],
-        input[type="text"],
-        input[type="number"] {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-size: 14px;
-            transition: border-color 0.3s;
-        }
-        input:focus {
-            outline: none;
-            border-color: #667eea;
-        }
+        input:focus { outline: none; border-color: #667eea; }
         .btn {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 14px 28px;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
+            color: white; padding: 14px 28px; border: none; border-radius: 8px;
+            font-size: 16px; font-weight: 600; cursor: pointer;
             transition: transform 0.2s, box-shadow 0.2s;
         }
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
-        }
-        .btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-        }
-        .btn-secondary {
-            background: #6c757d;
-        }
-        .btn-success {
-            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-        }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4); }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        .btn-secondary { background: #6c757d; }
+        .btn-success { background: linear-gradient(135deg, #28a745 0%, #20c997 100%); }
+        .btn-danger { background: #dc3545; padding: 8px 12px; font-size: 12px; }
+        .btn-sm { padding: 8px 16px; font-size: 13px; }
         .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 20px;
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px; margin-bottom: 20px;
         }
-        .stat-item {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 8px;
-            text-align: center;
-        }
-        .stat-value {
-            font-size: 24px;
-            font-weight: bold;
-            color: #667eea;
-        }
-        .stat-label {
-            color: #666;
-            font-size: 14px;
-        }
+        .stat-item { background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; }
+        .stat-value { font-size: 24px; font-weight: bold; color: #667eea; }
+        .stat-label { color: #666; font-size: 14px; }
         .settings-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 15px;
-            align-items: start;
+            display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; align-items: start;
         }
-        .settings-grid .form-group {
-            display: flex;
-            flex-direction: column;
-        }
-        .settings-grid .form-group label {
-            min-height: 40px;
-            display: flex;
-            align-items: flex-end;
-            margin-bottom: 5px;
-        }
-        @media (max-width: 1200px) {
-            .settings-grid {
-                grid-template-columns: repeat(3, 1fr);
-            }
-        }
-        @media (max-width: 768px) {
-            .settings-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-        }
-        
-        /* Workers horizontal layout */
-        .workers-horizontal {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 15px;
-            margin-top: 15px;
-        }
+        @media (max-width: 1200px) { .settings-grid { grid-template-columns: repeat(3, 1fr); } }
+        @media (max-width: 768px) { .settings-grid { grid-template-columns: repeat(2, 1fr); } }
+        .workers-horizontal { display: flex; flex-wrap: wrap; gap: 15px; margin-top: 15px; }
         .worker-card {
-            background: #f8f9fa;
-            border-radius: 8px;
-            padding: 15px;
-            min-width: 280px;
-            flex: 1;
-            max-width: 400px;
+            background: #f8f9fa; border-radius: 8px; padding: 15px;
+            min-width: 280px; flex: 1; max-width: 400px;
         }
-        .worker-name {
-            font-weight: bold;
-            color: #333;
-            margin-bottom: 10px;
-            font-size: 14px;
-        }
-        .extra-row {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 8px;
-        }
-        .extra-row input {
-            flex: 1;
-            padding: 8px;
-            font-size: 13px;
-        }
-        .extra-row input:first-child {
-            flex: 2;
-        }
-        .btn-add {
-            background: #28a745;
-            padding: 6px 12px;
-            font-size: 12px;
-        }
-        .btn-remove {
-            background: #dc3545;
-            padding: 6px 10px;
-            font-size: 12px;
-        }
-        
-        /* Days table */
-        .days-table {
-            max-height: 500px;
-            overflow-y: auto;
-            margin-bottom: 20px;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        th, td {
-            padding: 10px;
-            text-align: left;
-            border-bottom: 1px solid #e0e0e0;
-        }
-        th {
-            background: #f8f9fa;
-            font-weight: 600;
-            position: sticky;
-            top: 0;
-        }
-        td.order-cell {
-            max-width: 500px;
-            word-wrap: break-word;
-        }
-        .days-input {
-            width: 60px;
-            padding: 6px;
-            text-align: center;
-        }
-        
-        /* Loading and success */
-        .loading {
-            display: none;
-            text-align: center;
-            padding: 40px;
-        }
-        .loading.active {
-            display: block;
-        }
+        .worker-name { font-weight: bold; color: #333; margin-bottom: 10px; font-size: 14px; }
+        .extra-row { display: flex; gap: 8px; margin-bottom: 8px; }
+        .extra-row input { flex: 1; padding: 8px; font-size: 13px; }
+        .extra-row input:first-child { flex: 2; }
+        .btn-add { background: #28a745; padding: 6px 12px; font-size: 12px; }
+        .btn-remove { background: #dc3545; padding: 6px 10px; font-size: 12px; }
+        .days-table { max-height: 500px; overflow-y: auto; margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #e0e0e0; }
+        th { background: #f8f9fa; font-weight: 600; position: sticky; top: 0; }
+        .days-input { width: 60px; padding: 6px; text-align: center; }
+        .loading { display: none; text-align: center; padding: 40px; }
+        .loading.active { display: block; }
         .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #667eea;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 20px;
+            border: 4px solid #f3f3f3; border-top: 4px solid #667eea; border-radius: 50%;
+            width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 20px;
         }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        .success {
-            background: #d4edda;
-            border: 1px solid #28a745;
-            border-radius: 8px;
-            padding: 20px;
-            text-align: center;
-        }
-        .success h3 {
-            color: #155724;
-        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .success { background: #d4edda; border: 1px solid #28a745; border-radius: 8px; padding: 20px; text-align: center; }
+        .success h3 { color: #155724; }
         .download-link {
-            display: inline-block;
-            margin-top: 15px;
-            padding: 14px 28px;
+            display: inline-block; margin-top: 15px; padding: 14px 28px;
             background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-            color: white;
-            text-decoration: none;
-            border-radius: 8px;
-            font-weight: 600;
+            color: white; text-decoration: none; border-radius: 8px; font-weight: 600;
         }
-        .hidden {
-            display: none;
-        }
-        .toggle-section {
-            cursor: pointer;
-            user-select: none;
-        }
-        .toggle-section:hover {
-            color: #667eea;
-        }
-        .collapsible {
-            overflow: hidden;
-            transition: max-height 0.3s ease-out;
-        }
-        .collapsible.collapsed {
-            max-height: 0;
-        }
+        .hidden { display: none; }
+        .toggle-section { cursor: pointer; user-select: none; }
+        .toggle-section:hover { color: #667eea; }
+        .collapsible { overflow: hidden; transition: max-height 0.3s ease-out; }
+        .collapsible.collapsed { max-height: 0; }
         
-        /* Alarms tabs */
-        .alarms-container {
-            background: #f8f9fa;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
+        /* Preview table */
+        .preview-table-wrapper { max-height: 600px; overflow: auto; margin-bottom: 20px; }
+        .preview-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .preview-table th { 
+            background: #667eea; color: white; padding: 12px 8px; 
+            position: sticky; top: 0; z-index: 10; white-space: nowrap;
         }
-        .alarms-tabs {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 15px;
-            flex-wrap: wrap;
+        .preview-table td { padding: 10px 8px; border-bottom: 1px solid #eee; }
+        .preview-table tr:hover { background: #f8f9fa; }
+        .preview-table .order-code { font-weight: 600; color: #667eea; }
+        .preview-table .address { max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .preview-table .number { text-align: right; font-family: Monaco, Consolas, monospace; }
+        .preview-table .total-cell { font-weight: bold; }
+        .badge { display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: 500; }
+        .badge-client { background: #ffeaa7; color: #d68910; }
+        .badge-over10k { background: #dfe6e9; color: #636e72; }
+        .btn-delete-row { 
+            background: #dc3545; color: white; border: none; padding: 4px 8px; 
+            border-radius: 4px; cursor: pointer; font-size: 11px;
         }
+        .btn-delete-row:hover { background: #c82333; }
+        .row-deleted { opacity: 0.4; text-decoration: line-through; }
+        .row-deleted td { background: #f8d7da !important; }
+        
+        /* Worker tabs in preview */
+        .worker-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; }
+        .worker-tab {
+            padding: 8px 16px; background: #e9ecef; border-radius: 20px;
+            cursor: pointer; font-size: 13px; transition: all 0.2s;
+        }
+        .worker-tab:hover { background: #dee2e6; }
+        .worker-tab.active { background: #667eea; color: white; }
+        .worker-tab .count { 
+            background: rgba(0,0,0,0.1); padding: 2px 6px; 
+            border-radius: 10px; margin-left: 5px; font-size: 11px;
+        }
+        .worker-tab.active .count { background: rgba(255,255,255,0.3); }
+        
+        /* Summary cards */
+        .summary-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .summary-card { background: #f8f9fa; padding: 15px; border-radius: 10px; text-align: center; }
+        .summary-card-value { font-size: 20px; font-weight: bold; color: #667eea; }
+        .summary-card-label { font-size: 12px; color: #666; margin-top: 5px; }
+        
+        /* Alarms styles */
+        .alarms-container { background: #f8f9fa; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+        .alarms-tabs { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
         .alarm-tab {
-            padding: 10px 20px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 600;
-            font-size: 14px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            transition: transform 0.2s;
+            padding: 10px 20px; border-radius: 8px; cursor: pointer;
+            font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px;
         }
-        .alarm-tab:hover {
-            transform: translateY(-2px);
+        .alarm-tab.active { box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+        .alarm-tab-count { background: rgba(255,255,255,0.3); padding: 2px 8px; border-radius: 12px; font-size: 12px; }
+        .alarm-tab.high-payment { background: #f8d7da; color: #721c24; }
+        .alarm-tab.non-standard-percent { background: #fff3cd; color: #856404; }
+        .alarm-tab.high-specialist-fee { background: #d4edda; color: #155724; }
+        .alarm-tab.high-fuel { background: #cce5ff; color: #004085; }
+        .alarm-content { display: none; }
+        .alarm-content.active { display: block; }
+        .alarm-item { background: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid #ffc107; }
+        .alarm-item.high-payment { border-left-color: #dc3545; }
+        .alarm-item.non-standard-percent { border-left-color: #ffc107; }
+        .alarm-item.high-specialist-fee { border-left-color: #28a745; }
+        .alarm-item.high-fuel { border-left-color: #007bff; }
+        .alarm-message { font-weight: bold; margin-bottom: 10px; }
+        .alarm-section-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-left: 10px; }
+        .alarm-section-badge.main { background: #e3f2fd; color: #1976d2; }
+        .alarm-section-badge.client { background: #fce4ec; color: #c2185b; }
+        .alarm-details { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; font-size: 12px; }
+        .alarm-detail { background: #f8f9fa; padding: 8px 12px; border-radius: 4px; }
+        .alarm-detail-label { font-weight: 600; color: #666; }
+        
+        /* History button */
+        .history-btn {
+            position: fixed; top: 20px; right: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white; padding: 12px 20px; border-radius: 25px;
+            text-decoration: none; font-weight: 600; box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            z-index: 100;
         }
-        .alarm-tab.active {
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-        }
-        .alarm-tab-count {
-            background: rgba(255,255,255,0.3);
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 12px;
-        }
-        .alarm-tab.high-payment {
-            background: #f8d7da;
-            color: #721c24;
-        }
-        .alarm-tab.non-standard-percent {
-            background: #fff3cd;
-            color: #856404;
-        }
-        .alarm-tab.high-specialist-fee {
-            background: #d4edda;
-            color: #155724;
-        }
-        .alarm-tab.high-fuel {
-            background: #cce5ff;
-            color: #004085;
-        }
-        .alarm-content {
-            display: none;
-        }
-        .alarm-content.active {
-            display: block;
-        }
-        .alarm-item {
-            background: white;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 10px;
-            border-left: 4px solid #ffc107;
-        }
-        .alarm-item.high-payment {
-            border-left-color: #dc3545;
-        }
-        .alarm-item.non-standard-percent {
-            border-left-color: #ffc107;
-        }
-        .alarm-item.high-specialist-fee {
-            border-left-color: #28a745;
-        }
-        .alarm-item.high-fuel {
-            border-left-color: #007bff;
-        }
-        .alarm-message {
-            font-weight: bold;
-            margin-bottom: 10px;
-        }
-        .alarm-section-badge {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 11px;
-            margin-left: 10px;
-        }
-        .alarm-section-badge.main {
-            background: #e3f2fd;
-            color: #1976d2;
-        }
-        .alarm-section-badge.client {
-            background: #fce4ec;
-            color: #c2185b;
-        }
-        .alarm-details {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 8px;
-            font-size: 12px;
-        }
-        .alarm-detail {
-            background: #f8f9fa;
-            padding: 8px 12px;
-            border-radius: 4px;
-        }
-        .alarm-detail-label {
-            font-weight: 600;
-            color: #666;
-        }
-        .alarm-detail-value {
-            color: #333;
-            word-break: break-word;
-        }
-        /* Changes section styles */
-        .changes-box {
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 15px;
-        }
-        .changes-box.no-changes {
-            background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
-            border: 1px solid #28a745;
-        }
-        .changes-box.has-changes {
-            background: linear-gradient(135deg, #fff3cd 0%, #ffeeba 100%);
-            border: 1px solid #ffc107;
-        }
-        .changes-header {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 16px;
-            font-weight: bold;
-            margin-bottom: 15px;
-        }
-        .changes-header .icon {
-            font-size: 24px;
-        }
-        .changes-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-            gap: 15px;
-        }
-        .change-category {
-            background: white;
-            border-radius: 8px;
-            padding: 15px;
-            max-height: 400px;
-            overflow-y: auto;
-        }
-        .change-category-title {
-            font-weight: bold;
-            margin-bottom: 10px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            position: sticky;
-            top: 0;
-            background: white;
-            padding: 5px 0;
-        }
-        .change-category-title.added { color: #28a745; }
-        .change-category-title.deleted { color: #dc3545; }
-        .change-category-title.modified { color: #fd7e14; }
-        .change-item {
-            padding: 10px;
-            margin-bottom: 8px;
-            border-radius: 5px;
-            font-size: 13px;
-        }
-        .change-item.added { background: #d4edda; border-left: 3px solid #28a745; }
-        .change-item.deleted { background: #f8d7da; border-left: 3px solid #dc3545; }
-        .change-item.modified { background: #fff3cd; border-left: 3px solid #fd7e14; }
-        .change-item-code {
-            font-weight: 600;
-            font-size: 14px;
-        }
-        .change-item-worker {
-            color: #666;
-            font-size: 12px;
-            margin-top: 2px;
-        }
-        .change-item-address {
-            color: #495057;
-            font-size: 11px;
-            margin-top: 4px;
-            font-style: italic;
-        }
-        .change-item-details {
-            margin-top: 6px;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 4px;
-        }
-        .detail-tag {
-            background: rgba(0,0,0,0.08);
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-size: 11px;
-            white-space: nowrap;
-        }
-        .change-item-fields {
-            font-size: 12px;
-            color: #856404;
-            margin-top: 6px;
-        }
-        .field-change {
-            display: inline-block;
-            margin-right: 8px;
-            margin-bottom: 2px;
-        }
-        .field-change s {
-            color: #dc3545;
-            text-decoration: line-through;
-        }
-        .field-change b {
-            color: #28a745;
-        }
+        .history-btn:hover { transform: scale(1.05); }
+        
+        /* Checkbox styles */
+        .company-car-grid { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+        .company-car-item { display: flex; align-items: center; gap: 5px; background: #f8f9fa; padding: 8px 12px; border-radius: 6px; }
+        .company-car-checkbox { width: 18px; height: 18px; }
     </style>
 </head>
 <body>
+    <a href="/history" class="history-btn">📊 История</a>
+    
     <div class="container">
         <div class="card">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                <h1>💰 Расчёт зарплаты монтажников</h1>
-                <a href="/history" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 500;">📊 История</a>
+            <div class="header-row">
+                <div>
+                    <h1>💰 Расчёт зарплаты монтажников</h1>
+                    <p class="subtitle">Загрузите файлы из 1С для автоматического расчёта</p>
+                </div>
             </div>
-            <p class="subtitle">Загрузите файлы из 1С для автоматического расчёта</p>
             
             <!-- Step 1: Upload -->
             <div class="step active" id="step1">
                 <h2>Шаг 1: Загрузка файлов</h2>
                 <form id="uploadForm">
                     <div class="form-group">
-                        <label>📁 Файл объектов до 10 000₽:</label>
+                        <label>📁 Файл с заказами до 10 000 ₽</label>
                         <input type="file" id="file_under_10k" accept=".xlsx,.xls" required>
                     </div>
                     <div class="form-group">
-                        <label>📁 Файл объектов более 10 000₽:</label>
+                        <label>📁 Файл с заказами от 10 000 ₽</label>
                         <input type="file" id="file_over_10k" accept=".xlsx,.xls" required>
                     </div>
-                    <button type="submit" class="btn">Загрузить и обработать</button>
+                    <button type="submit" class="btn">Загрузить и продолжить →</button>
                 </form>
             </div>
             
-            <!-- Step 2: Settings & Review -->
+            <!-- Step 2: Settings -->
             <div class="step" id="step2">
                 <h2>Шаг 2: Настройки и проверка</h2>
-                
                 <div class="stats" id="statsSection"></div>
                 
-                <!-- Changes section -->
-                <div id="changesSection" class="hidden" style="margin-bottom: 20px;"></div>
-                
-                <!-- Settings -->
                 <h3 class="toggle-section" onclick="toggleSection('settingsContent')">⚙️ Настройки расчёта ▼</h3>
                 <div class="collapsible" id="settingsContent">
                     <div class="settings-grid">
                         <div class="form-group">
                             <label>Базовый адрес:</label>
-                            <input type="text" id="base_address" value="Москва, Сходненский тупик 16с4" readonly style="background: #f5f5f5; cursor: not-allowed;">
+                            <input type="text" id="base_address" value="Москва, Сходненский тупик 16с4">
                         </div>
                         <div class="form-group">
                             <label>Коэффициент бензина:</label>
-                            <input type="number" id="fuel_coefficient" value="7" readonly style="background: #f5f5f5; cursor: not-allowed;">
+                            <input type="number" id="fuel_coefficient" value="7" min="1">
                         </div>
                         <div class="form-group">
                             <label>🚗 Сумма транспортных (На своём авто):</label>
-                            <input type="number" id="transport_amount" value="1000" readonly style="background: #f5f5f5; cursor: not-allowed;">
+                            <input type="number" id="transport_amount" value="1000" min="0">
                         </div>
                         <div class="form-group">
-                            <label>🏢 Сумма транспортных (На авто компании):</label>
-                            <input type="number" value="0" readonly style="background: #f5f5f5; cursor: not-allowed;">
+                            <label>🚐 Сумма транспортных (На авто компании):</label>
+                            <input type="number" id="transport_company" value="0" min="0">
                         </div>
                     </div>
-                    
-                    <div class="form-group" style="margin-top: 15px;">
-                        <label>🏢 Монтажники на авто компании (транспортные = 0₽):</label>
-                        <div id="companyCarWorkers" style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; padding: 10px; background: #f9f9f9; border-radius: 8px; min-height: 40px;">
-                            <span style="color: #999; font-style: italic;">Загрузите файлы для выбора монтажников</span>
-                        </div>
+                    <div class="form-group">
+                        <label>🚐 Монтажники на авто компании (транспортные = 0Р):</label>
+                        <div class="company-car-grid" id="companyCarWorkers"></div>
                     </div>
                 </div>
                 
-                <!-- Days table -->
                 <h3 class="toggle-section" onclick="toggleSection('daysContent')">📅 Количество дней на объект ▼</h3>
                 <div class="collapsible" id="daysContent">
                     <div class="days-table" id="daysTable"></div>
                 </div>
                 
-                <!-- Extra rows - horizontal layout -->
                 <h3 class="toggle-section" onclick="toggleSection('extraContent')">➕ Дополнительные начисления ▼</h3>
                 <div class="collapsible" id="extraContent">
                     <div class="workers-horizontal" id="workersExtra"></div>
                 </div>
                 
                 <div style="margin-top: 20px;">
-                    <button class="btn" onclick="calculate()">Рассчитать и скачать</button>
+                    <button class="btn" onclick="preview()">Предпросмотр →</button>
                     <button class="btn btn-secondary" onclick="goToStep(1)">← Назад</button>
                 </div>
             </div>
             
-            <!-- Step 3: Result -->
+            <!-- Step 3: Preview -->
             <div class="step" id="step3">
-                <h2>Шаг 3: Результат</h2>
+                <h2>Шаг 3: Предпросмотр и редактирование</h2>
                 
-                <div class="loading" id="loadingSection">
+                <div class="loading" id="previewLoading">
                     <div class="spinner"></div>
-                    <p>Идёт расчёт... Это может занять несколько минут.</p>
+                    <p>Расчёт данных...</p>
+                </div>
+                
+                <div id="previewContent" class="hidden">
+                    <div class="summary-cards" id="previewSummary"></div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <strong>Фильтр по монтажнику:</strong>
+                        <div class="worker-tabs" id="workerTabs">
+                            <div class="worker-tab active" data-worker="all">Все</div>
+                        </div>
+                    </div>
+                    
+                    <div class="preview-table-wrapper">
+                        <table class="preview-table" id="previewTable">
+                            <thead>
+                                <tr>
+                                    <th>Заказ</th>
+                                    <th>Адрес</th>
+                                    <th>Выручка</th>
+                                    <th>Оплата</th>
+                                    <th>%</th>
+                                    <th>Бензин</th>
+                                    <th>Трансп.</th>
+                                    <th>Итого</th>
+                                    <th>Тип</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="previewTableBody"></tbody>
+                        </table>
+                    </div>
+                    
+                    <div id="previewAlarms" class="hidden"></div>
+                    
+                    <div style="margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button class="btn btn-success" onclick="finalize()">✅ Подтвердить и сохранить</button>
+                        <button class="btn btn-secondary" onclick="goToStep(2)">← Вернуться к настройкам</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Step 4: Result -->
+            <div class="step" id="step4">
+                <h2>Шаг 4: Результат</h2>
+                
+                <div class="loading" id="finalizeLoading">
+                    <div class="spinner"></div>
+                    <p>Сохранение и генерация файлов...</p>
                 </div>
                 
                 <div class="success hidden" id="successSection">
-                    <h3>✅ Расчёт завершён!</h3>
+                    <h3>✅ Расчёт завершён и сохранён!</h3>
                     <p>Файлы готовы к скачиванию</p>
                     <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; margin-top: 15px;">
                         <a href="#" class="download-link" id="downloadLinkFull">📥 Полный архив (Не урезанный)</a>
@@ -610,7 +334,6 @@
                     </div>
                 </div>
                 
-                <!-- Alarms with tabs -->
                 <div class="alarms-container hidden" id="alarmsSection">
                     <h3>⚠️ Предупреждения для проверки</h3>
                     <div class="alarms-tabs" id="alarmsTabs"></div>
@@ -625,6 +348,9 @@
         let workers = [];
         let orders = [];
         let extraRows = {};
+        let previewRows = [];
+        let deletedRows = new Set();
+        let currentWorkerFilter = 'all';
         
         const alarmTypeNames = {
             'high_payment': 'Сумма оплаты > 20000',
@@ -634,22 +360,32 @@
         };
         
         function toggleSection(id) {
-            const el = document.getElementById(id);
-            el.classList.toggle('collapsed');
+            document.getElementById(id).classList.toggle('collapsed');
         }
         
         function goToStep(step) {
             document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
             document.getElementById('step' + step).classList.add('active');
             
-            // При возврате на шаг 2, сбрасываем состояние загрузки на шаге 3
-            if (step === 2) {
-                document.getElementById('loadingSection').classList.remove('hidden');
+            if (step === 3) {
+                document.getElementById('previewLoading').classList.add('active');
+                document.getElementById('previewContent').classList.add('hidden');
+            }
+            if (step === 4) {
+                document.getElementById('finalizeLoading').classList.add('active');
                 document.getElementById('successSection').classList.add('hidden');
                 document.getElementById('alarmsSection').classList.add('hidden');
             }
         }
         
+        function formatNumber(n) {
+            if (n === "" || n === null || n === undefined) return "-";
+            const num = parseFloat(n);
+            if (isNaN(num)) return "-";
+            return Math.round(num).toLocaleString('ru-RU');
+        }
+        
+        // Step 1: Upload
         document.getElementById('uploadForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             
@@ -658,11 +394,7 @@
             formData.append('file_over_10k', document.getElementById('file_over_10k').files[0]);
             
             try {
-                const response = await fetch('/upload', {
-                    method: 'POST',
-                    body: formData
-                });
-                
+                const response = await fetch('/upload', { method: 'POST', body: formData });
                 const data = await response.json();
                 
                 if (data.success) {
@@ -670,152 +402,38 @@
                     workers = data.workers;
                     orders = data.orders;
                     
-                    // Show stats
                     document.getElementById('statsSection').innerHTML = `
-                        <div class="stat-item">
-                            <div class="stat-value">${data.total_records}</div>
-                            <div class="stat-label">Записей</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-value">${data.workers.length}</div>
-                            <div class="stat-label">Монтажников</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-value">${data.period}</div>
-                            <div class="stat-label">Период</div>
-                        </div>
+                        <div class="stat-item"><div class="stat-value">${data.total_records}</div><div class="stat-label">Записей</div></div>
+                        <div class="stat-item"><div class="stat-value">${data.workers.length}</div><div class="stat-label">Монтажников</div></div>
+                        <div class="stat-item"><div class="stat-value">${data.period}</div><div class="stat-label">Период</div></div>
                     `;
                     
-                    // Show changes if any
-                    const changesSection = document.getElementById('changesSection');
-                    const changes = data.changes || {};
-                    
-                    if (changes.has_previous) {
-                        const totalChanges = (changes.added?.length || 0) + (changes.deleted?.length || 0) + (changes.modified?.length || 0);
-                        
-                        if (totalChanges === 0) {
-                            changesSection.innerHTML = `
-                                <div class="changes-box no-changes">
-                                    <div class="changes-header">
-                                        <span class="icon">✅</span>
-                                        <span>Изменений нет</span>
-                                    </div>
-                                    <p style="margin: 0; color: #155724;">Данные совпадают с предыдущей загрузкой (версия ${changes.previous_version})</p>
-                                </div>
-                            `;
-                        } else {
-                            let changesHtml = `
-                                <div class="changes-box has-changes">
-                                    <div class="changes-header">
-                                        <span class="icon">🔄</span>
-                                        <span>Обнаружены изменения (${totalChanges})</span>
-                                    </div>
-                                    <p style="margin: 0 0 15px; color: #856404;">Сравнение с версией ${changes.previous_version}</p>
-                                    <div class="changes-grid">
-                            `;
-                            
-                            // Helper function to format details
-                            const formatDetails = (details) => {
-                                if (!details || Object.keys(details).length === 0) return '';
-                                return Object.entries(details)
-                                    .map(([key, val]) => `<span class="detail-tag">${key}: ${val}</span>`)
-                                    .join(' ');
-                            };
-                            
-                            // Added
-                            if (changes.added?.length > 0) {
-                                changesHtml += `
-                                    <div class="change-category">
-                                        <div class="change-category-title added">➕ Добавлено (${changes.added.length})</div>
-                                `;
-                                changes.added.forEach(item => {
-                                    changesHtml += `
-                                        <div class="change-item added">
-                                            <div class="change-item-code">${item.order_code}</div>
-                                            <div class="change-item-worker">${item.worker}</div>
-                                            ${item.address ? `<div class="change-item-address">📍 ${item.address}</div>` : ''}
-                                            ${item.details ? `<div class="change-item-details">${formatDetails(item.details)}</div>` : ''}
-                                        </div>
-                                    `;
-                                });
-                                changesHtml += `</div>`;
-                            }
-                            
-                            // Deleted
-                            if (changes.deleted?.length > 0) {
-                                changesHtml += `
-                                    <div class="change-category">
-                                        <div class="change-category-title deleted">➖ Удалено (${changes.deleted.length})</div>
-                                `;
-                                changes.deleted.forEach(item => {
-                                    changesHtml += `
-                                        <div class="change-item deleted">
-                                            <div class="change-item-code">${item.order_code}</div>
-                                            <div class="change-item-worker">${item.worker}</div>
-                                            ${item.address ? `<div class="change-item-address">📍 ${item.address}</div>` : ''}
-                                            ${item.details ? `<div class="change-item-details">${formatDetails(item.details)}</div>` : ''}
-                                        </div>
-                                    `;
-                                });
-                                changesHtml += `</div>`;
-                            }
-                            
-                            // Modified
-                            if (changes.modified?.length > 0) {
-                                changesHtml += `
-                                    <div class="change-category">
-                                        <div class="change-category-title modified">✏️ Изменено (${changes.modified.length})</div>
-                                `;
-                                changes.modified.forEach(item => {
-                                    const fieldsText = item.changes.map(c => `<span class="field-change">${c.field}: <s>${c.old}</s> → <b>${c.new}</b></span>`).join(' ');
-                                    changesHtml += `
-                                        <div class="change-item modified">
-                                            <div class="change-item-code">${item.order_code}</div>
-                                            <div class="change-item-worker">${item.worker}</div>
-                                            ${item.address ? `<div class="change-item-address">📍 ${item.address}</div>` : ''}
-                                            <div class="change-item-fields">${fieldsText}</div>
-                                        </div>
-                                    `;
-                                });
-                                changesHtml += `</div>`;
-                            }
-                            
-                            changesHtml += `</div></div>`;
-                            changesSection.innerHTML = changesHtml;
-                        }
-                        changesSection.classList.remove('hidden');
-                    } else {
-                        changesSection.classList.add('hidden');
-                        changesSection.innerHTML = '';
-                    }
-                    
-                    // Build company car workers checkboxes
+                    // Company car checkboxes
                     let companyCarHtml = '';
                     workers.forEach(worker => {
                         companyCarHtml += `
-                            <label style="display: flex; align-items: center; gap: 5px; padding: 5px 10px; background: white; border-radius: 5px; cursor: pointer; border: 1px solid #ddd;">
+                            <label class="company-car-item">
                                 <input type="checkbox" class="company-car-checkbox" value="${worker}">
-                                <span>${worker}</span>
+                                ${worker}
                             </label>
                         `;
                     });
                     document.getElementById('companyCarWorkers').innerHTML = companyCarHtml;
                     
-                    // Build days table - sorted by worker, using short order format
-                    // Filter: only orders with transport (revenue > 10k and percent < 50%)
+                    // Days table
                     const ordersWithTransport = orders.filter(o => !o.is_client_payment && o.has_transport);
                     let daysHtml = '<table><thead><tr><th>Монтажник</th><th>Заказ</th><th>Дни</th></tr></thead><tbody>';
                     ordersWithTransport.forEach((order, idx) => {
                         daysHtml += `<tr>
                             <td>${order.worker}</td>
-                            <td class="order-cell">${order.order_short}</td>
+                            <td>${order.order_short}</td>
                             <td><input type="number" class="days-input" id="days_${idx}" value="1" min="1" data-order="${encodeURIComponent(order.order)}"></td>
                         </tr>`;
                     });
                     daysHtml += '</tbody></table>';
                     document.getElementById('daysTable').innerHTML = daysHtml;
                     
-                    // Build extra rows section - horizontal layout
+                    // Extra rows section
                     let extraHtml = '';
                     workers.forEach(worker => {
                         extraRows[worker] = [];
@@ -856,48 +474,32 @@
         }
         
         function removeExtraRow(worker, idx) {
-            const rowId = `extra_row_${worker.replace(/\s+/g, '_')}_${idx}`;
-            const row = document.getElementById(rowId);
+            const row = document.getElementById(`extra_row_${worker.replace(/\s+/g, '_')}_${idx}`);
             if (row) row.remove();
             extraRows[worker] = extraRows[worker].filter(r => r.idx !== idx);
         }
         
-        function showAlarmTab(type) {
-            document.querySelectorAll('.alarm-tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.alarm-content').forEach(c => c.classList.remove('active'));
-            
-            document.querySelector(`.alarm-tab.${type}`).classList.add('active');
-            document.getElementById(`alarm-content-${type}`).classList.add('active');
-        }
-        
-        async function calculate() {
-            goToStep(3);
-            document.getElementById('loadingSection').classList.add('active');
-            document.getElementById('successSection').classList.add('hidden');
-            document.getElementById('alarmsSection').classList.add('hidden');
-            
-            // Collect company car workers (transport = 0)
+        function getConfig() {
             const companyCarWorkers = [];
-            document.querySelectorAll('.company-car-checkbox:checked').forEach(cb => {
-                companyCarWorkers.push(cb.value);
-            });
+            document.querySelectorAll('.company-car-checkbox:checked').forEach(cb => companyCarWorkers.push(cb.value));
             
-            // Collect config
-            const config = {
+            return {
                 base_address: document.getElementById('base_address').value,
                 fuel_coefficient: parseFloat(document.getElementById('fuel_coefficient').value),
                 transport_amount: parseInt(document.getElementById('transport_amount').value),
                 company_car_workers: companyCarWorkers
             };
-            
-            // Collect days
+        }
+        
+        function getDays() {
             const days = {};
             document.querySelectorAll('.days-input').forEach(input => {
-                const order = decodeURIComponent(input.dataset.order);
-                days[order] = parseInt(input.value) || 1;
+                days[decodeURIComponent(input.dataset.order)] = parseInt(input.value) || 1;
             });
-            
-            // Collect extra rows
+            return days;
+        }
+        
+        function getExtras() {
             const extras = {};
             workers.forEach(worker => {
                 extras[worker] = [];
@@ -905,119 +507,229 @@
                     const desc = document.getElementById(`extra_desc_${worker.replace(/\s+/g, '_')}_${row.idx}`);
                     const amount = document.getElementById(`extra_amount_${worker.replace(/\s+/g, '_')}_${row.idx}`);
                     if (desc && amount && desc.value && amount.value) {
-                        extras[worker].push({
-                            description: desc.value,
-                            amount: parseFloat(amount.value)
-                        });
+                        extras[worker].push({ description: desc.value, amount: parseFloat(amount.value) });
                     }
                 });
             });
+            return extras;
+        }
+        
+        // Step 2 -> Step 3: Preview
+        async function preview() {
+            goToStep(3);
+            deletedRows = new Set();
+            
+            const formData = new FormData();
+            formData.append('session_id', sessionId);
+            formData.append('config_json', JSON.stringify(getConfig()));
+            formData.append('days_json', JSON.stringify(getDays()));
+            formData.append('extra_rows_json', JSON.stringify(getExtras()));
             
             try {
-                const formData = new FormData();
-                formData.append('session_id', sessionId);
-                formData.append('config_json', JSON.stringify(config));
-                formData.append('days_json', JSON.stringify(days));
-                formData.append('extra_rows_json', JSON.stringify(extras));
-                
-                const response = await fetch('/calculate', {
-                    method: 'POST',
-                    body: formData
-                });
-                
+                const response = await fetch('/preview', { method: 'POST', body: formData });
                 const data = await response.json();
                 
-                document.getElementById('loadingSection').classList.remove('active');
+                document.getElementById('previewLoading').classList.remove('active');
+                
+                if (data.success) {
+                    previewRows = data.rows;
+                    renderPreview(data);
+                    document.getElementById('previewContent').classList.remove('hidden');
+                } else {
+                    alert('Ошибка: ' + (data.detail || 'Неизвестная ошибка'));
+                    goToStep(2);
+                }
+            } catch (error) {
+                alert('Ошибка: ' + error.message);
+                goToStep(2);
+            }
+        }
+        
+        function renderPreview(data) {
+            // Summary
+            const summary = data.workers_summary;
+            let totalSum = 0, totalFuel = 0, totalTransport = 0, totalOrders = 0;
+            for (const [w, s] of Object.entries(summary)) {
+                totalSum += s.total; totalFuel += s.fuel; totalTransport += s.transport; totalOrders += s.count;
+            }
+            
+            document.getElementById('previewSummary').innerHTML = `
+                <div class="summary-card"><div class="summary-card-value">${formatNumber(totalSum)} ₽</div><div class="summary-card-label">Общая сумма</div></div>
+                <div class="summary-card"><div class="summary-card-value">${totalOrders}</div><div class="summary-card-label">Заказов</div></div>
+                <div class="summary-card"><div class="summary-card-value">${formatNumber(totalFuel)} ₽</div><div class="summary-card-label">Бензин</div></div>
+                <div class="summary-card"><div class="summary-card-value">${formatNumber(totalTransport)} ₽</div><div class="summary-card-label">Транспортные</div></div>
+                <div class="summary-card"><div class="summary-card-value">${data.period}</div><div class="summary-card-label">Период</div></div>
+            `;
+            
+            // Worker tabs
+            const workersList = [...new Set(previewRows.map(r => r.worker))].sort();
+            let tabsHtml = `<div class="worker-tab active" data-worker="all" onclick="filterByWorker('all')">Все <span class="count">${previewRows.length}</span></div>`;
+            workersList.forEach(w => {
+                const count = previewRows.filter(r => r.worker === w).length;
+                tabsHtml += `<div class="worker-tab" data-worker="${w}" onclick="filterByWorker('${w}')">${w.split(' ')[0]} <span class="count">${count}</span></div>`;
+            });
+            document.getElementById('workerTabs').innerHTML = tabsHtml;
+            
+            renderPreviewTable();
+        }
+        
+        function filterByWorker(worker) {
+            currentWorkerFilter = worker;
+            document.querySelectorAll('.worker-tab').forEach(t => t.classList.remove('active'));
+            document.querySelector(`.worker-tab[data-worker="${worker}"]`).classList.add('active');
+            renderPreviewTable();
+        }
+        
+        function renderPreviewTable() {
+            let rows = previewRows;
+            if (currentWorkerFilter !== 'all') {
+                rows = previewRows.filter(r => r.worker === currentWorkerFilter);
+            }
+            
+            let html = '';
+            rows.forEach(row => {
+                const isDeleted = deletedRows.has(row.id);
+                const rowClass = isDeleted ? 'row-deleted' : '';
+                
+                let badges = '';
+                if (row.is_client_payment) badges += '<span class="badge badge-client">Оплата клиентом</span> ';
+                if (row.is_over_10k) badges += '<span class="badge badge-over10k">>10k</span>';
+                
+                html += `
+                    <tr class="${rowClass}" id="preview-row-${row.id}">
+                        <td class="order-code">${row.order_code || '-'}</td>
+                        <td class="address" title="${row.address}">${row.address}</td>
+                        <td class="number">${formatNumber(row.revenue_total)}</td>
+                        <td class="number">${formatNumber(row.service_payment)}</td>
+                        <td class="number">${row.percent || '-'}</td>
+                        <td class="number">${formatNumber(row.fuel_payment)}</td>
+                        <td class="number">${formatNumber(row.transport)}</td>
+                        <td class="number total-cell">${formatNumber(row.total)}</td>
+                        <td>${badges}</td>
+                        <td>
+                            ${isDeleted 
+                                ? `<button class="btn-delete-row" onclick="restoreRow(${row.id})" style="background:#28a745;">↩</button>`
+                                : `<button class="btn-delete-row" onclick="deleteRow(${row.id})">✕</button>`
+                            }
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            document.getElementById('previewTableBody').innerHTML = html;
+        }
+        
+        function deleteRow(id) {
+            deletedRows.add(id);
+            renderPreviewTable();
+            updatePreviewSummary();
+        }
+        
+        function restoreRow(id) {
+            deletedRows.delete(id);
+            renderPreviewTable();
+            updatePreviewSummary();
+        }
+        
+        function updatePreviewSummary() {
+            let totalSum = 0, totalFuel = 0, totalTransport = 0, totalOrders = 0;
+            previewRows.forEach(row => {
+                if (!deletedRows.has(row.id)) {
+                    totalSum += parseFloat(row.total) || 0;
+                    totalFuel += parseFloat(row.fuel_payment) || 0;
+                    totalTransport += parseFloat(row.transport) || 0;
+                    totalOrders++;
+                }
+            });
+            
+            const cards = document.getElementById('previewSummary').querySelectorAll('.summary-card-value');
+            cards[0].textContent = formatNumber(totalSum) + ' ₽';
+            cards[1].textContent = totalOrders;
+            cards[2].textContent = formatNumber(totalFuel) + ' ₽';
+            cards[3].textContent = formatNumber(totalTransport) + ' ₽';
+        }
+        
+        // Step 3 -> Step 4: Finalize
+        async function finalize() {
+            goToStep(4);
+            
+            const formData = new FormData();
+            formData.append('session_id', sessionId);
+            formData.append('config_json', JSON.stringify(getConfig()));
+            formData.append('days_json', JSON.stringify(getDays()));
+            formData.append('extra_rows_json', JSON.stringify(getExtras()));
+            formData.append('deleted_rows_json', JSON.stringify([...deletedRows]));
+            
+            try {
+                const response = await fetch('/calculate', { method: 'POST', body: formData });
+                const data = await response.json();
+                
+                document.getElementById('finalizeLoading').classList.remove('active');
                 
                 if (data.success) {
                     document.getElementById('successSection').classList.remove('hidden');
                     document.getElementById('downloadLinkFull').href = data.download_url_full;
                     document.getElementById('downloadLinkWorkers').href = data.download_url_workers;
                     
-                    // Show alarms with tabs
+                    // Show alarms
                     const alarms = data.alarms;
                     const hasAlarms = Object.values(alarms).some(arr => arr.length > 0);
                     
                     if (hasAlarms) {
                         document.getElementById('alarmsSection').classList.remove('hidden');
+                        renderAlarms(alarms);
+                    }
+                } else {
+                    alert('Ошибка: ' + (data.detail || 'Неизвестная ошибка'));
+                    goToStep(3);
+                }
+            } catch (error) {
+                alert('Ошибка: ' + error.message);
+                goToStep(3);
+            }
+        }
+        
+        function renderAlarms(alarms) {
+            let tabsHtml = '', contentHtml = '', firstActive = true;
+            
+            for (const [type, items] of Object.entries(alarms)) {
+                if (items.length > 0) {
+                    const activeClass = firstActive ? 'active' : '';
+                    const typeClass = type.replace(/_/g, '-');
+                    tabsHtml += `<div class="alarm-tab ${typeClass} ${activeClass}" onclick="showAlarmTab('${typeClass}')">${alarmTypeNames[type]} <span class="alarm-tab-count">${items.length}</span></div>`;
+                    
+                    let itemsHtml = '';
+                    items.forEach(alarm => {
+                        const sectionBadge = alarm.section === 'оплата клиентом' 
+                            ? '<span class="alarm-section-badge client">оплата клиентом</span>'
+                            : '<span class="alarm-section-badge main">основная</span>';
                         
-                        // Build tabs
-                        let tabsHtml = '';
-                        let contentHtml = '';
-                        let firstActive = true;
-                        
-                        for (const [type, items] of Object.entries(alarms)) {
-                            if (items.length > 0) {
-                                const activeClass = firstActive ? 'active' : '';
-                                tabsHtml += `
-                                    <div class="alarm-tab ${type.replace(/_/g, '-')} ${activeClass}" onclick="showAlarmTab('${type.replace(/_/g, '-')}')">
-                                        ${alarmTypeNames[type]}
-                                        <span class="alarm-tab-count">${items.length}</span>
-                                    </div>
-                                `;
-                                
-                                let itemsHtml = '';
-                                items.forEach(alarm => {
-                                    const sectionBadge = alarm.section === 'оплата клиентом' 
-                                        ? '<span class="alarm-section-badge client">оплата клиентом</span>'
-                                        : '<span class="alarm-section-badge main">основная</span>';
-                                    
-                                    // Only these fields should be bold
-                                    const boldFields = ['Выручка от услуг', 'Итого'];
-                                    
-                                    let detailsHtml = '';
-                                    if (alarm.row_info) {
-                                        for (const [key, value] of Object.entries(alarm.row_info)) {
-                                            if (key !== 'Секция') {
-                                                const isBold = boldFields.some(f => key.includes(f));
-                                                const displayValue = isBold && value && !String(value).includes('%') 
-                                                    ? `<strong>${value}</strong>` 
-                                                    : value;
-                                                detailsHtml += `
-                                                    <div class="alarm-detail">
-                                                        <span class="alarm-detail-label">${key}:</span>
-                                                        <span class="alarm-detail-value">${displayValue}</span>
-                                                    </div>
-                                                `;
-                                            }
-                                        }
-                                    }
-                                    
-                                    // Make the main message amount larger with "рублей"
-                                    let messageHtml = alarm.message;
-                                    // Match patterns like ": 49526.7" and make larger with "рублей"
-                                    messageHtml = messageHtml.replace(/: (\d+\.?\d*)\s*$/g, ': <span style="font-size: 1.1em; font-weight: bold;">$1 рублей</span>');
-                                    
-                                    itemsHtml += `
-                                        <div class="alarm-item ${type.replace(/_/g, '-')}">
-                                            <div class="alarm-message">${messageHtml} ${sectionBadge}</div>
-                                            <div class="alarm-details">${detailsHtml}</div>
-                                        </div>
-                                    `;
-                                });
-                                
-                                contentHtml += `
-                                    <div class="alarm-content ${activeClass}" id="alarm-content-${type.replace(/_/g, '-')}">
-                                        ${itemsHtml}
-                                    </div>
-                                `;
-                                
-                                firstActive = false;
+                        let detailsHtml = '';
+                        if (alarm.row_info) {
+                            for (const [key, value] of Object.entries(alarm.row_info)) {
+                                if (key !== 'Секция') {
+                                    detailsHtml += `<div class="alarm-detail"><span class="alarm-detail-label">${key}:</span> <span>${value}</span></div>`;
+                                }
                             }
                         }
                         
-                        document.getElementById('alarmsTabs').innerHTML = tabsHtml;
-                        document.getElementById('alarmsContent').innerHTML = contentHtml;
-                    }
-                } else {
-                    alert('Ошибка расчёта: ' + (data.detail || 'Неизвестная ошибка'));
-                    goToStep(2);
+                        itemsHtml += `<div class="alarm-item ${typeClass}"><div class="alarm-message">${alarm.message} ${sectionBadge}</div><div class="alarm-details">${detailsHtml}</div></div>`;
+                    });
+                    
+                    contentHtml += `<div class="alarm-content ${activeClass}" id="alarm-content-${typeClass}">${itemsHtml}</div>`;
+                    firstActive = false;
                 }
-            } catch (error) {
-                document.getElementById('loadingSection').classList.remove('active');
-                alert('Ошибка: ' + error.message);
-                goToStep(2);
             }
+            
+            document.getElementById('alarmsTabs').innerHTML = tabsHtml;
+            document.getElementById('alarmsContent').innerHTML = contentHtml;
+        }
+        
+        function showAlarmTab(type) {
+            document.querySelectorAll('.alarm-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.alarm-content').forEach(c => c.classList.remove('active'));
+            document.querySelector(`.alarm-tab.${type}`).classList.add('active');
+            document.getElementById(`alarm-content-${type}`).classList.add('active');
         }
     </script>
 </body>
