@@ -81,18 +81,45 @@ session_data = {}
 # Distance cache to avoid repeated API calls
 distance_cache = {}
 
-# Worker name normalization map
-WORKER_NAME_MAP = {
-    "Романюк Алексей": "Романюк Алексей Юрьевич",
-}
+# Worker name normalization - built dynamically from actual data
+def build_worker_name_map(all_names: set) -> dict:
+    """
+    Build normalization map automatically.
+    If we have 'Иванов Иван' and 'Иванов Иван Иванович', 
+    the shorter one maps to the longer (more complete) one.
+    """
+    name_map = {}
+    # Clean names (remove оплата клиентом suffix)
+    clean_names = set()
+    for name in all_names:
+        clean = name.replace(" (оплата клиентом)", "").strip()
+        if clean:
+            clean_names.add(clean)
+    
+    # Sort by length descending - longer names are "more complete"
+    sorted_names = sorted(clean_names, key=len, reverse=True)
+    
+    for i, short_name in enumerate(sorted_names):
+        # Skip if already mapped
+        if short_name in name_map:
+            continue
+        
+        # Look for a longer name that starts with this name
+        for long_name in sorted_names[:i]:  # Only check longer names
+            # Check if long_name starts with short_name + space (to avoid partial matches)
+            if long_name.startswith(short_name + " "):
+                name_map[short_name] = long_name
+                break
+    
+    return name_map
 
 
-def normalize_worker_name(name: str) -> str:
-    """Normalize worker name to handle duplicates like 'Романюк Алексей' -> 'Романюк Алексей Юрьевич'"""
+def normalize_worker_name(name: str, name_map: dict) -> str:
+    """Normalize worker name using the provided map"""
     if not name:
         return name
     clean_name = name.replace(" (оплата клиентом)", "").strip()
-    normalized = WORKER_NAME_MAP.get(clean_name, clean_name)
+    normalized = name_map.get(clean_name, clean_name)
     if "(оплата клиентом)" in name:
         return f"{normalized} (оплата клиентом)"
     return normalized
@@ -488,8 +515,10 @@ def extract_period(df: pd.DataFrame) -> str:
     return "период"
 
 
-def parse_excel_file(file_bytes: bytes, is_over_10k: bool) -> pd.DataFrame:
-    """Parse Excel file from 1C and extract data"""
+def parse_excel_file(file_bytes: bytes, is_over_10k: bool, name_map: dict = None) -> tuple:
+    """Parse Excel file from 1C and extract data.
+    Returns (DataFrame, set of worker names found)
+    """
     df = pd.read_excel(BytesIO(file_bytes), header=None)
     
     header_row = None
@@ -502,6 +531,30 @@ def parse_excel_file(file_bytes: bytes, is_over_10k: bool) -> pd.DataFrame:
     if header_row is None:
         raise ValueError("Не найден заголовок с 'Монтажник'")
     
+    # First pass: collect all worker names
+    all_worker_names = set()
+    for i in range(header_row + 2, len(df)):
+        row = df.iloc[i]
+        first_col = row.iloc[0] if pd.notna(row.iloc[0]) else ""
+        first_col_str = str(first_col).strip()
+        
+        if not first_col_str or first_col_str == "Итого" or first_col_str == "Заказ, Комментарий":
+            continue
+        
+        is_order = (first_col_str.startswith("Заказ") or 
+                   "КАУТ-" in first_col_str or 
+                   "ИБУТ-" in first_col_str or 
+                   "ТДУТ-" in first_col_str or
+                   "В прошлом расчете" in first_col_str)
+        
+        if not is_order and is_valid_worker_name(first_col_str):
+            all_worker_names.add(first_col_str)
+    
+    # If no external map provided, just return names for first pass
+    if name_map is None:
+        return None, all_worker_names
+    
+    # Second pass: extract records with normalized names
     records = []
     current_worker = None
     is_client_payment_section = False
@@ -534,7 +587,7 @@ def parse_excel_file(file_bytes: bytes, is_over_10k: bool) -> pd.DataFrame:
             
             if is_valid_worker:
                 # Normalize worker name
-                worker_name = normalize_worker_name(worker_name)
+                worker_name = normalize_worker_name(worker_name, name_map)
                 current_worker = worker_name
             else:
                 # Skip this group - it's not a real worker
@@ -546,7 +599,7 @@ def parse_excel_file(file_bytes: bytes, is_over_10k: bool) -> pd.DataFrame:
             # This is an order row - only add if current worker is valid
             if current_worker and is_valid_worker:
                 records.append({
-                    "worker": normalize_worker_name(current_worker),
+                    "worker": normalize_worker_name(current_worker, name_map),
                     "order": first_col_str,
                     "revenue_total": row.iloc[4] if pd.notna(row.iloc[4]) else 0,
                     "revenue_services": row.iloc[5] if pd.notna(row.iloc[5]) else 0,
@@ -561,7 +614,31 @@ def parse_excel_file(file_bytes: bytes, is_over_10k: bool) -> pd.DataFrame:
                     "is_worker_total": False
                 })
     
-    return pd.DataFrame(records)
+    return pd.DataFrame(records), all_worker_names
+
+
+def parse_both_excel_files(content_under: bytes, content_over: bytes) -> tuple:
+    """Parse both Excel files and return combined DataFrame with normalized worker names.
+    Returns (combined_df, name_map)
+    """
+    # First pass: collect all worker names from both files
+    _, names_under = parse_excel_file(content_under, is_over_10k=False, name_map=None)
+    _, names_over = parse_excel_file(content_over, is_over_10k=True, name_map=None)
+    
+    all_names = names_under | names_over
+    
+    # Build normalization map from all names
+    name_map = build_worker_name_map(all_names)
+    if name_map:
+        print(f"📋 Нормализация имён: {name_map}")
+    
+    # Second pass: parse with normalization
+    df_under, _ = parse_excel_file(content_under, is_over_10k=False, name_map=name_map)
+    df_over, _ = parse_excel_file(content_over, is_over_10k=True, name_map=name_map)
+    
+    combined = pd.concat([df_over, df_under], ignore_index=True)
+    
+    return combined, name_map
 
 
 def generate_alarms(data: List[dict], config: dict) -> Dict[str, List[Dict]]:
@@ -1067,15 +1144,13 @@ async def upload_files(
         content_under = await file_under_10k.read()
         content_over = await file_over_10k.read()
         
-        df_under = parse_excel_file(content_under, is_over_10k=False)
-        df_over = parse_excel_file(content_over, is_over_10k=True)
+        # Parse both files with automatic name normalization
+        combined, name_map = parse_both_excel_files(content_under, content_over)
         
         period_df = pd.read_excel(BytesIO(content_under), header=None)
         period = extract_period(period_df)
         
-        combined = pd.concat([df_over, df_under], ignore_index=True)
-        
-        workers = list(set([normalize_worker_name(w).replace(" (оплата клиентом)", "") 
+        workers = list(set([w.replace(" (оплата клиентом)", "") 
                            for w in combined["worker"].unique() if w and not pd.isna(w)]))
         workers = sorted(workers)
         
@@ -1115,7 +1190,8 @@ async def upload_files(
         session_data[session_id] = {
             "combined": combined.to_dict("records"),
             "period": period,
-            "workers": workers
+            "workers": workers,
+            "name_map": name_map  # Save for later use
         }
         
         # ===== CHECK FOR CHANGES FROM PREVIOUS UPLOAD =====
