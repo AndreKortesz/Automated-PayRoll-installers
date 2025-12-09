@@ -999,13 +999,9 @@ def create_excel_report(data: List[dict], period: str, config: dict, for_workers
             c.border = thin_border
             
             # Итого - column L (12)
-            # For extra rows (additional payments), output value directly
-            # For regular rows, use formula =H+J+K
-            if record.get("is_extra_row"):
-                total_val = to_int(record.get("total", 0))
-                c = ws.cell(row=current_row, column=12, value=total_val if total_val else None)
-            else:
-                c = ws.cell(row=current_row, column=12, value=f"=H{current_row}+J{current_row}+K{current_row}")
+            # Use the actual total value from data (can be edited in history)
+            total_val = to_int(record.get("total", 0))
+            c = ws.cell(row=current_row, column=12, value=total_val if total_val else None)
             c.font = data_font
             c.border = thin_border
             
@@ -1075,8 +1071,9 @@ def create_excel_report(data: List[dict], period: str, config: dict, for_workers
                 for col in [10, 11]:
                     ws.cell(row=current_row, column=col).border = thin_border
                 
-                # Итого = just service payment (H)
-                c = ws.cell(row=current_row, column=12, value=f"=H{current_row}")
+                # Итого - use actual value from data
+                total_val = to_int(record.get("total", 0))
+                c = ws.cell(row=current_row, column=12, value=total_val if total_val else None)
                 c.font = data_font
                 c.border = thin_border
                 
