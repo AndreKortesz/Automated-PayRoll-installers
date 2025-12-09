@@ -2187,6 +2187,90 @@ async def comparison_page(request: Request):
     return templates.TemplateResponse("comparison.html", {"request": request})
 
 
+@app.post("/api/calculation/{calc_id}/update")
+async def update_calculation(calc_id: int, request: Request):
+    """Update calculation values (fuel, transport, total)"""
+    try:
+        if not database:
+            raise HTTPException(status_code=500, detail="Database not connected")
+        
+        data = await request.json()
+        fuel_payment = data.get("fuel_payment")
+        transport = data.get("transport")
+        total = data.get("total")
+        
+        # Build update query
+        from sqlalchemy import update
+        from database import calculations
+        
+        update_values = {}
+        if fuel_payment is not None:
+            update_values["fuel_payment"] = float(fuel_payment)
+        if transport is not None:
+            update_values["transport"] = float(transport)
+        if total is not None:
+            update_values["total"] = float(total)
+        
+        if not update_values:
+            raise HTTPException(status_code=400, detail="No values to update")
+        
+        query = update(calculations).where(calculations.c.id == calc_id).values(**update_values)
+        await database.execute(query)
+        
+        # Also update worker_totals for this upload
+        # First, get the upload_id and worker from this calculation
+        calc_query = calculations.select().where(calculations.c.id == calc_id)
+        calc_row = await database.fetch_one(calc_query)
+        
+        if calc_row:
+            upload_id = calc_row["upload_id"]
+            worker = calc_row["worker"].replace(" (оплата клиентом)", "")
+            
+            # Recalculate worker totals from all calculations for this worker/upload
+            from database import worker_totals
+            from sqlalchemy import func, and_
+            
+            # Get all calculations for this worker in this upload
+            all_calcs_query = calculations.select().where(
+                and_(
+                    calculations.c.upload_id == upload_id,
+                    calculations.c.worker.like(f"{worker}%")
+                )
+            )
+            all_calcs = await database.fetch_all(all_calcs_query)
+            
+            new_total = sum(c["total"] or 0 for c in all_calcs)
+            new_fuel = sum(c["fuel_payment"] or 0 for c in all_calcs)
+            new_transport = sum(c["transport"] or 0 for c in all_calcs)
+            
+            # Update worker_totals
+            update_wt = update(worker_totals).where(
+                and_(
+                    worker_totals.c.upload_id == upload_id,
+                    worker_totals.c.worker == worker
+                )
+            ).values(
+                total_amount=new_total,
+                fuel_total=new_fuel,
+                transport_total=new_transport
+            )
+            await database.execute(update_wt)
+        
+        print(f"✅ Updated calculation {calc_id}: {update_values}")
+        
+        return JSONResponse({
+            "success": True,
+            "updated": update_values
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/period/{period_id}")
 async def period_page(request: Request, period_id: int):
     """Period details page"""
