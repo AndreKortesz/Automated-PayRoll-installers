@@ -2178,11 +2178,21 @@ async def download_period_archive(period_id: int, archive_type: str):
         zip_buffer.seek(0)
         
         from fastapi.responses import StreamingResponse
+        from urllib.parse import quote
+        
+        # Use ASCII-safe filename and add UTF-8 encoded filename for modern browsers
         archive_name = f"{'Для_монтажников' if for_workers else 'Полный_отчет'}_{period_name.replace('.', '_')}.zip"
+        ascii_name = f"{'workers' if for_workers else 'full'}_{period_name.replace('.', '_')}.zip"
+        
+        # RFC 5987 encoding for non-ASCII filenames
+        encoded_name = quote(archive_name)
+        
         return StreamingResponse(
             zip_buffer,
             media_type="application/zip",
-            headers={"Content-Disposition": f"attachment; filename={archive_name}"}
+            headers={
+                "Content-Disposition": f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{encoded_name}"
+            }
         )
     except HTTPException:
         raise
