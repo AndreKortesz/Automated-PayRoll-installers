@@ -111,7 +111,7 @@
         .preview-table td { padding: 10px 8px; border-bottom: 1px solid #eee; }
         .preview-table tr:hover { background: #f8f9fa; }
         .preview-table .order-code { font-weight: 600; color: #667eea; }
-        .preview-table .address { max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .preview-table .address { max-width: 300px; word-wrap: break-word; white-space: normal; line-height: 1.3; }
         .preview-table .number { text-align: right; font-family: Monaco, Consolas, monospace; }
         .preview-table .total-cell { font-weight: bold; }
         .badge { display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: 500; }
@@ -176,12 +176,12 @@
         /* History button */
         .history-btn {
             position: fixed; top: 20px; right: 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white; padding: 12px 20px; border-radius: 25px;
+            background: white;
+            color: #667eea; padding: 12px 20px; border-radius: 25px;
             text-decoration: none; font-weight: 600; box-shadow: 0 4px 15px rgba(0,0,0,0.2);
             z-index: 100;
         }
-        .history-btn:hover { transform: scale(1.05); }
+        .history-btn:hover { transform: scale(1.05); background: #f8f9fa; }
         
         /* Checkbox styles */
         .company-car-grid { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
