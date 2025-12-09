@@ -219,6 +219,54 @@
         .btn-delete:hover {
             background: #c82333;
         }
+        .btn-add {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn-add:hover {
+            background: #218838;
+        }
+        .new-row {
+            background: #d4edda !important;
+        }
+        .new-row td {
+            border-bottom: 2px solid #28a745;
+        }
+        .editable-text {
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 4px;
+            min-width: 100px;
+            display: inline-block;
+        }
+        .editable-text:hover {
+            background: #e8f4fc;
+        }
+        .editable-text input {
+            width: 100%;
+            min-width: 150px;
+            padding: 4px 6px;
+            border: 2px solid #28a745;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+        .editable-text input:focus {
+            outline: none;
+            border-color: #1e7e34;
+        }
+        .add-row-section {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px dashed #ccc;
+        }
     </style>
 </head>
 <body>
@@ -248,6 +296,8 @@
         
         let ordersData = [];
         let pendingChanges = {}; // {calc_id: {field: value}}
+        let newRows = []; // Новые добавленные строки (ещё не сохранённые)
+        let pendingOrderChanges = {}; // {order_id: {field: value}} для изменения order_code/address
         
         async function loadWorkerData() {
             if (!workerName) {
@@ -299,8 +349,11 @@
             });
             
             // Summary
+            const hasAnyChanges = Object.keys(pendingChanges).length > 0 || 
+                                  Object.keys(pendingOrderChanges).length > 0 || 
+                                  newRows.length > 0;
             let summaryHtml = `
-                <div class="unsaved-notice ${Object.keys(pendingChanges).length > 0 ? 'show' : ''}" id="unsavedNotice">
+                <div class="unsaved-notice ${hasAnyChanges ? 'show' : ''}" id="unsavedNotice">
                     ⚠️ Есть несохранённые изменения
                 </div>
                 <div class="summary-grid">
@@ -329,7 +382,10 @@
                         <div class="summary-label" style="color: rgba(255,255,255,0.8);">ИТОГО ₽</div>
                     </div>
                 </div>
-                <p class="edit-hint">💡 Кликните на ячейку Бензин, Трансп. или Итого для редактирования</p>
+                <p class="edit-hint">💡 Кликните на ячейку Бензин, Трансп. или Итого для редактирования. Для новых строк можно редактировать Заказ и Адрес.</p>
+                <div class="add-row-section">
+                    <button class="btn-add" onclick="addNewRow()">➕ Добавить строку</button>
+                </div>
             `;
             
             // Table
@@ -357,6 +413,7 @@
                 const calc = order.calculation || {};
                 const calcId = calc.id;
                 const orderId = order.id;
+                const isNewRow = order.is_extra_row || order._isNew;
                 
                 const badges = [];
                 if (order.is_client_payment) badges.push('<span class="badge badge-client">Оплата клиентом</span>');
@@ -372,10 +429,34 @@
                 const transportModified = pendingChanges[calcId]?.transport !== undefined ? 'cell-modified' : '';
                 const totalModified = pendingChanges[calcId]?.total !== undefined ? 'cell-modified' : '';
                 
+                // For new/extra rows - order_code and address are editable
+                const orderCodeVal = pendingOrderChanges[orderId]?.order_code ?? order.order_code ?? '';
+                const addressVal = pendingOrderChanges[orderId]?.address ?? order.address ?? '';
+                const orderCodeModified = pendingOrderChanges[orderId]?.order_code !== undefined ? 'cell-modified' : '';
+                const addressModified = pendingOrderChanges[orderId]?.address !== undefined ? 'cell-modified' : '';
+                
+                const rowClass = order._isNew ? 'new-row' : '';
+                
+                // Order code cell - editable for extra rows
+                let orderCodeCell;
+                if (isNewRow) {
+                    orderCodeCell = `<td class="order-code editable-text ${orderCodeModified}" onclick="editOrderField(${idx}, 'order_code', ${orderId})" id="cell-ordercode-${idx}">${orderCodeVal || '<em style=\"color:#999\">Добавить код</em>'}</td>`;
+                } else {
+                    orderCodeCell = `<td class="order-code">${order.order_code || '-'}</td>`;
+                }
+                
+                // Address cell - editable for extra rows
+                let addressCell;
+                if (isNewRow) {
+                    addressCell = `<td class="address editable-text ${addressModified}" onclick="editOrderField(${idx}, 'address', ${orderId})" id="cell-address-${idx}" title="${addressVal}">${addressVal || '<em style=\"color:#999\">Добавить адрес</em>'}</td>`;
+                } else {
+                    addressCell = `<td class="address" title="${order.address || ''}">${order.address || order.order_full || '-'}</td>`;
+                }
+                
                 tableHtml += `
-                    <tr data-idx="${idx}" data-order-id="${orderId}">
-                        <td class="order-code">${order.order_code || '-'}</td>
-                        <td class="address" title="${order.address || ''}">${order.address || order.order_full || '-'}</td>
+                    <tr data-idx="${idx}" data-order-id="${orderId}" class="${rowClass}">
+                        ${orderCodeCell}
+                        ${addressCell}
                         <td class="number">${formatNumber(order.revenue_services)}</td>
                         <td class="number">${formatNumber(order.service_payment)}</td>
                         <td>${order.percent || '-'}</td>
@@ -413,7 +494,10 @@
             `;
             
             // Update save button state
-            document.getElementById('saveBtn').disabled = Object.keys(pendingChanges).length === 0;
+            const hasChanges = Object.keys(pendingChanges).length > 0 || 
+                               Object.keys(pendingOrderChanges).length > 0 || 
+                               newRows.length > 0;
+            document.getElementById('saveBtn').disabled = !hasChanges;
         }
         
         function editCell(idx, field, calcId) {
@@ -456,6 +540,83 @@
             renderTable();
         }
         
+        // Edit order_code or address for extra/new rows
+        function editOrderField(idx, field, orderId) {
+            const order = ordersData[idx];
+            const currentVal = pendingOrderChanges[orderId]?.[field] ?? order[field] ?? '';
+            
+            const cellId = field === 'order_code' ? `cell-ordercode-${idx}` : `cell-address-${idx}`;
+            const targetCell = document.getElementById(cellId);
+            
+            // Create input
+            targetCell.innerHTML = `<input type="text" value="${currentVal}" onblur="saveOrderField(${idx}, '${field}', ${orderId}, this)" onkeypress="if(event.key==='Enter')this.blur()" placeholder="${field === 'order_code' ? 'Код заказа' : 'Адрес'}">`;
+            targetCell.querySelector('input').focus();
+            targetCell.querySelector('input').select();
+        }
+        
+        function saveOrderField(idx, field, orderId, input) {
+            const newVal = input.value.trim();
+            const order = ordersData[idx];
+            const originalVal = order[field] ?? '';
+            
+            if (newVal !== originalVal) {
+                if (!pendingOrderChanges[orderId]) {
+                    pendingOrderChanges[orderId] = {};
+                }
+                pendingOrderChanges[orderId][field] = newVal;
+            } else {
+                if (pendingOrderChanges[orderId]) {
+                    delete pendingOrderChanges[orderId][field];
+                    if (Object.keys(pendingOrderChanges[orderId]).length === 0) {
+                        delete pendingOrderChanges[orderId];
+                    }
+                }
+            }
+            
+            renderTable();
+        }
+        
+        async function addNewRow() {
+            try {
+                // Create a new row via API immediately
+                const response = await fetch(`/api/upload/${uploadId}/worker/${encodeURIComponent(workerName)}/add-row`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        order_code: '',
+                        address: '',
+                        fuel_payment: 0,
+                        transport: 0,
+                        total: 0
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Add to local data with flag
+                    const newOrder = data.order;
+                    newOrder._isNew = true;
+                    ordersData.push(newOrder);
+                    renderTable();
+                    
+                    // Scroll to the new row
+                    setTimeout(() => {
+                        const idx = ordersData.length - 1;
+                        const cell = document.getElementById(`cell-ordercode-${idx}`);
+                        if (cell) {
+                            cell.scrollIntoView({behavior: 'smooth', block: 'center'});
+                            cell.click(); // Start editing
+                        }
+                    }, 100);
+                } else {
+                    throw new Error(data.detail || 'Ошибка создания');
+                }
+            } catch (error) {
+                alert('❌ Ошибка добавления строки: ' + error.message);
+            }
+        }
+        
         async function saveChanges() {
             const saveBtn = document.getElementById('saveBtn');
             saveBtn.disabled = true;
@@ -464,10 +625,22 @@
             try {
                 const promises = [];
                 
+                // Save calculation changes (fuel, transport, total)
                 for (const [calcId, changes] of Object.entries(pendingChanges)) {
                     promises.push(
                         fetch(`/api/calculation/${calcId}/update`, {
                             method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify(changes)
+                        })
+                    );
+                }
+                
+                // Save order changes (order_code, address)
+                for (const [orderId, changes] of Object.entries(pendingOrderChanges)) {
+                    promises.push(
+                        fetch(`/api/order/${orderId}/update`, {
+                            method: 'PUT',
                             headers: {'Content-Type': 'application/json'},
                             body: JSON.stringify(changes)
                         })
@@ -486,7 +659,19 @@
                         }
                     }
                     
+                    for (const [orderId, changes] of Object.entries(pendingOrderChanges)) {
+                        const order = ordersData.find(o => o.id == orderId);
+                        if (order) {
+                            Object.assign(order, changes);
+                        }
+                    }
+                    
                     pendingChanges = {};
+                    pendingOrderChanges = {};
+                    
+                    // Clear _isNew flag
+                    ordersData.forEach(o => delete o._isNew);
+                    
                     alert('✅ Изменения сохранены!');
                     renderTable();
                 } else {
