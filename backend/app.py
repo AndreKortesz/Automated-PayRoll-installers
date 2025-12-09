@@ -2448,6 +2448,193 @@ async def delete_order(order_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/upload/{upload_id}/worker/{worker}/add-row")
+async def add_order_row(upload_id: int, worker: str, request: Request):
+    """Add a new order row for a worker"""
+    try:
+        if not database:
+            raise HTTPException(status_code=500, detail="Database not connected")
+        
+        from urllib.parse import unquote
+        from sqlalchemy import and_, update
+        from database import orders, calculations, worker_totals
+        
+        worker_decoded = unquote(worker)
+        data = await request.json()
+        
+        order_code = data.get("order_code", "")
+        address = data.get("address", "")
+        fuel_payment = float(data.get("fuel_payment", 0) or 0)
+        transport = float(data.get("transport", 0) or 0)
+        total = float(data.get("total", 0) or 0)
+        
+        # Determine if client payment
+        is_client_payment = "(оплата клиентом)" in worker_decoded
+        base_worker = worker_decoded.replace(" (оплата клиентом)", "")
+        
+        # Create order text
+        order_text = f"{order_code}, {address}" if order_code and address else (order_code or address or "Ручная запись")
+        
+        # Insert new order
+        order_insert = orders.insert().values(
+            upload_id=upload_id,
+            worker=worker_decoded,
+            order_code=order_code,
+            order_full=order_text,
+            address=address,
+            revenue_total=0,
+            revenue_services=0,
+            diagnostic=0,
+            diagnostic_payment=0,
+            specialist_fee=0,
+            additional_expenses=0,
+            service_payment=0,
+            percent="",
+            is_client_payment=is_client_payment,
+            is_over_10k=False,
+            is_extra_row=True  # Mark as manual/extra row
+        )
+        order_id = await database.execute(order_insert)
+        
+        # Insert calculation
+        calc_insert = calculations.insert().values(
+            upload_id=upload_id,
+            order_id=order_id,
+            worker=worker_decoded,
+            fuel_payment=fuel_payment,
+            transport=transport,
+            diagnostic_50=0,
+            total=total
+        )
+        calc_id = await database.execute(calc_insert)
+        
+        # Update worker_totals
+        wt_query = worker_totals.select().where(
+            and_(
+                worker_totals.c.upload_id == upload_id,
+                worker_totals.c.worker == base_worker
+            )
+        )
+        wt = await database.fetch_one(wt_query)
+        
+        if wt:
+            new_total = (wt["total_amount"] or 0) + total
+            new_fuel = (wt["fuel_total"] or 0) + fuel_payment
+            new_transport = (wt["transport_total"] or 0) + transport
+            new_count = (wt["orders_count"] or 0) + 1
+            
+            if is_client_payment:
+                new_client = (wt["client_amount"] or 0) + total
+                new_company = wt["company_amount"] or 0
+                new_client_count = (wt["client_orders_count"] or 0) + 1
+                new_company_count = wt["company_orders_count"] or 0
+            else:
+                new_company = (wt["company_amount"] or 0) + total
+                new_client = wt["client_amount"] or 0
+                new_company_count = (wt["company_orders_count"] or 0) + 1
+                new_client_count = wt["client_orders_count"] or 0
+            
+            update_wt = update(worker_totals).where(
+                and_(
+                    worker_totals.c.upload_id == upload_id,
+                    worker_totals.c.worker == base_worker
+                )
+            ).values(
+                total_amount=new_total,
+                company_amount=new_company,
+                client_amount=new_client,
+                fuel_total=new_fuel,
+                transport_total=new_transport,
+                orders_count=new_count,
+                company_orders_count=new_company_count,
+                client_orders_count=new_client_count
+            )
+            await database.execute(update_wt)
+        
+        print(f"➕ Added new row for {worker_decoded}: order_code={order_code}, total={total}")
+        
+        # Return the new order data
+        return JSONResponse({
+            "success": True,
+            "order": {
+                "id": order_id,
+                "order_code": order_code,
+                "address": address,
+                "order_full": order_text,
+                "worker": worker_decoded,
+                "revenue_services": 0,
+                "service_payment": 0,
+                "percent": "",
+                "is_client_payment": is_client_payment,
+                "is_over_10k": False,
+                "is_extra_row": True,
+                "calculation": {
+                    "id": calc_id,
+                    "fuel_payment": fuel_payment,
+                    "transport": transport,
+                    "total": total
+                }
+            }
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/order/{order_id}/update")
+async def update_order_info(order_id: int, request: Request):
+    """Update order info (order_code, address) - for manually added rows"""
+    try:
+        if not database:
+            raise HTTPException(status_code=500, detail="Database not connected")
+        
+        from sqlalchemy import update
+        from database import orders
+        
+        data = await request.json()
+        
+        update_values = {}
+        if "order_code" in data:
+            update_values["order_code"] = data["order_code"]
+        if "address" in data:
+            update_values["address"] = data["address"]
+        
+        if update_values:
+            # Also update order_full
+            order_query = orders.select().where(orders.c.id == order_id)
+            order = await database.fetch_one(order_query)
+            
+            if order:
+                new_order_code = data.get("order_code", order["order_code"] or "")
+                new_address = data.get("address", order["address"] or "")
+                order_text = f"{new_order_code}, {new_address}" if new_order_code and new_address else (new_order_code or new_address or "Ручная запись")
+                update_values["order_full"] = order_text
+        
+        if not update_values:
+            return JSONResponse({"success": True, "message": "No changes"})
+        
+        query = update(orders).where(orders.c.id == order_id).values(**update_values)
+        await database.execute(query)
+        
+        print(f"📝 Updated order {order_id}: {update_values}")
+        
+        return JSONResponse({
+            "success": True,
+            "updated": update_values
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/period/{period_id}")
 async def period_page(request: Request, period_id: int):
     """Period details page"""
