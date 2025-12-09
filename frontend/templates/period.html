@@ -270,6 +270,54 @@
             border-radius: 8px;
             text-align: center;
         }
+        .download-section {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .download-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .download-buttons {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        .download-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.2s;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .download-btn.full {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .download-btn.workers {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+        }
+        .download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .download-btn .icon {
+            font-size: 18px;
+        }
     </style>
 </head>
 <body>
@@ -416,6 +464,23 @@
                 </div>
             `;
             
+            // Download section
+            let downloadHtml = `
+                <div class="download-section">
+                    <div class="download-title">📥 Скачать отчёты (актуальные данные)</div>
+                    <div class="download-buttons">
+                        <a href="/api/period/${periodId}/download/full" class="download-btn full">
+                            <span class="icon">📊</span>
+                            <span>Полный отчёт</span>
+                        </a>
+                        <a href="/api/period/${periodId}/download/workers" class="download-btn workers">
+                            <span class="icon">👷</span>
+                            <span>Для монтажников</span>
+                        </a>
+                    </div>
+                </div>
+            `;
+            
             // Render changes
             let changesHtml = '';
             if (changes.length > 0) {
@@ -492,6 +557,7 @@
                 ${tabsHtml}
                 <div class="card">
                     <div class="card-title">👥 Монтажники</div>
+                    ${downloadHtml}
                     ${workersHtml}
                 </div>
                 ${changesHtml}
