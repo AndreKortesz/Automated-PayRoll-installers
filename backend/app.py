@@ -1637,35 +1637,39 @@ async def calculate_salaries(
                 # 4. Save orders and calculations - ONLY for valid workers
                 order_id_map = {}  # To map order to its DB id
                 for row in calculated_data:
-                    if row.get("is_extra_row"):
-                        continue  # Skip extra rows for now
-                    
                     # Skip non-worker groups (Доставка, Помощник, etc.)
                     worker = normalize_worker_name(row.get("worker", "").replace(" (оплата клиентом)", ""))
                     if not is_valid_worker_name(worker):
                         continue
                     
-                    # Extract order code from order text
+                    is_extra = row.get("is_extra_row", False)
+                    
+                    # Extract order code from order text (for regular rows)
                     order_text = row.get("order", "")
                     order_code_match = re.search(r'(КАУТ|ИБУТ|ТДУТ)-\d+', order_text)
                     order_code = order_code_match.group(0) if order_code_match else ""
+                    
+                    # For extra rows, use description as order text
+                    if is_extra:
+                        order_code = "ДОПЛАТА"  # Special code for extra rows
                     
                     # Save order
                     order_data = {
                         "worker": row.get("worker", ""),
                         "order_code": order_code,
                         "order": order_text,
-                        "address": extract_address_from_order(order_text),
-                        "revenue_total": row.get("revenue_total", 0),
-                        "revenue_services": row.get("revenue_services", 0),
-                        "diagnostic": row.get("diagnostic", 0),
-                        "diagnostic_payment": row.get("diagnostic_payment", 0),
-                        "specialist_fee": row.get("specialist_fee", 0),
-                        "additional_expenses": row.get("additional_expenses", 0),
-                        "service_payment": row.get("service_payment", 0),
-                        "percent": row.get("percent", ""),
+                        "address": extract_address_from_order(order_text) if not is_extra else order_text,
+                        "revenue_total": row.get("revenue_total", 0) if not is_extra else 0,
+                        "revenue_services": row.get("revenue_services", 0) if not is_extra else 0,
+                        "diagnostic": row.get("diagnostic", 0) if not is_extra else 0,
+                        "diagnostic_payment": row.get("diagnostic_payment", 0) if not is_extra else 0,
+                        "specialist_fee": row.get("specialist_fee", 0) if not is_extra else 0,
+                        "additional_expenses": row.get("additional_expenses", 0) if not is_extra else 0,
+                        "service_payment": row.get("service_payment", 0) if not is_extra else 0,
+                        "percent": row.get("percent", "") if not is_extra else "",
                         "is_client_payment": row.get("is_client_payment", False),
                         "is_over_10k": row.get("is_over_10k", False),
+                        "is_extra_row": is_extra,
                     }
                     order_id = await save_order(upload_id, order_data)
                     order_id_map[order_text] = order_id
@@ -1673,9 +1677,9 @@ async def calculate_salaries(
                     # Save calculation
                     calc_data = {
                         "worker": row.get("worker", ""),
-                        "fuel_payment": row.get("fuel_payment", 0),
-                        "transport": row.get("transport", 0),
-                        "diagnostic_50": row.get("diagnostic_50", 0),
+                        "fuel_payment": row.get("fuel_payment", 0) if not is_extra else 0,
+                        "transport": row.get("transport", 0) if not is_extra else 0,
+                        "diagnostic_50": row.get("diagnostic_50", 0) if not is_extra else 0,
                         "total": row.get("total", 0),
                     }
                     await save_calculation(upload_id, order_id, calc_data)
