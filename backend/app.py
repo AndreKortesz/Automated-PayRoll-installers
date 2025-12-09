@@ -2118,23 +2118,28 @@ async def download_period_archive(period_id: int, archive_type: str):
         for wt in worker_totals:
             worker_orders = await get_worker_orders(latest_upload["id"], wt["worker"])
             all_orders.extend(worker_orders)
+            # Also get client payment orders
+            worker_orders_client = await get_worker_orders(latest_upload["id"], f"{wt['worker']} (оплата клиентом)")
+            all_orders.extend(worker_orders_client)
         
-        # Reconstruct data structure
+        # Reconstruct data structure from current DB values
         data = []
         for order in all_orders:
             calc = order.get("calculation", {})
             row = {
                 "worker": order["worker"],
-                "order": order.get("order_text", ""),
+                "order": order.get("order_full", "") or order.get("address", ""),
                 "revenue_total": order.get("revenue_total", 0),
                 "revenue_services": order.get("revenue_services", 0),
                 "diagnostic": order.get("diagnostic", 0),
                 "diagnostic_payment": order.get("diagnostic_payment", 0),
                 "specialist_fee": order.get("specialist_fee", 0),
-                "extra_expenses": order.get("extra_expenses", 0),
+                "additional_expenses": order.get("additional_expenses", 0),
                 "service_payment": order.get("service_payment", 0),
-                "percent": order.get("percent", 0),
+                "percent": order.get("percent", ""),
                 "is_client_payment": order.get("is_client_payment", False),
+                "is_over_10k": order.get("is_over_10k", False),
+                "is_extra_row": order.get("is_extra_row", False),
                 "fuel_payment": calc.get("fuel_payment", 0),
                 "transport": calc.get("transport", 0),
                 "diagnostic_50": calc.get("diagnostic_50", 0),
@@ -2261,6 +2266,89 @@ async def update_calculation(calc_id: int, request: Request):
         return JSONResponse({
             "success": True,
             "updated": update_values
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/order/{order_id}")
+async def delete_order(order_id: int):
+    """Delete an order and its calculation from the database"""
+    try:
+        if not database:
+            raise HTTPException(status_code=500, detail="Database not connected")
+        
+        from sqlalchemy import delete, and_
+        from database import orders, calculations, worker_totals
+        
+        # First, get order info for updating worker_totals
+        order_query = orders.select().where(orders.c.id == order_id)
+        order = await database.fetch_one(order_query)
+        
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        
+        upload_id = order["upload_id"]
+        worker = order["worker"].replace(" (оплата клиентом)", "")
+        
+        # Get calculation total for this order
+        calc_query = calculations.select().where(calculations.c.order_id == order_id)
+        calc = await database.fetch_one(calc_query)
+        
+        deleted_total = calc["total"] if calc else 0
+        deleted_fuel = calc["fuel_payment"] if calc else 0
+        deleted_transport = calc["transport"] if calc else 0
+        
+        # Delete calculation first (foreign key)
+        del_calc = delete(calculations).where(calculations.c.order_id == order_id)
+        await database.execute(del_calc)
+        
+        # Delete order
+        del_order = delete(orders).where(orders.c.id == order_id)
+        await database.execute(del_order)
+        
+        # Update worker_totals
+        from sqlalchemy import update
+        
+        # Get current worker totals
+        wt_query = worker_totals.select().where(
+            and_(
+                worker_totals.c.upload_id == upload_id,
+                worker_totals.c.worker == worker
+            )
+        )
+        wt = await database.fetch_one(wt_query)
+        
+        if wt:
+            new_total = (wt["total_amount"] or 0) - deleted_total
+            new_fuel = (wt["fuel_total"] or 0) - deleted_fuel
+            new_transport = (wt["transport_total"] or 0) - deleted_transport
+            new_count = (wt["orders_count"] or 0) - 1
+            
+            update_wt = update(worker_totals).where(
+                and_(
+                    worker_totals.c.upload_id == upload_id,
+                    worker_totals.c.worker == worker
+                )
+            ).values(
+                total_amount=max(0, new_total),
+                fuel_total=max(0, new_fuel),
+                transport_total=max(0, new_transport),
+                orders_count=max(0, new_count)
+            )
+            await database.execute(update_wt)
+        
+        print(f"🗑️ Deleted order {order_id} (worker: {worker}, total: {deleted_total})")
+        
+        return JSONResponse({
+            "success": True,
+            "deleted_order_id": order_id,
+            "deleted_total": deleted_total
         })
         
     except HTTPException:
