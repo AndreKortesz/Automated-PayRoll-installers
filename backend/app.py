@@ -2219,78 +2219,118 @@ async def update_calculation(calc_id: int, request: Request):
         
         # Build update query
         from sqlalchemy import update
-        from database import calculations, orders
+        from database import calculations, orders, save_manual_edit
         
-        update_values = {}
-        if fuel_payment is not None:
-            update_values["fuel_payment"] = float(fuel_payment)
-        if transport is not None:
-            update_values["transport"] = float(transport)
-        if total is not None:
-            update_values["total"] = float(total)
-        
-        if not update_values:
-            raise HTTPException(status_code=400, detail="No values to update")
-        
-        query = update(calculations).where(calculations.c.id == calc_id).values(**update_values)
-        await database.execute(query)
-        
-        # Get the calculation info to update worker_totals
+        # First, get current values to record the change
         calc_query = calculations.select().where(calculations.c.id == calc_id)
         calc_row = await database.fetch_one(calc_query)
         
-        if calc_row:
-            upload_id = calc_row["upload_id"]
-            full_worker = calc_row["worker"]
-            is_client_payment = "(оплата клиентом)" in full_worker
-            base_worker = full_worker.replace(" (оплата клиентом)", "")
-            
-            # Recalculate worker totals from all calculations for this worker/upload
-            from database import worker_totals
-            from sqlalchemy import and_
-            
-            # Get all calculations for company orders (without "оплата клиентом")
-            company_calcs_query = calculations.select().where(
-                and_(
-                    calculations.c.upload_id == upload_id,
-                    calculations.c.worker == base_worker
-                )
+        if not calc_row:
+            raise HTTPException(status_code=404, detail="Calculation not found")
+        
+        # Get order info for logging
+        order_query = orders.select().where(orders.c.id == calc_row["order_id"])
+        order_row = await database.fetch_one(order_query)
+        
+        update_values = {}
+        edits_to_save = []
+        
+        # Prepare updates and track changes
+        field_names = {
+            "fuel_payment": "Бензин",
+            "transport": "Транспортные", 
+            "total": "Итого"
+        }
+        
+        for field, new_val in [("fuel_payment", fuel_payment), ("transport", transport), ("total", total)]:
+            if new_val is not None:
+                old_val = calc_row[field] or 0
+                new_val_float = float(new_val)
+                if old_val != new_val_float:
+                    update_values[field] = new_val_float
+                    edits_to_save.append({
+                        "field": field,
+                        "old_value": old_val,
+                        "new_value": new_val_float
+                    })
+        
+        if not update_values:
+            return JSONResponse({"success": True, "updated": {}, "message": "No changes"})
+        
+        # Update calculation
+        query = update(calculations).where(calculations.c.id == calc_id).values(**update_values)
+        await database.execute(query)
+        
+        # Save manual edits to history
+        upload_id = calc_row["upload_id"]
+        order_code = order_row["order_code"] if order_row else ""
+        worker = calc_row["worker"]
+        address = order_row["address"] if order_row else ""
+        
+        for edit in edits_to_save:
+            await save_manual_edit(
+                upload_id=upload_id,
+                order_id=calc_row["order_id"],
+                calculation_id=calc_id,
+                order_code=order_code,
+                worker=worker,
+                address=address,
+                field_name=edit["field"],
+                old_value=edit["old_value"],
+                new_value=edit["new_value"]
             )
-            company_calcs = await database.fetch_all(company_calcs_query)
-            
-            # Get all calculations for client orders
-            client_calcs_query = calculations.select().where(
-                and_(
-                    calculations.c.upload_id == upload_id,
-                    calculations.c.worker == f"{base_worker} (оплата клиентом)"
-                )
+            print(f"📝 Manual edit saved: {order_code} {worker} - {edit['field']}: {edit['old_value']} → {edit['new_value']}")
+        
+        # Update worker_totals
+        full_worker = calc_row["worker"]
+        is_client_payment = "(оплата клиентом)" in full_worker
+        base_worker = full_worker.replace(" (оплата клиентом)", "")
+        
+        from database import worker_totals
+        from sqlalchemy import and_
+        
+        # Get all calculations for company orders (without "оплата клиентом")
+        company_calcs_query = calculations.select().where(
+            and_(
+                calculations.c.upload_id == upload_id,
+                calculations.c.worker == base_worker
             )
-            client_calcs = await database.fetch_all(client_calcs_query)
-            
-            company_amount = sum(c["total"] or 0 for c in company_calcs)
-            client_amount = sum(c["total"] or 0 for c in client_calcs)
-            total_amount = company_amount + client_amount
-            
-            new_fuel = sum(c["fuel_payment"] or 0 for c in company_calcs) + sum(c["fuel_payment"] or 0 for c in client_calcs)
-            new_transport = sum(c["transport"] or 0 for c in company_calcs) + sum(c["transport"] or 0 for c in client_calcs)
-            
-            # Update worker_totals
-            update_wt = update(worker_totals).where(
-                and_(
-                    worker_totals.c.upload_id == upload_id,
-                    worker_totals.c.worker == base_worker
-                )
-            ).values(
-                total_amount=total_amount,
-                company_amount=company_amount,
-                client_amount=client_amount,
-                fuel_total=new_fuel,
-                transport_total=new_transport
+        )
+        company_calcs = await database.fetch_all(company_calcs_query)
+        
+        # Get all calculations for client orders
+        client_calcs_query = calculations.select().where(
+            and_(
+                calculations.c.upload_id == upload_id,
+                calculations.c.worker == f"{base_worker} (оплата клиентом)"
             )
-            await database.execute(update_wt)
-            
-            print(f"✅ Updated calculation {calc_id}: {update_values}")
-            print(f"   Worker {base_worker}: company={company_amount}, client={client_amount}, total={total_amount}")
+        )
+        client_calcs = await database.fetch_all(client_calcs_query)
+        
+        company_amount = sum(c["total"] or 0 for c in company_calcs)
+        client_amount = sum(c["total"] or 0 for c in client_calcs)
+        total_amount = company_amount + client_amount
+        
+        new_fuel = sum(c["fuel_payment"] or 0 for c in company_calcs) + sum(c["fuel_payment"] or 0 for c in client_calcs)
+        new_transport = sum(c["transport"] or 0 for c in company_calcs) + sum(c["transport"] or 0 for c in client_calcs)
+        
+        # Update worker_totals
+        update_wt = update(worker_totals).where(
+            and_(
+                worker_totals.c.upload_id == upload_id,
+                worker_totals.c.worker == base_worker
+            )
+        ).values(
+            total_amount=total_amount,
+            company_amount=company_amount,
+            client_amount=client_amount,
+            fuel_total=new_fuel,
+            transport_total=new_transport
+        )
+        await database.execute(update_wt)
+        
+        print(f"✅ Updated calculation {calc_id}: {update_values}")
+        print(f"   Worker {base_worker}: company={company_amount}, client={client_amount}, total={total_amount}")
         
         return JSONResponse({
             "success": True,

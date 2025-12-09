@@ -180,6 +180,23 @@ changes = Table(
     Column("created_at", DateTime, default=datetime.utcnow),
 )
 
+# Table for manual edits (changes made in history UI)
+manual_edits = Table(
+    "manual_edits",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("upload_id", Integer, ForeignKey("uploads.id"), nullable=False),
+    Column("order_id", Integer, ForeignKey("orders.id"), nullable=False),
+    Column("calculation_id", Integer, ForeignKey("calculations.id"), nullable=False),
+    Column("order_code", String(50)),
+    Column("worker", String(100)),
+    Column("address", Text),
+    Column("field_name", String(50)),  # fuel_payment, transport, total
+    Column("old_value", Float),
+    Column("new_value", Float),
+    Column("created_at", DateTime, default=datetime.utcnow),
+)
+
 
 # ============== DATABASE FUNCTIONS ==============
 
@@ -215,6 +232,20 @@ def create_tables():
                 "ALTER TABLE worker_totals ADD COLUMN IF NOT EXISTS company_orders_count INTEGER DEFAULT 0",
                 "ALTER TABLE worker_totals ADD COLUMN IF NOT EXISTS client_orders_count INTEGER DEFAULT 0",
                 "ALTER TABLE orders ADD COLUMN IF NOT EXISTS is_extra_row BOOLEAN DEFAULT FALSE",
+                # Create manual_edits table if not exists
+                """CREATE TABLE IF NOT EXISTS manual_edits (
+                    id SERIAL PRIMARY KEY,
+                    upload_id INTEGER REFERENCES uploads(id),
+                    order_id INTEGER REFERENCES orders(id),
+                    calculation_id INTEGER REFERENCES calculations(id),
+                    order_code VARCHAR(50),
+                    worker VARCHAR(100),
+                    address TEXT,
+                    field_name VARCHAR(50),
+                    old_value FLOAT,
+                    new_value FLOAT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )""",
             ]
             
             for migration in migrations:
@@ -524,10 +555,25 @@ async def get_upload_details(upload_id: int) -> dict:
             
             filtered_changes.append(change_dict)
         
+        # Get manual edits for this upload
+        edits_query = manual_edits.select().where(
+            manual_edits.c.upload_id == upload_id
+        ).order_by(manual_edits.c.created_at.desc())
+        edits_list = await database.fetch_all(edits_query)
+        
+        # Filter edits to only valid workers
+        filtered_edits = []
+        for e in edits_list:
+            worker = e["worker"].replace(" (оплата клиентом)", "")
+            if not is_valid_worker_name(worker):
+                continue
+            filtered_edits.append(dict(e))
+        
         return {
             "upload": dict(upload),
             "worker_totals": filtered_totals,
-            "changes": filtered_changes
+            "changes": filtered_changes,
+            "manual_edits": filtered_edits
         }
     except Exception as e:
         print(f"Error in get_upload_details: {e}")
@@ -571,5 +617,33 @@ async def get_months_summary() -> List[dict]:
         GROUP BY p.month, p.year
         ORDER BY p.year DESC, p.month DESC
     """
+    results = await database.fetch_all(query)
+    return [dict(r) for r in results]
+
+
+async def save_manual_edit(upload_id: int, order_id: int, calculation_id: int, 
+                           order_code: str, worker: str, address: str,
+                           field_name: str, old_value: float, new_value: float):
+    """Save a manual edit made in history UI"""
+    query = manual_edits.insert().values(
+        upload_id=upload_id,
+        order_id=order_id,
+        calculation_id=calculation_id,
+        order_code=order_code,
+        worker=worker,
+        address=address,
+        field_name=field_name,
+        old_value=old_value,
+        new_value=new_value
+    )
+    await database.execute(query)
+
+
+async def get_manual_edits(upload_id: int) -> List[dict]:
+    """Get all manual edits for an upload"""
+    query = manual_edits.select().where(
+        manual_edits.c.upload_id == upload_id
+    ).order_by(manual_edits.c.created_at.desc())
+    
     results = await database.fetch_all(query)
     return [dict(r) for r in results]
