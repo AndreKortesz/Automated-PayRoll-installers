@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>История расчётов</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        h1 {
+            color: white;
+            font-size: 28px;
+        }
+        .header-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            background: white;
+            color: #667eea;
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 500;
+            transition: transform 0.2s;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .btn:hover {
+            transform: scale(1.05);
+        }
+        .btn-primary {
+            background: #28a745;
+            color: white;
+        }
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+        .month-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            cursor: pointer;
+        }
+        .month-title {
+            font-size: 20px;
+            font-weight: bold;
+            color: #333;
+        }
+        .month-badge {
+            background: #667eea;
+            color: white;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+        .periods-list {
+            display: grid;
+            gap: 10px;
+        }
+        .period-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            transition: background 0.2s;
+        }
+        .period-item:hover {
+            background: #e9ecef;
+        }
+        .period-info {
+            flex: 1;
+        }
+        .period-name {
+            font-weight: 500;
+            color: #333;
+        }
+        .period-date {
+            color: #666;
+            font-size: 14px;
+        }
+        .period-stats {
+            font-size: 13px;
+            color: #667eea;
+            margin-top: 4px;
+        }
+        .period-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .period-link {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+            padding: 8px 12px;
+            border-radius: 6px;
+            transition: background 0.2s;
+        }
+        .period-link:hover {
+            background: rgba(102, 126, 234, 0.1);
+        }
+        .download-btn {
+            background: #28a745;
+            color: white;
+            padding: 6px 10px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 12px;
+            transition: transform 0.2s;
+        }
+        .download-btn:hover {
+            transform: scale(1.05);
+        }
+        .download-btn.secondary {
+            background: #6c757d;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+        .empty-state h2 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        .summary-card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .summary-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #667eea;
+        }
+        .summary-label {
+            color: #666;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 История расчётов</h1>
+            <div class="header-buttons">
+                <a href="/comparison" class="btn btn-primary">📈 Сравнительная таблица</a>
+                <a href="/" class="btn">← Новый расчёт</a>
+            </div>
+        </div>
+        
+        <div id="summarySection" class="summary-grid"></div>
+        
+        <div id="content">
+            <div class="loading">
+                <div class="spinner"></div>
+                <p>Загрузка данных...</p>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        async function loadHistory() {
+            try {
+                const response = await fetch('/api/periods');
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Failed to load');
+                }
+                
+                const content = document.getElementById('content');
+                const months = data.months || [];
+                
+                if (months.length === 0) {
+                    content.innerHTML = `
+                        <div class="card empty-state">
+                            <h2>📭 Пока нет данных</h2>
+                            <p>Загрузите файлы и выполните расчёт, чтобы история появилась здесь</p>
+                            <a href="/" class="btn" style="display: inline-block; margin-top: 20px;">Начать расчёт</a>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                // Calculate summary
+                let totalPeriods = 0;
+                let totalAmount = 0;
+                months.forEach(m => {
+                    totalPeriods += m.periods.length;
+                    m.periods.forEach(p => {
+                        totalAmount += p.total_amount || 0;
+                    });
+                });
+                
+                document.getElementById('summarySection').innerHTML = `
+                    <div class="summary-card">
+                        <div class="summary-value">${months.length}</div>
+                        <div class="summary-label">Месяцев</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-value">${totalPeriods}</div>
+                        <div class="summary-label">Периодов</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-value">${Math.round(totalAmount).toLocaleString('ru-RU')}</div>
+                        <div class="summary-label">Общая сумма ₽</div>
+                    </div>
+                `;
+                
+                // Render months
+                let html = '';
+                const monthNames = {
+                    '01': 'Январь', '02': 'Февраль', '03': 'Март', '04': 'Апрель',
+                    '05': 'Май', '06': 'Июнь', '07': 'Июль', '08': 'Август',
+                    '09': 'Сентябрь', '10': 'Октябрь', '11': 'Ноябрь', '12': 'Декабрь'
+                };
+                
+                months.forEach(month => {
+                    const [year, monthNum] = month.month.split('-');
+                    const monthName = monthNames[monthNum] || monthNum;
+                    
+                    html += `
+                        <div class="card">
+                            <div class="month-header">
+                                <span class="month-title">📅 ${monthName} ${year}</span>
+                                <span class="month-badge">${month.periods.length} период(ов)</span>
+                            </div>
+                            <div class="periods-list">
+                    `;
+                    
+                    month.periods.forEach(period => {
+                        const createdDate = period.created_at ? new Date(period.created_at).toLocaleDateString('ru-RU') : '';
+                        const totalAmt = period.total_amount ? Math.round(period.total_amount).toLocaleString('ru-RU') : '0';
+                        const uploadId = period.latest_upload_id;
+                        
+                        html += `
+                            <div class="period-item">
+                                <div class="period-info">
+                                    <div class="period-name">${period.name}</div>
+                                    <div class="period-date">Создан: ${createdDate}</div>
+                                    <div class="period-stats">💰 Итого: ${totalAmt} ₽</div>
+                                </div>
+                                <div class="period-actions">
+                                    ${uploadId ? `
+                                        <a href="/api/period/${period.id}/download/full" class="download-btn" title="Полный архив">📥</a>
+                                        <a href="/api/period/${period.id}/download/workers" class="download-btn secondary" title="Для монтажников">👷</a>
+                                    ` : ''}
+                                    <a href="/period/${period.id}" class="period-link">Подробнее →</a>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    html += `
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                content.innerHTML = html;
+                
+            } catch (error) {
+                document.getElementById('content').innerHTML = `
+                    <div class="card empty-state">
+                        <h2>❌ Ошибка загрузки</h2>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        // Reload data when returning to this page
+        window.addEventListener('focus', () => {
+            loadHistory();
+        });
+        
+        window.addEventListener('pageshow', (event) => {
+            if (event.persisted) {
+                loadHistory();
+            }
+        });
+        
+        loadHistory();
+    </script>
+</body>
+</html>
