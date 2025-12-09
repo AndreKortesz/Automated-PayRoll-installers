@@ -270,6 +270,59 @@
             border-radius: 8px;
             text-align: center;
         }
+        .manual-edits-section {
+            margin-top: 20px;
+        }
+        .manual-edit-item {
+            background: #e7f3ff;
+            border-left: 4px solid #007bff;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+        .edit-icon {
+            font-size: 20px;
+        }
+        .edit-content {
+            flex: 1;
+        }
+        .edit-header {
+            font-weight: 600;
+            color: #333;
+        }
+        .edit-address {
+            font-size: 11px;
+            color: #666;
+            margin-top: 2px;
+        }
+        .edit-change {
+            margin-top: 6px;
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+        .edit-change.fuel {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .edit-change.transport {
+            background: #d4edda;
+            color: #155724;
+        }
+        .edit-change.total {
+            background: #cce5ff;
+            color: #004085;
+        }
+        .edit-time {
+            font-size: 10px;
+            color: #999;
+            margin-top: 4px;
+        }
         .download-section {
             background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
             border-radius: 12px;
@@ -404,6 +457,7 @@
             const upload = data.data;
             const workerTotals = upload.worker_totals || [];
             const changes = upload.changes || [];
+            const manualEdits = upload.manual_edits || [];
             
             // Calculate grand totals
             const grandTotal = workerTotals.reduce((sum, w) => sum + (w.total_amount || 0), 0);
@@ -553,6 +607,60 @@
                 changesHtml = '<div class="card"><div class="no-changes">✅ Изменений нет</div></div>';
             }
             
+            // Render manual edits (changes made in history UI)
+            let editsHtml = '';
+            if (manualEdits.length > 0) {
+                editsHtml = '<div class="card"><div class="card-title">✏️ Ручные корректировки</div><div class="changes-list manual-edits-section">';
+                
+                const fieldLabels = {
+                    fuel_payment: 'Бензин',
+                    transport: 'Транспортные',
+                    total: 'Итого'
+                };
+                
+                const fieldClasses = {
+                    fuel_payment: 'fuel',
+                    transport: 'transport',
+                    total: 'total'
+                };
+                
+                manualEdits.forEach(edit => {
+                    const fieldLabel = fieldLabels[edit.field_name] || edit.field_name;
+                    const fieldClass = fieldClasses[edit.field_name] || '';
+                    const worker = edit.worker.replace(' (оплата клиентом)', '');
+                    
+                    const oldVal = Math.round(edit.old_value || 0).toLocaleString('ru-RU');
+                    const newVal = Math.round(edit.new_value || 0).toLocaleString('ru-RU');
+                    
+                    let addressHtml = '';
+                    if (edit.address) {
+                        addressHtml = `<div class="edit-address">📍 ${edit.address}</div>`;
+                    }
+                    
+                    let timeHtml = '';
+                    if (edit.created_at) {
+                        const date = new Date(edit.created_at);
+                        timeHtml = `<div class="edit-time">${date.toLocaleString('ru-RU')}</div>`;
+                    }
+                    
+                    editsHtml += `
+                        <div class="manual-edit-item">
+                            <span class="edit-icon">✏️</span>
+                            <div class="edit-content">
+                                <div class="edit-header">${edit.order_code || ''} - ${worker}</div>
+                                ${addressHtml}
+                                <div class="edit-change ${fieldClass}">
+                                    ${fieldLabel}: ${oldVal} → ${newVal} ₽
+                                </div>
+                                ${timeHtml}
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                editsHtml += '</div></div>';
+            }
+            
             document.getElementById('content').innerHTML = `
                 ${tabsHtml}
                 <div class="card">
@@ -561,6 +669,7 @@
                     ${workersHtml}
                 </div>
                 ${changesHtml}
+                ${editsHtml}
             `;
         }
         
