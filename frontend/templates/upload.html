@@ -227,8 +227,7 @@
             <h1 id="pageTitle">👷 Загрузка...</h1>
             <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                 <button class="btn btn-save" id="saveBtn" onclick="saveChanges()" disabled>💾 Сохранить изменения</button>
-                <a href="javascript:history.back()" class="btn btn-secondary">← Назад</a>
-                <a href="/history" class="btn">История</a>
+                <a href="/history" class="btn btn-secondary" onclick="window.location.href='/history'; return false;">← Назад</a>
             </div>
         </div>
         
