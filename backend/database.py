@@ -131,6 +131,7 @@ orders = Table(
     Column("percent", String(20)),
     Column("is_client_payment", Boolean, default=False),
     Column("is_over_10k", Boolean, default=False),
+    Column("is_extra_row", Boolean, default=False),  # Дополнительная строка (ручное добавление)
 )
 
 # Calculations table (результаты расчётов)
@@ -213,6 +214,7 @@ def create_tables():
                 "ALTER TABLE worker_totals ADD COLUMN IF NOT EXISTS client_amount FLOAT DEFAULT 0",
                 "ALTER TABLE worker_totals ADD COLUMN IF NOT EXISTS company_orders_count INTEGER DEFAULT 0",
                 "ALTER TABLE worker_totals ADD COLUMN IF NOT EXISTS client_orders_count INTEGER DEFAULT 0",
+                "ALTER TABLE orders ADD COLUMN IF NOT EXISTS is_extra_row BOOLEAN DEFAULT FALSE",
             ]
             
             for migration in migrations:
@@ -293,6 +295,7 @@ async def save_order(upload_id: int, order_data: dict) -> int:
         percent=str(order_data.get("percent", "")),
         is_client_payment=order_data.get("is_client_payment", False),
         is_over_10k=order_data.get("is_over_10k", False),
+        is_extra_row=order_data.get("is_extra_row", False),
     )
     return await database.execute(query)
 
