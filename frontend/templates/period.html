@@ -682,6 +682,18 @@
             window.location.href = `/upload/${currentUploadId}?worker=${workerEncoded}`;
         }
         
+        // Reload data when returning to this page (e.g. after editing worker details)
+        window.addEventListener('focus', () => {
+            loadPeriod();
+        });
+        
+        // Also reload on pageshow (for back/forward navigation)
+        window.addEventListener('pageshow', (event) => {
+            if (event.persisted) {
+                loadPeriod();
+            }
+        });
+        
         loadPeriod();
     </script>
 </body>

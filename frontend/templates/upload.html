@@ -328,10 +328,17 @@
         }
         
         function renderTable() {
-            // Calculate totals
+            // Sort orders: regular first, then extra/new rows at the bottom
+            const sortedOrders = [...ordersData].sort((a, b) => {
+                const aIsExtra = a.is_extra_row || a._isNew ? 1 : 0;
+                const bIsExtra = b.is_extra_row || b._isNew ? 1 : 0;
+                return aIsExtra - bIsExtra;
+            });
+            
+            // Calculate totals using current values (including pending changes)
             let totalRevenue = 0, totalPayment = 0, totalFuel = 0, totalTransport = 0, totalFinal = 0;
             
-            ordersData.forEach((order, idx) => {
+            sortedOrders.forEach((order, idx) => {
                 totalRevenue += order.revenue_services || 0;
                 totalPayment += order.service_payment || 0;
                 
@@ -409,7 +416,7 @@
                         <tbody>
             `;
             
-            ordersData.forEach((order, idx) => {
+            sortedOrders.forEach((order, idx) => {
                 const calc = order.calculation || {};
                 const calcId = calc.id;
                 const orderId = order.id;
@@ -437,10 +444,13 @@
                 
                 const rowClass = order._isNew ? 'new-row' : '';
                 
+                // Store original index in ordersData for edit functions
+                const originalIdx = ordersData.indexOf(order);
+                
                 // Order code cell - editable for extra rows
                 let orderCodeCell;
                 if (isNewRow) {
-                    orderCodeCell = `<td class="order-code editable-text ${orderCodeModified}" onclick="editOrderField(${idx}, 'order_code', ${orderId})" id="cell-ordercode-${idx}">${orderCodeVal || '<em style=\"color:#999\">Добавить код</em>'}</td>`;
+                    orderCodeCell = `<td class="order-code editable-text ${orderCodeModified}" onclick="editOrderField(${originalIdx}, 'order_code', ${orderId})" id="cell-ordercode-${originalIdx}">${orderCodeVal || '<em style=\"color:#999\">Добавить код</em>'}</td>`;
                 } else {
                     orderCodeCell = `<td class="order-code">${order.order_code || '-'}</td>`;
                 }
@@ -448,23 +458,23 @@
                 // Address cell - editable for extra rows
                 let addressCell;
                 if (isNewRow) {
-                    addressCell = `<td class="address editable-text ${addressModified}" onclick="editOrderField(${idx}, 'address', ${orderId})" id="cell-address-${idx}" title="${addressVal}">${addressVal || '<em style=\"color:#999\">Добавить адрес</em>'}</td>`;
+                    addressCell = `<td class="address editable-text ${addressModified}" onclick="editOrderField(${originalIdx}, 'address', ${orderId})" id="cell-address-${originalIdx}" title="${addressVal}">${addressVal || '<em style=\"color:#999\">Добавить адрес</em>'}</td>`;
                 } else {
                     addressCell = `<td class="address" title="${order.address || ''}">${order.address || order.order_full || '-'}</td>`;
                 }
                 
                 tableHtml += `
-                    <tr data-idx="${idx}" data-order-id="${orderId}" class="${rowClass}">
+                    <tr data-idx="${originalIdx}" data-order-id="${orderId}" class="${rowClass}">
                         ${orderCodeCell}
                         ${addressCell}
                         <td class="number">${formatNumber(order.revenue_services)}</td>
                         <td class="number">${formatNumber(order.service_payment)}</td>
                         <td>${order.percent || '-'}</td>
-                        <td class="number editable ${fuelModified}" onclick="editCell(${idx}, 'fuel_payment', ${calcId})" id="cell-fuel-${idx}">${formatNumber(fuelVal)}</td>
-                        <td class="number editable ${transportModified}" onclick="editCell(${idx}, 'transport', ${calcId})" id="cell-transport-${idx}">${formatNumber(transportVal)}</td>
-                        <td class="number editable ${totalModified}" onclick="editCell(${idx}, 'total', ${calcId})" id="cell-total-${idx}"><strong>${formatNumber(totalVal)}</strong></td>
+                        <td class="number editable ${fuelModified}" onclick="editCell(${originalIdx}, 'fuel_payment', ${calcId})" id="cell-fuel-${originalIdx}">${formatNumber(fuelVal)}</td>
+                        <td class="number editable ${transportModified}" onclick="editCell(${originalIdx}, 'transport', ${calcId})" id="cell-transport-${originalIdx}">${formatNumber(transportVal)}</td>
+                        <td class="number editable ${totalModified}" onclick="editCell(${originalIdx}, 'total', ${calcId})" id="cell-total-${originalIdx}"><strong>${formatNumber(totalVal)}</strong></td>
                         <td>${badges.join(' ')}</td>
-                        <td><button class="btn-delete" onclick="deleteOrder(${orderId}, ${idx})" title="Удалить строку">✕</button></td>
+                        <td><button class="btn-delete" onclick="deleteOrder(${orderId}, ${originalIdx})" title="Удалить строку">✕</button></td>
                     </tr>
                 `;
             });
@@ -598,12 +608,15 @@
                     const newOrder = data.order;
                     newOrder._isNew = true;
                     ordersData.push(newOrder);
+                    
+                    // Remember the index in ordersData (not sorted)
+                    const newOrderIdx = ordersData.length - 1;
+                    
                     renderTable();
                     
-                    // Scroll to the new row
+                    // Scroll to the new row and start editing
                     setTimeout(() => {
-                        const idx = ordersData.length - 1;
-                        const cell = document.getElementById(`cell-ordercode-${idx}`);
+                        const cell = document.getElementById(`cell-ordercode-${newOrderIdx}`);
                         if (cell) {
                             cell.scrollIntoView({behavior: 'smooth', block: 'center'});
                             cell.click(); // Start editing
@@ -673,7 +686,9 @@
                     ordersData.forEach(o => delete o._isNew);
                     
                     alert('✅ Изменения сохранены!');
-                    renderTable();
+                    
+                    // Reload data from server to get fresh totals
+                    await loadWorkerData();
                 } else {
                     throw new Error('Не все изменения удалось сохранить');
                 }

@@ -324,6 +324,17 @@
             }
         }
         
+        // Reload data when returning to this page
+        window.addEventListener('focus', () => {
+            loadHistory();
+        });
+        
+        window.addEventListener('pageshow', (event) => {
+            if (event.persisted) {
+                loadHistory();
+            }
+        });
+        
         loadHistory();
     </script>
 </body>
