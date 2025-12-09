@@ -1513,53 +1513,69 @@ async def calculate_salaries(
             raise HTTPException(status_code=400, detail="Session expired")
         
         session = session_data[session_id]
-        config = json.loads(config_json)
-        days_map = json.loads(days_json)
-        extra_rows = json.loads(extra_rows_json)
-        deleted_rows = json.loads(deleted_rows_json)  # List of row IDs to delete
+        deleted_rows_raw = json.loads(deleted_rows_json)
+        deleted_rows = set(int(x) for x in deleted_rows_raw)
         
-        full_config = {**DEFAULT_CONFIG, **config}
-        name_map = session.get("name_map", {})  # Get name_map from session
+        if deleted_rows:
+            print(f"🗑️ Удаляем строки с ID: {sorted(deleted_rows)}")
         
-        calculated_data = []
-        for idx, row in enumerate(session["combined"]):
-            if idx in deleted_rows:
-                continue  # Skip deleted rows
-            calc_row = await calculate_row(row, full_config, days_map)
-            calculated_data.append(calc_row)
-        
-        # Count how many original rows we have (for extra row indexing)
-        original_count = len(session["combined"])
-        extra_idx = original_count
-        
-        for worker, rows in extra_rows.items():
-            for extra in rows:
-                if extra_idx in deleted_rows:
-                    extra_idx += 1
-                    continue  # Skip deleted extra rows
-                calculated_data.append({
-                    "worker": normalize_worker_name(worker, name_map),
-                    "order": extra.get("description", ""),
-                    "revenue_total": "",
-                    "revenue_services": "",
-                    "diagnostic": "",
-                    "diagnostic_payment": "",
-                    "specialist_fee": "",
-                    "additional_expenses": "",
-                    "service_payment": "",
-                    "percent": "",
-                    "is_over_10k": False,
-                    "is_client_payment": False,
-                    "is_worker_total": False,
-                    "is_extra_row": True,
-                    "fuel_payment": "",
-                    "transport": "",
-                    "diagnostic_50": "",
-                    "total": float(extra.get("amount", 0))
-                })
-                extra_idx += 1
-        
-        calculated_data.sort(key=lambda x: normalize_worker_name(x.get("worker", ""), name_map).replace(" (оплата клиентом)", ""))
+        # Use pre-calculated data from preview if available
+        if "calculated_data" in session:
+            all_calculated = session["calculated_data"]
+            full_config = session.get("config", DEFAULT_CONFIG)
+            
+            # Filter out deleted rows
+            calculated_data = []
+            for idx, row in enumerate(all_calculated):
+                if idx in deleted_rows:
+                    order_info = row.get("order", "")[:50]
+                    worker = row.get("worker", "")
+                    print(f"  ❌ Удаляем: {worker} - {order_info}")
+                    continue
+                calculated_data.append(row)
+        else:
+            # Fallback: recalculate (shouldn't normally happen)
+            config = json.loads(config_json)
+            days_map = json.loads(days_json)
+            extra_rows = json.loads(extra_rows_json)
+            
+            full_config = {**DEFAULT_CONFIG, **config}
+            name_map = session.get("name_map", {})
+            
+            calculated_data = []
+            for idx, row in enumerate(session["combined"]):
+                calc_row = await calculate_row(row, full_config, days_map)
+                calculated_data.append(calc_row)
+            
+            for worker, rows in extra_rows.items():
+                for extra in rows:
+                    calculated_data.append({
+                        "worker": normalize_worker_name(worker, name_map),
+                        "order": extra.get("description", ""),
+                        "revenue_total": "",
+                        "revenue_services": "",
+                        "diagnostic": "",
+                        "diagnostic_payment": "",
+                        "specialist_fee": "",
+                        "additional_expenses": "",
+                        "service_payment": "",
+                        "percent": "",
+                        "is_over_10k": False,
+                        "is_client_payment": False,
+                        "is_worker_total": False,
+                        "is_extra_row": True,
+                        "fuel_payment": "",
+                        "transport": "",
+                        "diagnostic_50": "",
+                        "total": float(extra.get("amount", 0))
+                    })
+            
+            # Sort same as preview
+            name_map = session.get("name_map", {})
+            calculated_data.sort(key=lambda x: normalize_worker_name(x.get("worker", ""), name_map).replace(" (оплата клиентом)", ""))
+            
+            # Now filter deleted
+            calculated_data = [row for idx, row in enumerate(calculated_data) if idx not in deleted_rows]
         
         alarms = generate_alarms(calculated_data, full_config)
         
