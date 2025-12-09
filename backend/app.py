@@ -2101,7 +2101,7 @@ async def api_comparison_export():
 
 @app.get("/api/period/{period_id}/download/{archive_type}")
 async def download_period_archive(period_id: int, archive_type: str):
-    """Download archive for a specific period"""
+    """Download archive for a specific period - generates full archive like step 4"""
     try:
         period_details = await get_period_details(period_id)
         if not period_details or not period_details.get("uploads"):
@@ -2110,25 +2110,28 @@ async def download_period_archive(period_id: int, archive_type: str):
         latest_upload = period_details["uploads"][0]
         upload_details = await get_upload_details(latest_upload["id"])
         
-        # Reconstruct data for Excel generation
-        worker_totals = upload_details.get("worker_totals", [])
+        # Get worker totals
+        worker_totals_list = upload_details.get("worker_totals", [])
+        workers = [wt["worker"] for wt in worker_totals_list]
         
-        # Get all orders for this upload
+        # Get all orders for this upload with FRESH calculation data
         all_orders = []
-        for wt in worker_totals:
+        for wt in worker_totals_list:
             worker_orders = await get_worker_orders(latest_upload["id"], wt["worker"])
             all_orders.extend(worker_orders)
             # Also get client payment orders
             worker_orders_client = await get_worker_orders(latest_upload["id"], f"{wt['worker']} (оплата клиентом)")
             all_orders.extend(worker_orders_client)
         
-        # Reconstruct data structure from current DB values
-        data = []
+        # Reconstruct data structure from current DB values (calculations table!)
+        calculated_data = []
         for order in all_orders:
             calc = order.get("calculation", {})
             row = {
                 "worker": order["worker"],
                 "order": order.get("order_full", "") or order.get("address", ""),
+                "order_code": order.get("order_code", ""),
+                "address": order.get("address", ""),
                 "revenue_total": order.get("revenue_total", 0),
                 "revenue_services": order.get("revenue_services", 0),
                 "diagnostic": order.get("diagnostic", 0),
@@ -2140,39 +2143,42 @@ async def download_period_archive(period_id: int, archive_type: str):
                 "is_client_payment": order.get("is_client_payment", False),
                 "is_over_10k": order.get("is_over_10k", False),
                 "is_extra_row": order.get("is_extra_row", False),
+                # CRITICAL: Take values from calculations table (can be edited!)
                 "fuel_payment": calc.get("fuel_payment", 0),
                 "transport": calc.get("transport", 0),
                 "diagnostic_50": calc.get("diagnostic_50", 0),
                 "total": calc.get("total", 0),
             }
-            data.append(row)
+            calculated_data.append(row)
         
-        # Add worker totals
-        for wt in worker_totals:
-            data.append({
-                "worker": wt["worker"],
-                "is_worker_total": True,
-                "total": wt.get("total_amount", 0)
-            })
+        print(f"📊 Generating archive from {len(calculated_data)} orders")
+        # Debug: show some totals
+        for wt in worker_totals_list[:3]:
+            worker_data = [r for r in calculated_data if r["worker"].replace(" (оплата клиентом)", "") == wt["worker"]]
+            calc_total = sum(r.get("total", 0) for r in worker_data)
+            print(f"   {wt['worker']}: {len(worker_data)} orders, calc_total={calc_total}")
         
         period_name = period_details["period"]["name"]
         for_workers = (archive_type == "workers")
         
-        # Generate Excel
-        excel_data = create_excel_report(data, period_name, DEFAULT_CONFIG, for_workers=for_workers)
-        
-        # Create ZIP
+        # Generate FULL archive with all worker files (like step 4)
         zip_buffer = BytesIO()
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-            filename = f"Общий_отчет_{period_name.replace('.', '_')}.xlsx"
-            if for_workers:
-                filename = f"Для_монтажников_{period_name.replace('.', '_')}.xlsx"
-            zf.writestr(filename, excel_data)
+            # Main report
+            main_report = create_excel_report(calculated_data, period_name, DEFAULT_CONFIG, for_workers=for_workers)
+            main_filename = f"Для_монтажников_{period_name.replace('.', '_')}.xlsx" if for_workers else f"Общий_отчет_{period_name.replace('.', '_')}.xlsx"
+            zf.writestr(main_filename, main_report)
+            
+            # Individual worker reports
+            for worker in workers:
+                worker_surname = worker.split()[0] if worker else "Unknown"
+                worker_report = create_worker_report(calculated_data, worker, period_name, DEFAULT_CONFIG, for_workers=for_workers)
+                zf.writestr(f"{worker_surname}_{period_name.replace('.', '_')}.xlsx", worker_report)
         
         zip_buffer.seek(0)
         
         from fastapi.responses import StreamingResponse
-        archive_name = f"{'workers' if for_workers else 'full'}_{period_name.replace('.', '_')}.zip"
+        archive_name = f"{'Для_монтажников' if for_workers else 'Полный_отчет'}_{period_name.replace('.', '_')}.zip"
         return StreamingResponse(
             zip_buffer,
             media_type="application/zip",
