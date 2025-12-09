@@ -2206,7 +2206,7 @@ async def update_calculation(calc_id: int, request: Request):
         
         # Build update query
         from sqlalchemy import update
-        from database import calculations
+        from database import calculations, orders
         
         update_values = {}
         if fuel_payment is not None:
@@ -2222,46 +2222,62 @@ async def update_calculation(calc_id: int, request: Request):
         query = update(calculations).where(calculations.c.id == calc_id).values(**update_values)
         await database.execute(query)
         
-        # Also update worker_totals for this upload
-        # First, get the upload_id and worker from this calculation
+        # Get the calculation info to update worker_totals
         calc_query = calculations.select().where(calculations.c.id == calc_id)
         calc_row = await database.fetch_one(calc_query)
         
         if calc_row:
             upload_id = calc_row["upload_id"]
-            worker = calc_row["worker"].replace(" (оплата клиентом)", "")
+            full_worker = calc_row["worker"]
+            is_client_payment = "(оплата клиентом)" in full_worker
+            base_worker = full_worker.replace(" (оплата клиентом)", "")
             
             # Recalculate worker totals from all calculations for this worker/upload
             from database import worker_totals
-            from sqlalchemy import func, and_
+            from sqlalchemy import and_
             
-            # Get all calculations for this worker in this upload
-            all_calcs_query = calculations.select().where(
+            # Get all calculations for company orders (without "оплата клиентом")
+            company_calcs_query = calculations.select().where(
                 and_(
                     calculations.c.upload_id == upload_id,
-                    calculations.c.worker.like(f"{worker}%")
+                    calculations.c.worker == base_worker
                 )
             )
-            all_calcs = await database.fetch_all(all_calcs_query)
+            company_calcs = await database.fetch_all(company_calcs_query)
             
-            new_total = sum(c["total"] or 0 for c in all_calcs)
-            new_fuel = sum(c["fuel_payment"] or 0 for c in all_calcs)
-            new_transport = sum(c["transport"] or 0 for c in all_calcs)
+            # Get all calculations for client orders
+            client_calcs_query = calculations.select().where(
+                and_(
+                    calculations.c.upload_id == upload_id,
+                    calculations.c.worker == f"{base_worker} (оплата клиентом)"
+                )
+            )
+            client_calcs = await database.fetch_all(client_calcs_query)
+            
+            company_amount = sum(c["total"] or 0 for c in company_calcs)
+            client_amount = sum(c["total"] or 0 for c in client_calcs)
+            total_amount = company_amount + client_amount
+            
+            new_fuel = sum(c["fuel_payment"] or 0 for c in company_calcs) + sum(c["fuel_payment"] or 0 for c in client_calcs)
+            new_transport = sum(c["transport"] or 0 for c in company_calcs) + sum(c["transport"] or 0 for c in client_calcs)
             
             # Update worker_totals
             update_wt = update(worker_totals).where(
                 and_(
                     worker_totals.c.upload_id == upload_id,
-                    worker_totals.c.worker == worker
+                    worker_totals.c.worker == base_worker
                 )
             ).values(
-                total_amount=new_total,
+                total_amount=total_amount,
+                company_amount=company_amount,
+                client_amount=client_amount,
                 fuel_total=new_fuel,
                 transport_total=new_transport
             )
             await database.execute(update_wt)
-        
-        print(f"✅ Updated calculation {calc_id}: {update_values}")
+            
+            print(f"✅ Updated calculation {calc_id}: {update_values}")
+            print(f"   Worker {base_worker}: company={company_amount}, client={client_amount}, total={total_amount}")
         
         return JSONResponse({
             "success": True,
@@ -2283,7 +2299,7 @@ async def delete_order(order_id: int):
         if not database:
             raise HTTPException(status_code=500, detail="Database not connected")
         
-        from sqlalchemy import delete, and_
+        from sqlalchemy import delete, and_, update
         from database import orders, calculations, worker_totals
         
         # First, get order info for updating worker_totals
@@ -2294,7 +2310,9 @@ async def delete_order(order_id: int):
             raise HTTPException(status_code=404, detail="Order not found")
         
         upload_id = order["upload_id"]
-        worker = order["worker"].replace(" (оплата клиентом)", "")
+        full_worker = order["worker"]
+        is_client_payment = "(оплата клиентом)" in full_worker
+        base_worker = full_worker.replace(" (оплата клиентом)", "")
         
         # Get calculation total for this order
         calc_query = calculations.select().where(calculations.c.order_id == order_id)
@@ -2313,13 +2331,10 @@ async def delete_order(order_id: int):
         await database.execute(del_order)
         
         # Update worker_totals
-        from sqlalchemy import update
-        
-        # Get current worker totals
         wt_query = worker_totals.select().where(
             and_(
                 worker_totals.c.upload_id == upload_id,
-                worker_totals.c.worker == worker
+                worker_totals.c.worker == base_worker
             )
         )
         wt = await database.fetch_one(wt_query)
@@ -2330,16 +2345,32 @@ async def delete_order(order_id: int):
             new_transport = (wt["transport_total"] or 0) - deleted_transport
             new_count = (wt["orders_count"] or 0) - 1
             
+            # Update company or client amount based on order type
+            if is_client_payment:
+                new_client = (wt["client_amount"] or 0) - deleted_total
+                new_company = wt["company_amount"] or 0
+                new_client_count = (wt["client_orders_count"] or 0) - 1
+                new_company_count = wt["company_orders_count"] or 0
+            else:
+                new_company = (wt["company_amount"] or 0) - deleted_total
+                new_client = wt["client_amount"] or 0
+                new_company_count = (wt["company_orders_count"] or 0) - 1
+                new_client_count = wt["client_orders_count"] or 0
+            
             update_wt = update(worker_totals).where(
                 and_(
                     worker_totals.c.upload_id == upload_id,
-                    worker_totals.c.worker == worker
+                    worker_totals.c.worker == base_worker
                 )
             ).values(
                 total_amount=max(0, new_total),
+                company_amount=max(0, new_company),
+                client_amount=max(0, new_client),
                 fuel_total=max(0, new_fuel),
                 transport_total=max(0, new_transport),
-                orders_count=max(0, new_count)
+                orders_count=max(0, new_count),
+                company_orders_count=max(0, new_company_count),
+                client_orders_count=max(0, new_client_count)
             )
             await database.execute(update_wt)
         
