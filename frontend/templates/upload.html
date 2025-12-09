@@ -36,6 +36,9 @@
             text-decoration: none;
             font-weight: 500;
             transition: transform 0.2s;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
         }
         .btn:hover {
             transform: scale(1.05);
@@ -43,6 +46,15 @@
         .btn-secondary {
             background: rgba(255,255,255,0.2);
             color: white;
+        }
+        .btn-save {
+            background: #28a745;
+            color: white;
+        }
+        .btn-save:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
         }
         .card {
             background: white;
@@ -72,6 +84,9 @@
             font-size: 12px;
             color: #666;
             margin-top: 5px;
+        }
+        .table-wrapper {
+            overflow-x: auto;
         }
         table {
             width: 100%;
@@ -129,13 +144,13 @@
             background: #dfe6e9;
             color: #636e72;
         }
-        .table-wrapper {
-            overflow-x: auto;
+        .badge-extra {
+            background: #d4edda;
+            color: #155724;
         }
         .loading {
             text-align: center;
             padding: 40px;
-            color: #666;
         }
         .spinner {
             width: 40px;
@@ -150,8 +165,47 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-        .highlight {
+        
+        /* Editable cells */
+        .editable {
+            cursor: pointer;
+            position: relative;
+            min-width: 70px;
+        }
+        .editable:hover {
+            background: #e8f4fc;
+        }
+        .editable input {
+            width: 80px;
+            padding: 4px 6px;
+            border: 2px solid #667eea;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 13px;
+            text-align: right;
+        }
+        .editable input:focus {
+            outline: none;
+            border-color: #764ba2;
+        }
+        .cell-modified {
+            background: #fff3cd !important;
+        }
+        .edit-hint {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 15px;
+        }
+        .unsaved-notice {
             background: #fff3cd;
+            color: #856404;
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            display: none;
+        }
+        .unsaved-notice.show {
+            display: block;
         }
     </style>
 </head>
@@ -159,7 +213,8 @@
     <div class="container">
         <div class="header">
             <h1 id="pageTitle">👷 Загрузка...</h1>
-            <div>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <button class="btn btn-save" id="saveBtn" onclick="saveChanges()" disabled>💾 Сохранить изменения</button>
                 <a href="javascript:history.back()" class="btn btn-secondary">← Назад</a>
                 <a href="/history" class="btn">История</a>
             </div>
@@ -180,6 +235,9 @@
         const urlParams = new URLSearchParams(window.location.search);
         const workerName = urlParams.get('worker');
         
+        let ordersData = [];
+        let pendingChanges = {}; // {calc_id: {field: value}}
+        
         async function loadWorkerData() {
             if (!workerName) {
                 document.getElementById('content').innerHTML = `
@@ -189,7 +247,7 @@
             }
             
             try {
-                const response = await fetch(`/api/upload/${uploadId}/worker/${workerName}`);
+                const response = await fetch(`/api/upload/${uploadId}/worker/${encodeURIComponent(workerName)}`);
                 const data = await response.json();
                 
                 if (!data.success) {
@@ -198,117 +256,8 @@
                 
                 document.getElementById('pageTitle').textContent = `👷 ${data.worker}`;
                 
-                const orders = data.orders || [];
-                
-                // Calculate totals
-                let totalRevenue = 0;
-                let totalPayment = 0;
-                let totalFuel = 0;
-                let totalTransport = 0;
-                let totalFinal = 0;
-                
-                orders.forEach(order => {
-                    totalRevenue += order.revenue_services || 0;
-                    totalPayment += order.service_payment || 0;
-                    const calc = order.calculation || {};
-                    totalFuel += calc.fuel_payment || 0;
-                    totalTransport += calc.transport || 0;
-                    totalFinal += calc.total || 0;
-                });
-                
-                // Summary
-                let summaryHtml = `
-                    <div class="summary-grid">
-                        <div class="summary-item">
-                            <div class="summary-value">${orders.length}</div>
-                            <div class="summary-label">Заказов</div>
-                        </div>
-                        <div class="summary-item">
-                            <div class="summary-value">${Math.round(totalRevenue).toLocaleString('ru-RU')}</div>
-                            <div class="summary-label">Выручка ₽</div>
-                        </div>
-                        <div class="summary-item">
-                            <div class="summary-value">${Math.round(totalPayment).toLocaleString('ru-RU')}</div>
-                            <div class="summary-label">Оплата услуг ₽</div>
-                        </div>
-                        <div class="summary-item">
-                            <div class="summary-value">${Math.round(totalFuel).toLocaleString('ru-RU')}</div>
-                            <div class="summary-label">Бензин ₽</div>
-                        </div>
-                        <div class="summary-item">
-                            <div class="summary-value">${Math.round(totalTransport).toLocaleString('ru-RU')}</div>
-                            <div class="summary-label">Транспортные ₽</div>
-                        </div>
-                        <div class="summary-item" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
-                            <div class="summary-value" style="color: white;">${Math.round(totalFinal).toLocaleString('ru-RU')}</div>
-                            <div class="summary-label" style="color: rgba(255,255,255,0.8);">ИТОГО ₽</div>
-                        </div>
-                    </div>
-                `;
-                
-                // Table
-                let tableHtml = `
-                    <div class="table-wrapper">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Заказ</th>
-                                    <th>Адрес</th>
-                                    <th class="number">Выручка</th>
-                                    <th class="number">Оплата</th>
-                                    <th>%</th>
-                                    <th class="number">Бензин</th>
-                                    <th class="number">Трансп.</th>
-                                    <th class="number">Итого</th>
-                                    <th>Тип</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                `;
-                
-                orders.forEach(order => {
-                    const calc = order.calculation || {};
-                    const badges = [];
-                    if (order.is_client_payment) badges.push('<span class="badge badge-client">Оплата клиентом</span>');
-                    if (order.is_over_10k) badges.push('<span class="badge badge-over10k">>10k</span>');
-                    
-                    tableHtml += `
-                        <tr>
-                            <td class="order-code">${order.order_code || '-'}</td>
-                            <td class="address" title="${order.address || ''}">${order.address || '-'}</td>
-                            <td class="number">${formatNumber(order.revenue_services)}</td>
-                            <td class="number">${formatNumber(order.service_payment)}</td>
-                            <td>${order.percent || '-'}</td>
-                            <td class="number">${formatNumber(calc.fuel_payment)}</td>
-                            <td class="number">${formatNumber(calc.transport)}</td>
-                            <td class="number"><strong>${formatNumber(calc.total)}</strong></td>
-                            <td>${badges.join(' ')}</td>
-                        </tr>
-                    `;
-                });
-                
-                // Total row
-                tableHtml += `
-                    <tr class="total-row">
-                        <td colspan="2">ИТОГО</td>
-                        <td class="number">${formatNumber(totalRevenue)}</td>
-                        <td class="number">${formatNumber(totalPayment)}</td>
-                        <td></td>
-                        <td class="number">${formatNumber(totalFuel)}</td>
-                        <td class="number">${formatNumber(totalTransport)}</td>
-                        <td class="number">${formatNumber(totalFinal)}</td>
-                        <td></td>
-                    </tr>
-                `;
-                
-                tableHtml += '</tbody></table></div>';
-                
-                document.getElementById('content').innerHTML = `
-                    <div class="card">
-                        ${summaryHtml}
-                        ${tableHtml}
-                    </div>
-                `;
+                ordersData = data.orders || [];
+                renderTable();
                 
             } catch (error) {
                 document.getElementById('content').innerHTML = `
@@ -317,8 +266,228 @@
             }
         }
         
+        function renderTable() {
+            // Calculate totals
+            let totalRevenue = 0, totalPayment = 0, totalFuel = 0, totalTransport = 0, totalFinal = 0;
+            
+            ordersData.forEach((order, idx) => {
+                totalRevenue += order.revenue_services || 0;
+                totalPayment += order.service_payment || 0;
+                
+                const calc = order.calculation || {};
+                const calcId = calc.id;
+                
+                // Use pending changes if exist
+                const fuelVal = pendingChanges[calcId]?.fuel_payment ?? calc.fuel_payment ?? 0;
+                const transportVal = pendingChanges[calcId]?.transport ?? calc.transport ?? 0;
+                const totalVal = pendingChanges[calcId]?.total ?? calc.total ?? 0;
+                
+                totalFuel += fuelVal;
+                totalTransport += transportVal;
+                totalFinal += totalVal;
+            });
+            
+            // Summary
+            let summaryHtml = `
+                <div class="unsaved-notice ${Object.keys(pendingChanges).length > 0 ? 'show' : ''}" id="unsavedNotice">
+                    ⚠️ Есть несохранённые изменения
+                </div>
+                <div class="summary-grid">
+                    <div class="summary-item">
+                        <div class="summary-value">${ordersData.length}</div>
+                        <div class="summary-label">Заказов</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-value" id="summaryRevenue">${Math.round(totalRevenue).toLocaleString('ru-RU')}</div>
+                        <div class="summary-label">Выручка ₽</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-value" id="summaryPayment">${Math.round(totalPayment).toLocaleString('ru-RU')}</div>
+                        <div class="summary-label">Оплата услуг ₽</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-value" id="summaryFuel">${Math.round(totalFuel).toLocaleString('ru-RU')}</div>
+                        <div class="summary-label">Бензин ₽</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-value" id="summaryTransport">${Math.round(totalTransport).toLocaleString('ru-RU')}</div>
+                        <div class="summary-label">Транспортные ₽</div>
+                    </div>
+                    <div class="summary-item" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                        <div class="summary-value" style="color: white;" id="summaryTotal">${Math.round(totalFinal).toLocaleString('ru-RU')}</div>
+                        <div class="summary-label" style="color: rgba(255,255,255,0.8);">ИТОГО ₽</div>
+                    </div>
+                </div>
+                <p class="edit-hint">💡 Кликните на ячейку Бензин, Трансп. или Итого для редактирования</p>
+            `;
+            
+            // Table
+            let tableHtml = `
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Заказ</th>
+                                <th>Адрес</th>
+                                <th class="number">Выручка</th>
+                                <th class="number">Оплата</th>
+                                <th>%</th>
+                                <th class="number">Бензин</th>
+                                <th class="number">Трансп.</th>
+                                <th class="number">Итого</th>
+                                <th>Тип</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            ordersData.forEach((order, idx) => {
+                const calc = order.calculation || {};
+                const calcId = calc.id;
+                
+                const badges = [];
+                if (order.is_client_payment) badges.push('<span class="badge badge-client">Оплата клиентом</span>');
+                if (order.is_over_10k) badges.push('<span class="badge badge-over10k">>10k</span>');
+                if (order.is_extra_row) badges.push('<span class="badge badge-extra">Доплата</span>');
+                
+                // Get current values (from pending changes or original)
+                const fuelVal = pendingChanges[calcId]?.fuel_payment ?? calc.fuel_payment ?? 0;
+                const transportVal = pendingChanges[calcId]?.transport ?? calc.transport ?? 0;
+                const totalVal = pendingChanges[calcId]?.total ?? calc.total ?? 0;
+                
+                const fuelModified = pendingChanges[calcId]?.fuel_payment !== undefined ? 'cell-modified' : '';
+                const transportModified = pendingChanges[calcId]?.transport !== undefined ? 'cell-modified' : '';
+                const totalModified = pendingChanges[calcId]?.total !== undefined ? 'cell-modified' : '';
+                
+                tableHtml += `
+                    <tr data-idx="${idx}">
+                        <td class="order-code">${order.order_code || '-'}</td>
+                        <td class="address" title="${order.address || ''}">${order.address || order.order_full || '-'}</td>
+                        <td class="number">${formatNumber(order.revenue_services)}</td>
+                        <td class="number">${formatNumber(order.service_payment)}</td>
+                        <td>${order.percent || '-'}</td>
+                        <td class="number editable ${fuelModified}" onclick="editCell(${idx}, 'fuel_payment', ${calcId})" id="cell-fuel-${idx}">${formatNumber(fuelVal)}</td>
+                        <td class="number editable ${transportModified}" onclick="editCell(${idx}, 'transport', ${calcId})" id="cell-transport-${idx}">${formatNumber(transportVal)}</td>
+                        <td class="number editable ${totalModified}" onclick="editCell(${idx}, 'total', ${calcId})" id="cell-total-${idx}"><strong>${formatNumber(totalVal)}</strong></td>
+                        <td>${badges.join(' ')}</td>
+                    </tr>
+                `;
+            });
+            
+            // Total row
+            tableHtml += `
+                <tr class="total-row">
+                    <td colspan="2">ИТОГО</td>
+                    <td class="number" id="totalRevenue">${formatNumber(totalRevenue)}</td>
+                    <td class="number" id="totalPayment">${formatNumber(totalPayment)}</td>
+                    <td></td>
+                    <td class="number" id="totalFuel">${formatNumber(totalFuel)}</td>
+                    <td class="number" id="totalTransport">${formatNumber(totalTransport)}</td>
+                    <td class="number" id="totalTotal">${formatNumber(totalFinal)}</td>
+                    <td></td>
+                </tr>
+            `;
+            
+            tableHtml += '</tbody></table></div>';
+            
+            document.getElementById('content').innerHTML = `
+                <div class="card">
+                    ${summaryHtml}
+                    ${tableHtml}
+                </div>
+            `;
+            
+            // Update save button state
+            document.getElementById('saveBtn').disabled = Object.keys(pendingChanges).length === 0;
+        }
+        
+        function editCell(idx, field, calcId) {
+            const order = ordersData[idx];
+            const calc = order.calculation || {};
+            const currentVal = pendingChanges[calcId]?.[field] ?? calc[field] ?? 0;
+            
+            const cellId = field === 'fuel_payment' ? `cell-fuel-${idx}` : 
+                           field === 'transport' ? `cell-transport-${idx}` : `cell-total-${idx}`;
+            const targetCell = document.getElementById(cellId);
+            
+            // Create input
+            targetCell.innerHTML = `<input type="number" value="${currentVal}" onblur="saveCell(${idx}, '${field}', ${calcId}, this)" onkeypress="if(event.key==='Enter')this.blur()">`;
+            targetCell.querySelector('input').focus();
+            targetCell.querySelector('input').select();
+        }
+        
+        function saveCell(idx, field, calcId, input) {
+            const newVal = parseFloat(input.value) || 0;
+            const order = ordersData[idx];
+            const calc = order.calculation || {};
+            const originalVal = calc[field] ?? 0;
+            
+            if (newVal !== originalVal) {
+                // Store pending change
+                if (!pendingChanges[calcId]) {
+                    pendingChanges[calcId] = {};
+                }
+                pendingChanges[calcId][field] = newVal;
+            } else {
+                // Remove from pending if reverted to original
+                if (pendingChanges[calcId]) {
+                    delete pendingChanges[calcId][field];
+                    if (Object.keys(pendingChanges[calcId]).length === 0) {
+                        delete pendingChanges[calcId];
+                    }
+                }
+            }
+            
+            renderTable();
+        }
+        
+        async function saveChanges() {
+            const saveBtn = document.getElementById('saveBtn');
+            saveBtn.disabled = true;
+            saveBtn.textContent = '⏳ Сохранение...';
+            
+            try {
+                const promises = [];
+                
+                for (const [calcId, changes] of Object.entries(pendingChanges)) {
+                    promises.push(
+                        fetch(`/api/calculation/${calcId}/update`, {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify(changes)
+                        })
+                    );
+                }
+                
+                const results = await Promise.all(promises);
+                const allOk = results.every(r => r.ok);
+                
+                if (allOk) {
+                    // Update local data with saved values
+                    for (const [calcId, changes] of Object.entries(pendingChanges)) {
+                        const order = ordersData.find(o => o.calculation?.id == calcId);
+                        if (order && order.calculation) {
+                            Object.assign(order.calculation, changes);
+                        }
+                    }
+                    
+                    pendingChanges = {};
+                    alert('✅ Изменения сохранены!');
+                    renderTable();
+                } else {
+                    throw new Error('Не все изменения удалось сохранить');
+                }
+                
+            } catch (error) {
+                alert('❌ Ошибка сохранения: ' + error.message);
+                saveBtn.disabled = false;
+            }
+            
+            saveBtn.textContent = '💾 Сохранить изменения';
+        }
+        
         function formatNumber(val) {
-            if (val === null || val === undefined || val === 0) return '-';
+            if (val === null || val === undefined || val === '' || val === 0) return '-';
             return Math.round(val).toLocaleString('ru-RU');
         }
         
