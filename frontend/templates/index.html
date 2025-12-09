@@ -287,6 +287,7 @@
                         <table class="preview-table" id="previewTable">
                             <thead>
                                 <tr>
+                                    <th>Монтажник</th>
                                     <th>Заказ</th>
                                     <th>Адрес</th>
                                     <th>Выручка</th>
@@ -597,6 +598,7 @@
                 
                 html += `
                     <tr class="${rowClass}" id="preview-row-${row.id}">
+                        <td>${row.worker}</td>
                         <td class="order-code">${row.order_code || '-'}</td>
                         <td class="address" title="${row.address}">${row.address}</td>
                         <td class="number">${formatNumber(row.revenue_total)}</td>
