@@ -2358,7 +2358,7 @@ async def delete_order(order_id: int):
             raise HTTPException(status_code=500, detail="Database not connected")
         
         from sqlalchemy import delete, and_, update
-        from database import orders, calculations, worker_totals
+        from database import orders, calculations, worker_totals, manual_edits
         
         # First, get order info for updating worker_totals
         order_query = orders.select().where(orders.c.id == order_id)
@@ -2379,8 +2379,18 @@ async def delete_order(order_id: int):
         deleted_total = calc["total"] if calc else 0
         deleted_fuel = calc["fuel_payment"] if calc else 0
         deleted_transport = calc["transport"] if calc else 0
+        calc_id = calc["id"] if calc else None
         
-        # Delete calculation first (foreign key)
+        # Delete manual_edits first (they reference calculation)
+        if calc_id:
+            del_edits = delete(manual_edits).where(manual_edits.c.calculation_id == calc_id)
+            await database.execute(del_edits)
+        
+        # Also delete manual_edits by order_id
+        del_edits_order = delete(manual_edits).where(manual_edits.c.order_id == order_id)
+        await database.execute(del_edits_order)
+        
+        # Delete calculation (foreign key to orders)
         del_calc = delete(calculations).where(calculations.c.order_id == order_id)
         await database.execute(del_calc)
         
