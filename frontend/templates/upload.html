@@ -207,6 +207,18 @@
         .unsaved-notice.show {
             display: block;
         }
+        .btn-delete {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .btn-delete:hover {
+            background: #c82333;
+        }
     </style>
 </head>
 <body>
@@ -336,6 +348,7 @@
                                 <th class="number">Трансп.</th>
                                 <th class="number">Итого</th>
                                 <th>Тип</th>
+                                <th></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -344,6 +357,7 @@
             ordersData.forEach((order, idx) => {
                 const calc = order.calculation || {};
                 const calcId = calc.id;
+                const orderId = order.id;
                 
                 const badges = [];
                 if (order.is_client_payment) badges.push('<span class="badge badge-client">Оплата клиентом</span>');
@@ -360,7 +374,7 @@
                 const totalModified = pendingChanges[calcId]?.total !== undefined ? 'cell-modified' : '';
                 
                 tableHtml += `
-                    <tr data-idx="${idx}">
+                    <tr data-idx="${idx}" data-order-id="${orderId}">
                         <td class="order-code">${order.order_code || '-'}</td>
                         <td class="address" title="${order.address || ''}">${order.address || order.order_full || '-'}</td>
                         <td class="number">${formatNumber(order.revenue_services)}</td>
@@ -370,6 +384,7 @@
                         <td class="number editable ${transportModified}" onclick="editCell(${idx}, 'transport', ${calcId})" id="cell-transport-${idx}">${formatNumber(transportVal)}</td>
                         <td class="number editable ${totalModified}" onclick="editCell(${idx}, 'total', ${calcId})" id="cell-total-${idx}"><strong>${formatNumber(totalVal)}</strong></td>
                         <td>${badges.join(' ')}</td>
+                        <td><button class="btn-delete" onclick="deleteOrder(${orderId}, ${idx})" title="Удалить строку">✕</button></td>
                     </tr>
                 `;
             });
@@ -384,6 +399,7 @@
                     <td class="number" id="totalFuel">${formatNumber(totalFuel)}</td>
                     <td class="number" id="totalTransport">${formatNumber(totalTransport)}</td>
                     <td class="number" id="totalTotal">${formatNumber(totalFinal)}</td>
+                    <td></td>
                     <td></td>
                 </tr>
             `;
@@ -489,6 +505,34 @@
         function formatNumber(val) {
             if (val === null || val === undefined || val === '' || val === 0) return '-';
             return Math.round(val).toLocaleString('ru-RU');
+        }
+        
+        async function deleteOrder(orderId, idx) {
+            const order = ordersData[idx];
+            const orderInfo = order.order_code || order.address || 'эту строку';
+            
+            if (!confirm(`Удалить ${orderInfo}? Это действие нельзя отменить.`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/order/${orderId}`, {
+                    method: 'DELETE'
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Remove from local data
+                    ordersData.splice(idx, 1);
+                    renderTable();
+                    alert('✅ Строка удалена');
+                } else {
+                    throw new Error(data.detail || 'Ошибка удаления');
+                }
+            } catch (error) {
+                alert('❌ Ошибка: ' + error.message);
+            }
         }
         
         loadWorkerData();
