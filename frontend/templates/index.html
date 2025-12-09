@@ -124,6 +124,9 @@
         .btn-delete-row:hover { background: #c82333; }
         .row-deleted { opacity: 0.4; text-decoration: line-through; }
         .row-deleted td { background: #f8d7da !important; }
+        .totals-row { background: #e8f4e8; font-weight: bold; }
+        .totals-row td { border-top: 2px solid #667eea; padding: 12px 8px; }
+        .preview-table tfoot { position: sticky; bottom: 0; z-index: 10; }
         
         /* Worker tabs in preview */
         .worker-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; }
@@ -301,6 +304,19 @@
                                 </tr>
                             </thead>
                             <tbody id="previewTableBody"></tbody>
+                            <tfoot id="previewTableFoot">
+                                <tr class="totals-row">
+                                    <td colspan="3"><strong>ИТОГО:</strong></td>
+                                    <td class="number" id="totalRevenue"><strong>0</strong></td>
+                                    <td class="number" id="totalPayment"><strong>0</strong></td>
+                                    <td></td>
+                                    <td class="number" id="totalFuel"><strong>0</strong></td>
+                                    <td class="number" id="totalTransport"><strong>0</strong></td>
+                                    <td class="number" id="totalTotal"><strong>0</strong></td>
+                                    <td></td>
+                                    <td></td>
+                                </tr>
+                            </tfoot>
                         </table>
                     </div>
                     
@@ -588,9 +604,20 @@
             }
             
             let html = '';
+            let sumRevenue = 0, sumPayment = 0, sumFuel = 0, sumTransport = 0, sumTotal = 0;
+            
             rows.forEach(row => {
                 const isDeleted = deletedRows.has(row.id);
                 const rowClass = isDeleted ? 'row-deleted' : '';
+                
+                // Считаем итоги только для неудалённых строк
+                if (!isDeleted) {
+                    sumRevenue += parseFloat(row.revenue_total) || 0;
+                    sumPayment += parseFloat(row.service_payment) || 0;
+                    sumFuel += parseFloat(row.fuel_payment) || 0;
+                    sumTransport += parseFloat(row.transport) || 0;
+                    sumTotal += parseFloat(row.total) || 0;
+                }
                 
                 let badges = '';
                 if (row.is_client_payment) badges += '<span class="badge badge-client">Оплата клиентом</span> ';
@@ -619,6 +646,13 @@
             });
             
             document.getElementById('previewTableBody').innerHTML = html;
+            
+            // Обновляем итоги в footer
+            document.getElementById('totalRevenue').innerHTML = `<strong>${formatNumber(sumRevenue)}</strong>`;
+            document.getElementById('totalPayment').innerHTML = `<strong>${formatNumber(sumPayment)}</strong>`;
+            document.getElementById('totalFuel').innerHTML = `<strong>${formatNumber(sumFuel)}</strong>`;
+            document.getElementById('totalTransport').innerHTML = `<strong>${formatNumber(sumTransport)}</strong>`;
+            document.getElementById('totalTotal').innerHTML = `<strong>${formatNumber(sumTotal)}</strong>`;
         }
         
         function deleteRow(id) {
