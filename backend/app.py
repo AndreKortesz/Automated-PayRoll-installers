@@ -1807,7 +1807,12 @@ async def download_report(session_id: str, archive_type: str):
 @app.get("/history")
 async def history_page(request: Request):
     """History page - view all periods by month"""
-    return templates.TemplateResponse("history.html", {"request": request})
+    response = templates.TemplateResponse("history.html", {"request": request})
+    # Prevent browser caching so back button shows fresh data
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 
 @app.get("/api/periods")
@@ -2446,13 +2451,21 @@ async def delete_order(order_id: int):
 @app.get("/period/{period_id}")
 async def period_page(request: Request, period_id: int):
     """Period details page"""
-    return templates.TemplateResponse("period.html", {"request": request, "period_id": period_id})
+    response = templates.TemplateResponse("period.html", {"request": request, "period_id": period_id})
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 
 @app.get("/upload/{upload_id}")
 async def upload_page(request: Request, upload_id: int):
     """Upload details page"""
-    return templates.TemplateResponse("upload.html", {"request": request, "upload_id": upload_id})
+    response = templates.TemplateResponse("upload.html", {"request": request, "upload_id": upload_id})
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 
 if __name__ == "__main__":
