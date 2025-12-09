@@ -2288,36 +2288,33 @@ async def update_calculation(calc_id: int, request: Request):
         
         # Update worker_totals
         full_worker = calc_row["worker"]
-        is_client_payment = "(оплата клиентом)" in full_worker
         base_worker = full_worker.replace(" (оплата клиентом)", "")
         
         from database import worker_totals
-        from sqlalchemy import and_
+        from sqlalchemy import and_, text
         
-        # Get all calculations for company orders (without "оплата клиентом")
-        company_calcs_query = calculations.select().where(
-            and_(
-                calculations.c.upload_id == upload_id,
-                calculations.c.worker == base_worker
-            )
-        )
-        company_calcs = await database.fetch_all(company_calcs_query)
+        # Get all orders and calculations for this worker using JOIN
+        # This correctly uses orders.is_client_payment flag
+        query = text("""
+            SELECT c.total, c.fuel_payment, c.transport, o.is_client_payment
+            FROM calculations c
+            JOIN orders o ON c.order_id = o.id
+            WHERE c.upload_id = :upload_id
+            AND (o.worker = :worker OR o.worker = :worker_client)
+        """)
         
-        # Get all calculations for client orders
-        client_calcs_query = calculations.select().where(
-            and_(
-                calculations.c.upload_id == upload_id,
-                calculations.c.worker == f"{base_worker} (оплата клиентом)"
-            )
-        )
-        client_calcs = await database.fetch_all(client_calcs_query)
+        all_calcs = await database.fetch_all(query, {
+            "upload_id": upload_id,
+            "worker": base_worker,
+            "worker_client": f"{base_worker} (оплата клиентом)"
+        })
         
-        company_amount = sum(c["total"] or 0 for c in company_calcs)
-        client_amount = sum(c["total"] or 0 for c in client_calcs)
+        company_amount = sum(c["total"] or 0 for c in all_calcs if not c["is_client_payment"])
+        client_amount = sum(c["total"] or 0 for c in all_calcs if c["is_client_payment"])
         total_amount = company_amount + client_amount
         
-        new_fuel = sum(c["fuel_payment"] or 0 for c in company_calcs) + sum(c["fuel_payment"] or 0 for c in client_calcs)
-        new_transport = sum(c["transport"] or 0 for c in company_calcs) + sum(c["transport"] or 0 for c in client_calcs)
+        new_fuel = sum(c["fuel_payment"] or 0 for c in all_calcs)
+        new_transport = sum(c["transport"] or 0 for c in all_calcs)
         
         # Update worker_totals
         update_wt = update(worker_totals).where(
