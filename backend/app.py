@@ -2442,7 +2442,7 @@ async def delete_order(order_id: int):
             )
             await database.execute(update_wt)
         
-        print(f"🗑️ Deleted order {order_id} (worker: {worker}, total: {deleted_total})")
+        print(f"🗑️ Deleted order {order_id} (worker: {full_worker}, total: {deleted_total})")
         
         return JSONResponse({
             "success": True,
