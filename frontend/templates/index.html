@@ -17,6 +17,10 @@
             --gray: #D9D9D9;
             --gray-light: #F5F5F5;
             --white: #FFFFFF;
+            --green: #2E7D32;
+            --green-light: #4CAF50;
+            --orange: #F57C00;
+            --red: #D32F2F;
             --shadow-soft: 0 8px 32px rgba(26, 26, 26, 0.08);
             --shadow-medium: 0 12px 48px rgba(26, 26, 26, 0.12);
             --shadow-strong: 0 20px 60px rgba(26, 26, 26, 0.15);
@@ -25,21 +29,16 @@
             --radius-lg: 28px;
         }
 
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
             font-family: 'Roboto', sans-serif;
             background: var(--gray-light);
             color: var(--black);
             min-height: 100vh;
-            overflow-x: hidden;
         }
 
-        /* Header */
+        /* ===== HEADER ===== */
         .header {
             background: var(--white);
             padding: 16px 32px;
@@ -70,6 +69,7 @@
             width: 6px;
             background: var(--yellow);
             border-radius: 3px;
+            transition: height 0.3s ease;
         }
 
         .logo-bar:nth-child(1) { height: 8px; }
@@ -77,6 +77,12 @@
         .logo-bar:nth-child(3) { height: 20px; }
         .logo-bar:nth-child(4) { height: 26px; }
         .logo-bar:nth-child(5) { height: 32px; }
+
+        .logo:hover .logo-bar:nth-child(1) { height: 14px; }
+        .logo:hover .logo-bar:nth-child(2) { height: 20px; }
+        .logo:hover .logo-bar:nth-child(3) { height: 26px; }
+        .logo:hover .logo-bar:nth-child(4) { height: 20px; }
+        .logo:hover .logo-bar:nth-child(5) { height: 14px; }
 
         .logo-text {
             font-family: 'Roboto', sans-serif;
@@ -113,385 +119,14 @@
             color: var(--black);
         }
 
-        /* Main Content */
+        /* ===== MAIN ===== */
         .main {
             max-width: 1400px;
             margin: 0 auto;
             padding: 40px 32px;
         }
 
-        /* Hero Section */
-        .hero {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 40px;
-            margin-bottom: 60px;
-        }
-
-        .hero-content {
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-        }
-
-        .hero-title {
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 56px;
-            line-height: 1.1;
-            color: var(--black);
-            margin-bottom: 20px;
-        }
-
-        .hero-subtitle {
-            font-family: 'Roboto Condensed', sans-serif;
-            font-size: 20px;
-            color: var(--gray-dark);
-            margin-bottom: 32px;
-            line-height: 1.5;
-        }
-
-        .hero-actions {
-            display: flex;
-            gap: 16px;
-        }
-
-        /* 3D Card Style like T-Bank */
-        .hero-card {
-            background: var(--white);
-            border-radius: var(--radius-lg);
-            padding: 40px;
-            box-shadow: var(--shadow-strong);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .hero-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            right: 0;
-            width: 200px;
-            height: 200px;
-            background: linear-gradient(135deg, var(--yellow) 0%, var(--yellow-light) 100%);
-            border-radius: 0 var(--radius-lg) 0 100%;
-            opacity: 0.3;
-        }
-
-        .upload-zone {
-            border: 3px dashed var(--gray);
-            border-radius: var(--radius-md);
-            padding: 48px 32px;
-            text-align: center;
-            transition: all 0.3s ease;
-            cursor: pointer;
-            position: relative;
-            background: var(--gray-light);
-        }
-
-        .upload-zone:hover,
-        .upload-zone.dragover {
-            border-color: var(--yellow);
-            background: rgba(243, 192, 77, 0.1);
-        }
-
-        .upload-icon {
-            width: 80px;
-            height: 80px;
-            margin: 0 auto 20px;
-            background: linear-gradient(135deg, var(--yellow) 0%, var(--yellow-dark) 100%);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 8px 24px rgba(243, 192, 77, 0.4);
-        }
-
-        .upload-icon svg {
-            width: 36px;
-            height: 36px;
-            fill: var(--white);
-        }
-
-        .upload-title {
-            font-family: 'Roboto Condensed', sans-serif;
-            font-weight: 700;
-            font-size: 18px;
-            color: var(--black);
-            margin-bottom: 8px;
-            text-transform: uppercase;
-        }
-
-        .upload-hint {
-            font-size: 14px;
-            color: var(--gray-dark);
-        }
-
-        .upload-files {
-            margin-top: 20px;
-            display: none;
-        }
-
-        .upload-files.show {
-            display: block;
-        }
-
-        .file-item {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 12px 16px;
-            background: var(--white);
-            border-radius: var(--radius-sm);
-            margin-bottom: 8px;
-            border: 1px solid var(--gray);
-        }
-
-        .file-icon {
-            width: 40px;
-            height: 40px;
-            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .file-icon svg {
-            width: 20px;
-            height: 20px;
-            fill: white;
-        }
-
-        .file-info {
-            flex: 1;
-        }
-
-        .file-name {
-            font-weight: 500;
-            font-size: 14px;
-            color: var(--black);
-        }
-
-        .file-type {
-            font-size: 12px;
-            color: var(--gray-dark);
-        }
-
-        .file-remove {
-            background: none;
-            border: none;
-            cursor: pointer;
-            padding: 8px;
-            border-radius: 50%;
-            transition: background 0.2s;
-        }
-
-        .file-remove:hover {
-            background: var(--gray-light);
-        }
-
-        /* Buttons */
-        .btn {
-            font-family: 'Roboto Condensed', sans-serif;
-            font-weight: 700;
-            font-size: 16px;
-            padding: 16px 32px;
-            border-radius: var(--radius-sm);
-            border: none;
-            cursor: pointer;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            gap: 10px;
-            transition: all 0.2s ease;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, var(--yellow) 0%, var(--yellow-dark) 100%);
-            color: var(--black);
-            box-shadow: 0 8px 24px rgba(243, 192, 77, 0.4);
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 12px 32px rgba(243, 192, 77, 0.5);
-        }
-
-        .btn-secondary {
-            background: var(--white);
-            color: var(--black);
-            border: 2px solid var(--gray);
-        }
-
-        .btn-secondary:hover {
-            border-color: var(--yellow);
-            background: rgba(243, 192, 77, 0.1);
-        }
-
-        .btn-dark {
-            background: var(--black);
-            color: var(--white);
-        }
-
-        .btn-dark:hover {
-            background: var(--gray-dark);
-        }
-
-        /* Sections */
-        .section {
-            margin-bottom: 60px;
-        }
-
-        .section-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 24px;
-        }
-
-        .section-title {
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 36px;
-            color: var(--black);
-        }
-
-        /* Period Cards Grid */
-        .periods-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-            gap: 24px;
-        }
-
-        .period-card {
-            background: var(--white);
-            border-radius: var(--radius-md);
-            padding: 28px;
-            box-shadow: var(--shadow-soft);
-            transition: all 0.3s ease;
-            cursor: pointer;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .period-card:hover {
-            transform: translateY(-4px);
-            box-shadow: var(--shadow-medium);
-        }
-
-        .period-card::after {
-            content: '';
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: linear-gradient(90deg, var(--yellow) 0%, var(--yellow-dark) 100%);
-            transform: scaleX(0);
-            transition: transform 0.3s ease;
-        }
-
-        .period-card:hover::after {
-            transform: scaleX(1);
-        }
-
-        .period-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 20px;
-        }
-
-        .period-name {
-            font-family: 'Roboto Condensed', sans-serif;
-            font-weight: 700;
-            font-size: 22px;
-            color: var(--black);
-        }
-
-        .period-badge {
-            background: var(--yellow);
-            color: var(--black);
-            font-family: 'Roboto Condensed', sans-serif;
-            font-weight: 700;
-            font-size: 12px;
-            padding: 6px 12px;
-            border-radius: 20px;
-            text-transform: uppercase;
-        }
-
-        .period-stats {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 16px;
-        }
-
-        .stat {
-            text-align: center;
-            padding: 16px 8px;
-            background: var(--gray-light);
-            border-radius: var(--radius-sm);
-        }
-
-        .stat-value {
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 28px;
-            color: var(--black);
-            line-height: 1;
-        }
-
-        .stat-label {
-            font-size: 11px;
-            color: var(--gray-dark);
-            text-transform: uppercase;
-            margin-top: 4px;
-            letter-spacing: 0.5px;
-        }
-
-        .stat-value.company { color: #2E7D32; }
-        .stat-value.client { color: #F57C00; }
-
-        /* Empty State */
-        .empty-state {
-            text-align: center;
-            padding: 80px 40px;
-            background: var(--white);
-            border-radius: var(--radius-lg);
-            box-shadow: var(--shadow-soft);
-        }
-
-        .empty-icon {
-            width: 120px;
-            height: 120px;
-            margin: 0 auto 24px;
-            background: linear-gradient(135deg, var(--gray-light) 0%, var(--gray) 100%);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .empty-icon svg {
-            width: 48px;
-            height: 48px;
-            fill: var(--gray-dark);
-        }
-
-        .empty-title {
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 32px;
-            color: var(--black);
-            margin-bottom: 12px;
-        }
-
-        .empty-text {
-            font-size: 16px;
-            color: var(--gray-dark);
-            margin-bottom: 32px;
-        }
-
-        /* Quick Stats Bar */
+        /* ===== STATS BAR ===== */
         .stats-bar {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
@@ -507,6 +142,12 @@
             display: flex;
             align-items: center;
             gap: 20px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .stats-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-medium);
         }
 
         .stats-icon {
@@ -562,88 +203,93 @@
             margin-top: 4px;
         }
 
-        /* Modal */
-        .modal-overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(26, 26, 26, 0.6);
-            backdrop-filter: blur(8px);
-            z-index: 1000;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
+        /* ===== HERO SECTION ===== */
+        .hero {
+            display: grid;
+            grid-template-columns: 1fr 1.2fr;
+            gap: 40px;
+            margin-bottom: 60px;
         }
 
-        .modal-overlay.show {
+        .hero-content {
             display: flex;
+            flex-direction: column;
+            justify-content: center;
         }
 
-        .modal {
+        .hero-title {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 52px;
+            line-height: 1.1;
+            color: var(--black);
+            margin-bottom: 20px;
+        }
+
+        .hero-subtitle {
+            font-family: 'Roboto Condensed', sans-serif;
+            font-size: 18px;
+            color: var(--gray-dark);
+            margin-bottom: 32px;
+            line-height: 1.6;
+        }
+
+        .hero-actions {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        /* ===== UPLOAD CARD ===== */
+        .upload-card {
             background: var(--white);
             border-radius: var(--radius-lg);
-            max-width: 600px;
-            width: 100%;
-            max-height: 90vh;
-            overflow-y: auto;
+            padding: 32px;
             box-shadow: var(--shadow-strong);
+            position: relative;
+            overflow: hidden;
         }
 
-        .modal-header {
-            padding: 24px 32px;
-            border-bottom: 1px solid var(--gray);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+        .upload-card::before {
+            content: '';
+            position: absolute;
+            top: -50px;
+            right: -50px;
+            width: 200px;
+            height: 200px;
+            background: linear-gradient(135deg, var(--yellow) 0%, var(--yellow-light) 100%);
+            border-radius: 50%;
+            opacity: 0.2;
         }
 
-        .modal-title {
+        .upload-card-title {
             font-family: 'Bebas Neue', sans-serif;
             font-size: 28px;
             color: var(--black);
+            margin-bottom: 8px;
+            position: relative;
         }
 
-        .modal-close {
-            background: none;
-            border: none;
-            cursor: pointer;
-            padding: 8px;
-            border-radius: 50%;
-            transition: background 0.2s;
-        }
-
-        .modal-close:hover {
-            background: var(--gray-light);
-        }
-
-        .modal-body {
-            padding: 32px;
-        }
-
-        .modal-footer {
-            padding: 24px 32px;
-            border-top: 1px solid var(--gray);
-            display: flex;
-            justify-content: flex-end;
-            gap: 12px;
-        }
-
-        /* Form Elements */
-        .form-group {
+        .upload-card-subtitle {
+            font-size: 14px;
+            color: var(--gray-dark);
             margin-bottom: 24px;
+            position: relative;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+            position: relative;
         }
 
         .form-label {
             font-family: 'Roboto Condensed', sans-serif;
             font-weight: 700;
-            font-size: 14px;
+            font-size: 13px;
             color: var(--black);
             display: block;
             margin-bottom: 8px;
             text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
         .form-input {
@@ -652,25 +298,375 @@
             border: 2px solid var(--gray);
             border-radius: var(--radius-sm);
             font-family: 'Roboto', sans-serif;
-            font-size: 16px;
-            transition: border-color 0.2s;
+            font-size: 15px;
+            transition: all 0.2s;
+            background: var(--white);
         }
 
         .form-input:focus {
             outline: none;
             border-color: var(--yellow);
+            box-shadow: 0 0 0 4px rgba(243, 192, 77, 0.2);
         }
 
-        /* Loading */
+        .upload-zone {
+            border: 3px dashed var(--gray);
+            border-radius: var(--radius-md);
+            padding: 32px 24px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            background: var(--gray-light);
+            position: relative;
+        }
+
+        .upload-zone:hover,
+        .upload-zone.dragover {
+            border-color: var(--yellow);
+            background: rgba(243, 192, 77, 0.1);
+        }
+
+        .upload-zone.has-files {
+            border-color: var(--green);
+            background: rgba(76, 175, 80, 0.05);
+        }
+
+        .upload-icon {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 16px;
+            background: linear-gradient(135deg, var(--yellow) 0%, var(--yellow-dark) 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 8px 24px rgba(243, 192, 77, 0.4);
+        }
+
+        .upload-icon svg {
+            width: 28px;
+            height: 28px;
+            fill: var(--white);
+        }
+
+        .upload-title {
+            font-family: 'Roboto Condensed', sans-serif;
+            font-weight: 700;
+            font-size: 16px;
+            color: var(--black);
+            margin-bottom: 6px;
+            text-transform: uppercase;
+        }
+
+        .upload-hint {
+            font-size: 13px;
+            color: var(--gray-dark);
+        }
+
+        .upload-files {
+            margin-top: 16px;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            background: var(--white);
+            border-radius: var(--radius-sm);
+            margin-bottom: 8px;
+            border: 1px solid var(--gray);
+        }
+
+        .file-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #4CAF50 0%, #388E3C 100%);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .file-icon svg {
+            width: 20px;
+            height: 20px;
+            fill: white;
+        }
+
+        .file-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .file-name {
+            font-weight: 500;
+            font-size: 14px;
+            color: var(--black);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .file-meta {
+            font-size: 12px;
+            color: var(--gray-dark);
+        }
+
+        .file-badge {
+            font-size: 11px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-weight: 500;
+            flex-shrink: 0;
+        }
+
+        .file-badge.under { background: #E3F2FD; color: #1565C0; }
+        .file-badge.over { background: #FFF3E0; color: #EF6C00; }
+        .file-badge.unknown { background: var(--gray-light); color: var(--gray-dark); }
+
+        .file-remove {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 50%;
+            transition: background 0.2s;
+            flex-shrink: 0;
+        }
+
+        .file-remove:hover {
+            background: #FFEBEE;
+        }
+
+        /* ===== BUTTONS ===== */
+        .btn {
+            font-family: 'Roboto Condensed', sans-serif;
+            font-weight: 700;
+            font-size: 15px;
+            padding: 14px 28px;
+            border-radius: var(--radius-sm);
+            border: none;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--yellow) 0%, var(--yellow-dark) 100%);
+            color: var(--black);
+            box-shadow: 0 8px 24px rgba(243, 192, 77, 0.4);
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 32px rgba(243, 192, 77, 0.5);
+        }
+
+        .btn-secondary {
+            background: var(--white);
+            color: var(--black);
+            border: 2px solid var(--gray);
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            border-color: var(--yellow);
+            background: rgba(243, 192, 77, 0.1);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #4CAF50 0%, #388E3C 100%);
+            color: var(--white);
+            box-shadow: 0 8px 24px rgba(76, 175, 80, 0.4);
+        }
+
+        .btn-success:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 32px rgba(76, 175, 80, 0.5);
+        }
+
+        .btn-block {
+            width: 100%;
+            justify-content: center;
+        }
+
+        /* ===== SECTIONS ===== */
+        .section {
+            margin-bottom: 60px;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .section-title {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 36px;
+            color: var(--black);
+        }
+
+        /* ===== PERIODS GRID ===== */
+        .periods-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 24px;
+        }
+
+        .period-card {
+            background: var(--white);
+            border-radius: var(--radius-md);
+            padding: 28px;
+            box-shadow: var(--shadow-soft);
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .period-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-medium);
+        }
+
+        .period-card::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--yellow) 0%, var(--yellow-dark) 100%);
+            transform: scaleX(0);
+            transition: transform 0.3s ease;
+        }
+
+        .period-card:hover::after {
+            transform: scaleX(1);
+        }
+
+        .period-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 20px;
+        }
+
+        .period-name {
+            font-family: 'Roboto Condensed', sans-serif;
+            font-weight: 700;
+            font-size: 20px;
+            color: var(--black);
+        }
+
+        .period-date {
+            font-size: 13px;
+            color: var(--gray-dark);
+            margin-top: 4px;
+        }
+
+        .period-badge {
+            background: var(--yellow);
+            color: var(--black);
+            font-family: 'Roboto Condensed', sans-serif;
+            font-weight: 700;
+            font-size: 11px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            text-transform: uppercase;
+        }
+
+        .period-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+
+        .stat {
+            text-align: center;
+            padding: 14px 8px;
+            background: var(--gray-light);
+            border-radius: var(--radius-sm);
+        }
+
+        .stat-value {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 24px;
+            color: var(--black);
+            line-height: 1;
+        }
+
+        .stat-label {
+            font-size: 10px;
+            color: var(--gray-dark);
+            text-transform: uppercase;
+            margin-top: 4px;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-value.company { color: var(--green); }
+        .stat-value.client { color: var(--orange); }
+
+        /* ===== EMPTY STATE ===== */
+        .empty-state {
+            text-align: center;
+            padding: 80px 40px;
+            background: var(--white);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-soft);
+        }
+
+        .empty-icon {
+            width: 120px;
+            height: 120px;
+            margin: 0 auto 24px;
+            background: linear-gradient(135deg, var(--gray-light) 0%, var(--gray) 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .empty-icon svg {
+            width: 48px;
+            height: 48px;
+            fill: var(--gray-dark);
+        }
+
+        .empty-title {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 32px;
+            color: var(--black);
+            margin-bottom: 12px;
+        }
+
+        .empty-text {
+            font-size: 16px;
+            color: var(--gray-dark);
+            margin-bottom: 32px;
+        }
+
+        /* ===== LOADING ===== */
         .loading {
-            display: none;
             text-align: center;
             padding: 60px;
         }
 
-        .loading.show {
-            display: block;
-        }
+        .loading.hidden { display: none; }
 
         .spinner {
             width: 48px;
@@ -686,57 +682,85 @@
             to { transform: rotate(360deg); }
         }
 
-        /* Responsive */
+        /* ===== STEP INDICATOR ===== */
+        .steps {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 32px;
+        }
+
+        .step-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--gray);
+            transition: all 0.3s;
+        }
+
+        .step-dot.active {
+            background: var(--yellow);
+            transform: scale(1.2);
+        }
+
+        .step-dot.completed {
+            background: var(--green);
+        }
+
+        /* ===== RESPONSIVE ===== */
         @media (max-width: 1024px) {
-            .hero {
-                grid-template-columns: 1fr;
-            }
-            .stats-bar {
-                grid-template-columns: repeat(2, 1fr);
-            }
+            .hero { grid-template-columns: 1fr; }
+            .stats-bar { grid-template-columns: repeat(2, 1fr); }
         }
 
         @media (max-width: 768px) {
-            .header {
-                padding: 12px 16px;
-            }
-            .main {
-                padding: 24px 16px;
-            }
-            .hero-title {
-                font-size: 40px;
-            }
-            .stats-bar {
-                grid-template-columns: 1fr;
-            }
-            .periods-grid {
-                grid-template-columns: 1fr;
-            }
-            .nav {
-                display: none;
-            }
+            .header { padding: 12px 16px; }
+            .main { padding: 24px 16px; }
+            .hero-title { font-size: 40px; }
+            .stats-bar { grid-template-columns: 1fr; }
+            .periods-grid { grid-template-columns: 1fr; }
+            .nav { display: none; }
         }
 
-        /* Animations */
+        /* ===== ANIMATIONS ===== */
         @keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
         .animate-in {
             animation: fadeInUp 0.5s ease forwards;
         }
 
-        .delay-1 { animation-delay: 0.1s; }
-        .delay-2 { animation-delay: 0.2s; }
-        .delay-3 { animation-delay: 0.3s; }
-        .delay-4 { animation-delay: 0.4s; }
+        .delay-1 { animation-delay: 0.1s; opacity: 0; }
+        .delay-2 { animation-delay: 0.2s; opacity: 0; }
+        .delay-3 { animation-delay: 0.3s; opacity: 0; }
+        .delay-4 { animation-delay: 0.4s; opacity: 0; }
+
+        /* ===== AUTO-DETECT INFO ===== */
+        .auto-detect-info {
+            background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%);
+            border-radius: var(--radius-sm);
+            padding: 16px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .auto-detect-info svg {
+            width: 24px;
+            height: 24px;
+            fill: #1565C0;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        .auto-detect-info p {
+            font-size: 13px;
+            color: #0D47A1;
+            line-height: 1.5;
+        }
     </style>
 </head>
 <body>
@@ -755,6 +779,7 @@
         <nav class="nav">
             <a href="/" class="nav-link active">Главная</a>
             <a href="/history" class="nav-link">История</a>
+            <a href="/comparison" class="nav-link">Сравнение</a>
         </nav>
     </header>
 
@@ -767,7 +792,7 @@
                     <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
                 </div>
                 <div class="stats-content">
-                    <div class="stats-value" id="totalPeriods">0</div>
+                    <div class="stats-value" id="totalPeriods">-</div>
                     <div class="stats-label">Периодов</div>
                 </div>
             </div>
@@ -776,7 +801,7 @@
                     <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
                 </div>
                 <div class="stats-content">
-                    <div class="stats-value" id="totalCompany">0 ₽</div>
+                    <div class="stats-value" id="totalCompany">-</div>
                     <div class="stats-label">Компания</div>
                 </div>
             </div>
@@ -785,16 +810,16 @@
                     <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
                 </div>
                 <div class="stats-content">
-                    <div class="stats-value" id="totalClient">0 ₽</div>
+                    <div class="stats-value" id="totalClient">-</div>
                     <div class="stats-label">Клиенты</div>
                 </div>
             </div>
             <div class="stats-card animate-in delay-4">
                 <div class="stats-icon dark">
-                    <svg viewBox="0 0 24 24"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/></svg>
+                    <svg viewBox="0 0 24 24"><path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/></svg>
                 </div>
                 <div class="stats-content">
-                    <div class="stats-value" id="totalAmount">0 ₽</div>
+                    <div class="stats-value" id="totalAmount">-</div>
                     <div class="stats-label">Общий итог</div>
                 </div>
             </div>
@@ -805,43 +830,60 @@
             <div class="hero-content">
                 <h1 class="hero-title">Расчёт зарплаты<br>монтажников</h1>
                 <p class="hero-subtitle">
-                    Загрузите два Excel файла из 1С и система автоматически рассчитает зарплату: 
-                    бензин, транспортные, диагностику. Редактируйте данные и скачивайте готовые отчёты.
+                    Загрузите два Excel файла из 1С — система автоматически определит 
+                    какой файл содержит заказы до 10 000₽, а какой свыше. 
+                    Рассчитает бензин, транспортные, диагностику. 
+                    Редактируйте данные и скачивайте готовые отчёты.
                 </p>
                 <div class="hero-actions">
-                    <button class="btn btn-primary" onclick="openUploadModal()">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
-                        Загрузить файлы
-                    </button>
                     <a href="/history" class="btn btn-secondary">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
                         История расчётов
                     </a>
+                    <a href="/comparison" class="btn btn-secondary">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/></svg>
+                        Сравнение
+                    </a>
                 </div>
             </div>
 
-            <div class="hero-card">
-                <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
-                    <input type="file" id="fileInput" multiple accept=".xlsx,.xls" style="display: none" onchange="handleFiles(this.files)">
-                    <div class="upload-icon">
-                        <svg viewBox="0 0 24 24"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
+            <!-- Upload Card -->
+            <div class="upload-card">
+                <h2 class="upload-card-title">Новый расчёт</h2>
+                <p class="upload-card-subtitle">Загрузите файлы из 1С для расчёта зарплаты</p>
+
+                <form id="uploadForm">
+                    <div class="form-group">
+                        <label class="form-label">Название периода</label>
+                        <input type="text" class="form-input" id="periodName" placeholder="Например: 16-30.11.25" required>
                     </div>
-                    <div class="upload-title">Перетащите файлы сюда</div>
-                    <div class="upload-hint">или нажмите для выбора • 2 файла Excel (до 10к и свыше 10к)</div>
-                </div>
 
-                <div class="upload-files" id="uploadFiles">
-                    <!-- Files will be added here -->
-                </div>
+                    <div class="auto-detect-info">
+                        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+                        <p>
+                            <strong>Автоопределение:</strong> Просто загрузите оба файла — система сама определит 
+                            какой содержит заказы до 10 000₽, а какой свыше, по первой сумме в колонке "Стоимость".
+                        </p>
+                    </div>
 
-                <div id="uploadActions" style="margin-top: 24px; display: none;">
-                    <button class="btn btn-primary" onclick="processFiles()" style="width: 100%;">
+                    <div class="upload-zone" id="uploadZone">
+                        <input type="file" id="fileInput" multiple accept=".xlsx,.xls" hidden>
+                        <div class="upload-icon">
+                            <svg viewBox="0 0 24 24"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
+                        </div>
+                        <div class="upload-title">Перетащите файлы сюда</div>
+                        <div class="upload-hint">или нажмите для выбора • 2 файла Excel из 1С</div>
+                        
+                        <div class="upload-files" id="uploadFiles"></div>
+                    </div>
+
+                    <button type="submit" class="btn btn-success btn-block" id="submitBtn" disabled style="margin-top: 24px;">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></svg>
                         Рассчитать зарплату
                     </button>
-                </div>
+                </form>
 
-                <div class="loading" id="loadingIndicator">
+                <div class="loading hidden" id="loadingIndicator">
                     <div class="spinner"></div>
                     <div>Обработка файлов...</div>
                 </div>
@@ -856,14 +898,12 @@
             </div>
 
             <div id="periodsContainer">
-                <div class="loading show" id="periodsLoading">
+                <div class="loading" id="periodsLoading">
                     <div class="spinner"></div>
                     <div>Загрузка...</div>
                 </div>
 
-                <div class="periods-grid" id="periodsGrid" style="display: none;">
-                    <!-- Period cards will be loaded here -->
-                </div>
+                <div class="periods-grid" id="periodsGrid" style="display: none;"></div>
 
                 <div class="empty-state" id="emptyState" style="display: none;">
                     <div class="empty-icon">
@@ -871,203 +911,237 @@
                     </div>
                     <h3 class="empty-title">Пока нет данных</h3>
                     <p class="empty-text">Загрузите первые файлы для расчёта зарплаты</p>
-                    <button class="btn btn-primary" onclick="openUploadModal()">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
-                        Загрузить файлы
-                    </button>
                 </div>
             </div>
         </section>
     </main>
 
-    <!-- Upload Modal -->
-    <div class="modal-overlay" id="uploadModal" onclick="closeModal(event)">
-        <div class="modal" onclick="event.stopPropagation()">
-            <div class="modal-header">
-                <h3 class="modal-title">Загрузка файлов</h3>
-                <button class="modal-close" onclick="closeUploadModal()">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-                </button>
-            </div>
-            <div class="modal-body">
-                <p style="margin-bottom: 24px; color: var(--gray-dark);">
-                    Загрузите два Excel файла из 1С. Система автоматически определит какой файл содержит заказы до 10 000₽, а какой — свыше.
-                </p>
-
-                <div class="form-group">
-                    <label class="form-label">Название периода</label>
-                    <input type="text" class="form-input" id="periodName" placeholder="Например: 16-30.11.25">
-                </div>
-
-                <div class="upload-zone" onclick="document.getElementById('modalFileInput').click()" style="margin-bottom: 0;">
-                    <input type="file" id="modalFileInput" multiple accept=".xlsx,.xls" style="display: none" onchange="handleModalFiles(this.files)">
-                    <div class="upload-icon">
-                        <svg viewBox="0 0 24 24"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
-                    </div>
-                    <div class="upload-title">Выберите 2 файла</div>
-                    <div class="upload-hint">Excel файлы из 1С</div>
-                </div>
-
-                <div id="modalUploadFiles" style="margin-top: 16px;"></div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeUploadModal()">Отмена</button>
-                <button class="btn btn-primary" id="modalProcessBtn" onclick="processModalFiles()" disabled>
-                    Рассчитать
-                </button>
-            </div>
-        </div>
-    </div>
-
     <script>
+        // ===== STATE =====
         let uploadedFiles = [];
-        let modalFiles = [];
+        let fileTypes = {}; // {filename: 'under'|'over'|'unknown'}
 
-        // Load periods on page load
-        document.addEventListener('DOMContentLoaded', loadPeriods);
-
-        // Drag and drop
+        // ===== DOM ELEMENTS =====
         const uploadZone = document.getElementById('uploadZone');
-        
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            uploadZone.addEventListener(eventName, preventDefaults, false);
+        const fileInput = document.getElementById('fileInput');
+        const uploadFiles = document.getElementById('uploadFiles');
+        const submitBtn = document.getElementById('submitBtn');
+        const uploadForm = document.getElementById('uploadForm');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+
+        // ===== INIT =====
+        document.addEventListener('DOMContentLoaded', () => {
+            loadPeriods();
+            setupDragAndDrop();
         });
+
+        // ===== DRAG & DROP =====
+        function setupDragAndDrop() {
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(event => {
+                uploadZone.addEventListener(event, preventDefaults, false);
+            });
+
+            ['dragenter', 'dragover'].forEach(event => {
+                uploadZone.addEventListener(event, () => uploadZone.classList.add('dragover'), false);
+            });
+
+            ['dragleave', 'drop'].forEach(event => {
+                uploadZone.addEventListener(event, () => uploadZone.classList.remove('dragover'), false);
+            });
+
+            uploadZone.addEventListener('drop', (e) => {
+                handleFiles(e.dataTransfer.files);
+            });
+
+            uploadZone.addEventListener('click', (e) => {
+                if (e.target.closest('.file-remove')) return;
+                fileInput.click();
+            });
+
+            fileInput.addEventListener('change', () => {
+                handleFiles(fileInput.files);
+            });
+        }
 
         function preventDefaults(e) {
             e.preventDefault();
             e.stopPropagation();
         }
 
-        ['dragenter', 'dragover'].forEach(eventName => {
-            uploadZone.addEventListener(eventName, () => uploadZone.classList.add('dragover'), false);
-        });
+        // ===== FILE HANDLING =====
+        async function handleFiles(files) {
+            const newFiles = Array.from(files).filter(f => 
+                f.name.endsWith('.xlsx') || f.name.endsWith('.xls')
+            );
 
-        ['dragleave', 'drop'].forEach(eventName => {
-            uploadZone.addEventListener(eventName, () => uploadZone.classList.remove('dragover'), false);
-        });
-
-        uploadZone.addEventListener('drop', (e) => {
-            const files = e.dataTransfer.files;
-            handleFiles(files);
-        });
-
-        function handleFiles(files) {
-            uploadedFiles = Array.from(files).filter(f => f.name.endsWith('.xlsx') || f.name.endsWith('.xls'));
-            renderUploadedFiles();
-        }
-
-        function handleModalFiles(files) {
-            modalFiles = Array.from(files).filter(f => f.name.endsWith('.xlsx') || f.name.endsWith('.xls'));
-            renderModalFiles();
-        }
-
-        function renderUploadedFiles() {
-            const container = document.getElementById('uploadFiles');
-            const actions = document.getElementById('uploadActions');
-            
-            if (uploadedFiles.length === 0) {
-                container.classList.remove('show');
-                actions.style.display = 'none';
-                return;
+            // Add new files (max 2)
+            for (const file of newFiles) {
+                if (uploadedFiles.length >= 2) break;
+                if (!uploadedFiles.find(f => f.name === file.name)) {
+                    uploadedFiles.push(file);
+                    // Auto-detect file type
+                    await detectFileType(file);
+                }
             }
 
-            container.innerHTML = uploadedFiles.map((file, index) => `
-                <div class="file-item">
-                    <div class="file-icon">
-                        <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>
-                    </div>
-                    <div class="file-info">
-                        <div class="file-name">${file.name}</div>
-                        <div class="file-type">${(file.size / 1024).toFixed(1)} KB</div>
-                    </div>
-                    <button class="file-remove" onclick="removeFile(${index})">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="#999"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-                    </button>
-                </div>
-            `).join('');
-
-            container.classList.add('show');
-            actions.style.display = uploadedFiles.length === 2 ? 'block' : 'none';
+            renderFiles();
+            updateSubmitButton();
         }
 
-        function renderModalFiles() {
-            const container = document.getElementById('modalUploadFiles');
-            const btn = document.getElementById('modalProcessBtn');
+        async function detectFileType(file) {
+            // We'll detect on the server side, but for now mark as detecting
+            fileTypes[file.name] = 'detecting';
             
-            container.innerHTML = modalFiles.map((file, index) => `
-                <div class="file-item">
-                    <div class="file-icon">
-                        <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>
-                    </div>
-                    <div class="file-info">
-                        <div class="file-name">${file.name}</div>
-                        <div class="file-type">${(file.size / 1024).toFixed(1)} KB</div>
-                    </div>
-                </div>
-            `).join('');
-
-            btn.disabled = modalFiles.length !== 2;
+            // Read file and check first value
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                const response = await fetch('/api/detect-file-type', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    fileTypes[file.name] = data.type; // 'under' or 'over'
+                } else {
+                    fileTypes[file.name] = 'unknown';
+                }
+            } catch (error) {
+                console.error('Error detecting file type:', error);
+                fileTypes[file.name] = 'unknown';
+            }
+            
+            renderFiles();
         }
 
         function removeFile(index) {
+            const file = uploadedFiles[index];
+            delete fileTypes[file.name];
             uploadedFiles.splice(index, 1);
-            renderUploadedFiles();
+            renderFiles();
+            updateSubmitButton();
         }
 
-        function openUploadModal() {
-            document.getElementById('uploadModal').classList.add('show');
-            modalFiles = [];
-            renderModalFiles();
+        function renderFiles() {
+            if (uploadedFiles.length === 0) {
+                uploadFiles.innerHTML = '';
+                uploadZone.classList.remove('has-files');
+                return;
+            }
+
+            uploadZone.classList.add('has-files');
+
+            uploadFiles.innerHTML = uploadedFiles.map((file, index) => {
+                const type = fileTypes[file.name] || 'unknown';
+                let badgeClass = 'unknown';
+                let badgeText = 'Определение...';
+                
+                if (type === 'under') {
+                    badgeClass = 'under';
+                    badgeText = '< 10 000₽';
+                } else if (type === 'over') {
+                    badgeClass = 'over';
+                    badgeText = '> 10 000₽';
+                } else if (type === 'detecting') {
+                    badgeText = '⏳ Определение...';
+                }
+
+                return `
+                    <div class="file-item">
+                        <div class="file-icon">
+                            <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>
+                        </div>
+                        <div class="file-info">
+                            <div class="file-name">${file.name}</div>
+                            <div class="file-meta">${(file.size / 1024).toFixed(1)} KB</div>
+                        </div>
+                        <span class="file-badge ${badgeClass}">${badgeText}</span>
+                        <button type="button" class="file-remove" onclick="removeFile(${index})">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="#D32F2F"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                        </button>
+                    </div>
+                `;
+            }).join('');
         }
 
-        function closeUploadModal() {
-            document.getElementById('uploadModal').classList.remove('show');
-        }
-
-        function closeModal(e) {
-            if (e.target === e.currentTarget) {
-                closeUploadModal();
+        function updateSubmitButton() {
+            const hasValidFiles = uploadedFiles.length === 2;
+            const hasTypes = Object.values(fileTypes).filter(t => t === 'under' || t === 'over').length === 2;
+            const hasBothTypes = hasTypes && 
+                Object.values(fileTypes).includes('under') && 
+                Object.values(fileTypes).includes('over');
+            
+            submitBtn.disabled = !hasValidFiles || !hasBothTypes;
+            
+            if (hasValidFiles && !hasBothTypes && !Object.values(fileTypes).includes('detecting')) {
+                // Show warning if both files are same type
+                const types = Object.values(fileTypes);
+                if (types[0] === types[1] && types[0] !== 'unknown') {
+                    alert('⚠️ Оба файла содержат заказы одного типа. Нужны файлы с заказами до 10 000₽ и свыше 10 000₽');
+                }
             }
         }
 
-        async function processFiles() {
-            if (uploadedFiles.length !== 2) return;
-
-            const loading = document.getElementById('loadingIndicator');
-            const actions = document.getElementById('uploadActions');
+        // ===== FORM SUBMIT =====
+        uploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
             
-            loading.classList.add('show');
-            actions.style.display = 'none';
-
-            // TODO: Implement actual file processing
-            await new Promise(resolve => setTimeout(resolve, 2000));
-
-            loading.classList.remove('show');
-            alert('Файлы обработаны! Переход к результатам...');
-            // window.location.href = '/period/NEW_ID';
-        }
-
-        async function processModalFiles() {
-            if (modalFiles.length !== 2) return;
-
             const periodName = document.getElementById('periodName').value.trim();
             if (!periodName) {
                 alert('Введите название периода');
                 return;
             }
 
-            closeUploadModal();
+            if (uploadedFiles.length !== 2) {
+                alert('Загрузите 2 файла');
+                return;
+            }
 
-            const loading = document.getElementById('loadingIndicator');
-            loading.classList.add('show');
+            // Determine which file is which
+            let fileUnder, fileOver;
+            for (const file of uploadedFiles) {
+                if (fileTypes[file.name] === 'under') fileUnder = file;
+                else if (fileTypes[file.name] === 'over') fileOver = file;
+            }
 
-            // TODO: Implement actual file processing with auto-detection
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            if (!fileUnder || !fileOver) {
+                alert('Не удалось определить типы файлов');
+                return;
+            }
 
-            loading.classList.remove('show');
-            loadPeriods();
-        }
+            // Show loading
+            uploadForm.style.display = 'none';
+            loadingIndicator.classList.remove('hidden');
 
+            const formData = new FormData();
+            formData.append('file_under_10k', fileUnder);
+            formData.append('file_over_10k', fileOver);
+            formData.append('period_name', periodName);
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Redirect to period page
+                    window.location.href = `/period/${data.period_id}`;
+                } else {
+                    throw new Error(data.detail || 'Ошибка обработки');
+                }
+            } catch (error) {
+                alert('❌ Ошибка: ' + error.message);
+                uploadForm.style.display = 'block';
+                loadingIndicator.classList.add('hidden');
+            }
+        });
+
+        // ===== LOAD PERIODS =====
         async function loadPeriods() {
             try {
                 const response = await fetch('/api/periods');
@@ -1075,32 +1149,33 @@
 
                 document.getElementById('periodsLoading').style.display = 'none';
 
+                if (!data.success) {
+                    throw new Error(data.error || 'Failed to load');
+                }
+
                 // Calculate totals
                 let totalPeriods = 0;
                 let totalCompany = 0;
                 let totalClient = 0;
                 let allPeriods = [];
 
-                for (const month in data.months) {
-                    const monthData = data.months[month];
-                    totalPeriods += monthData.periods.length;
+                const months = data.months || [];
+                
+                for (const month of months) {
+                    totalPeriods += month.periods.length;
                     
-                    for (const period of monthData.periods) {
+                    for (const period of month.periods) {
                         allPeriods.push(period);
-                        if (period.latest_upload && period.latest_upload.workers) {
-                            for (const worker of period.latest_upload.workers) {
-                                totalCompany += worker.company_amount || 0;
-                                totalClient += worker.client_amount || 0;
-                            }
-                        }
+                        totalCompany += period.company_amount || 0;
+                        totalClient += period.client_amount || 0;
                     }
                 }
 
                 // Update stats
-                document.getElementById('totalPeriods').textContent = totalPeriods;
-                document.getElementById('totalCompany').textContent = formatCurrency(totalCompany);
-                document.getElementById('totalClient').textContent = formatCurrency(totalClient);
-                document.getElementById('totalAmount').textContent = formatCurrency(totalCompany + totalClient);
+                document.getElementById('totalPeriods').textContent = totalPeriods || '-';
+                document.getElementById('totalCompany').textContent = totalCompany ? formatCurrency(totalCompany) : '-';
+                document.getElementById('totalClient').textContent = totalClient ? formatCurrency(totalClient) : '-';
+                document.getElementById('totalAmount').textContent = (totalCompany + totalClient) ? formatCurrency(totalCompany + totalClient) : '-';
 
                 if (allPeriods.length === 0) {
                     document.getElementById('emptyState').style.display = 'block';
@@ -1112,17 +1187,19 @@
                 const grid = document.getElementById('periodsGrid');
                 
                 grid.innerHTML = recentPeriods.map(period => {
-                    const upload = period.latest_upload;
-                    const workers = upload?.workers || [];
-                    const company = workers.reduce((sum, w) => sum + (w.company_amount || 0), 0);
-                    const client = workers.reduce((sum, w) => sum + (w.client_amount || 0), 0);
-                    const total = company + client;
+                    const company = period.company_amount || 0;
+                    const client = period.client_amount || 0;
+                    const total = period.total_amount || (company + client);
+                    const createdDate = period.created_at ? new Date(period.created_at).toLocaleDateString('ru-RU') : '';
 
                     return `
                         <div class="period-card" onclick="window.location.href='/period/${period.id}'">
                             <div class="period-header">
-                                <div class="period-name">📅 ${period.name}</div>
-                                <div class="period-badge">Версия ${upload?.version || 1}</div>
+                                <div>
+                                    <div class="period-name">📅 ${period.name}</div>
+                                    <div class="period-date">${createdDate}</div>
+                                </div>
+                                <div class="period-badge">v${period.latest_version || 1}</div>
                             </div>
                             <div class="period-stats">
                                 <div class="stat">
@@ -1151,12 +1228,12 @@
             }
         }
 
+        // ===== UTILS =====
         function formatCurrency(value) {
-            return new Intl.NumberFormat('ru-RU', {
-                style: 'currency',
-                currency: 'RUB',
-                maximumFractionDigits: 0
-            }).format(value);
+            if (value >= 1000000) {
+                return (value / 1000000).toFixed(1) + ' млн ₽';
+            }
+            return Math.round(value).toLocaleString('ru-RU') + ' ₽';
         }
 
         function formatCurrencyShort(value) {
@@ -1165,15 +1242,8 @@
             } else if (value >= 1000) {
                 return Math.round(value / 1000) + 'К';
             }
-            return value.toString();
+            return Math.round(value).toString();
         }
-
-        // Keyboard shortcuts
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                closeUploadModal();
-            }
-        });
     </script>
 </body>
 </html>
