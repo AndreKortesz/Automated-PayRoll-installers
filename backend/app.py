@@ -1013,13 +1013,16 @@ def create_excel_report(data: List[dict], period: str, config: dict, for_workers
         
         regular_end = current_row - 1
         
-        # Formulas for worker total row (fuel J, transport K sums)
+        # Calculate sums for worker total row (fuel J, transport K) - use actual values instead of formulas
         if regular_end >= regular_start:
-            for col in [10, 11]:  # J, K
-                col_letter = get_column_letter(col)
-                formula = f"=SUM({col_letter}{regular_start}:{col_letter}{regular_end})"
-                c = ws.cell(row=worker_name_row, column=col, value=formula)
-                c.font = worker_font
+            # Sum fuel and transport from regular rows
+            fuel_sum = sum(to_int(r.get("fuel_payment", 0)) or 0 for r in regular_rows if not r.get("is_worker_total"))
+            transport_sum = sum(to_int(r.get("transport", 0)) or 0 for r in regular_rows if not r.get("is_worker_total"))
+            
+            c = ws.cell(row=worker_name_row, column=10, value=fuel_sum if fuel_sum else None)
+            c.font = worker_font
+            c = ws.cell(row=worker_name_row, column=11, value=transport_sum if transport_sum else None)
+            c.font = worker_font
         
         # Client payment section
         client_name_row = None
@@ -1086,26 +1089,35 @@ def create_excel_report(data: List[dict], period: str, config: dict, for_workers
             
             client_end = current_row - 1
             
-            # Client section totals
+            # Client section totals - use actual values instead of formulas
             if client_end >= client_start:
-                ws.cell(row=client_name_row, column=12, value=f"=SUM(L{client_start}:L{client_end})").font = worker_font
-                ws.cell(row=client_name_row, column=13, value=f"=SUM(M{client_start}:M{client_end})").font = worker_font
+                client_total_sum = sum(to_int(r.get("total", 0)) or 0 for r in client_rows if not r.get("is_worker_total"))
+                client_diag50_sum = sum(to_int(r.get("diagnostic_50", 0)) or 0 for r in client_rows if not r.get("is_worker_total"))
+                
+                c = ws.cell(row=client_name_row, column=12, value=client_total_sum if client_total_sum else None)
+                c.font = worker_font
+                c = ws.cell(row=client_name_row, column=13, value=client_diag50_sum if client_diag50_sum else None)
+                c.font = worker_font
         
-        # Main worker row Итого formula - subtract diagnostic -50% from client section
+        # Main worker row Итого - use actual values instead of formulas
+        # Sum of regular totals minus diagnostic -50% from client section
+        regular_total_sum = sum(to_int(r.get("total", 0)) or 0 for r in regular_rows if not r.get("is_worker_total"))
+        client_diag50_sum_for_main = sum(to_int(r.get("diagnostic_50", 0)) or 0 for r in client_rows if not r.get("is_worker_total")) if client_rows else 0
+        
         if regular_end >= regular_start:
             if client_name_row:
-                # Has client section - subtract M (diagnostic -50%) from client row
-                formula = f"=SUM(L{regular_start}:L{regular_end})-M{client_name_row}"
+                # Has client section - subtract diagnostic -50%
+                main_total = regular_total_sum - client_diag50_sum_for_main
             else:
-                formula = f"=SUM(L{regular_start}:L{regular_end})"
-            c = ws.cell(row=worker_name_row, column=12, value=formula)
+                main_total = regular_total_sum
+            c = ws.cell(row=worker_name_row, column=12, value=main_total if main_total else None)
             c.font = worker_font
             c.fill = yellow_fill
             c.border = thin_border
         else:
             if client_name_row:
-                formula = f"=-M{client_name_row}"
-                c = ws.cell(row=worker_name_row, column=12, value=formula)
+                main_total = -client_diag50_sum_for_main
+                c = ws.cell(row=worker_name_row, column=12, value=main_total if main_total else None)
             else:
                 c = ws.cell(row=worker_name_row, column=12, value=0)
             c.font = worker_font
@@ -2354,7 +2366,7 @@ async def delete_order(order_id: int):
         if not database:
             raise HTTPException(status_code=500, detail="Database not connected")
         
-        from sqlalchemy import delete, and_, update
+        from sqlalchemy import delete, and_, update, text
         from database import orders, calculations, worker_totals, manual_edits
         
         # First, get order info for updating worker_totals
@@ -2366,16 +2378,13 @@ async def delete_order(order_id: int):
         
         upload_id = order["upload_id"]
         full_worker = order["worker"]
-        is_client_payment = "(оплата клиентом)" in full_worker
         base_worker = full_worker.replace(" (оплата клиентом)", "")
         
-        # Get calculation total for this order
+        # Get calculation info for logging
         calc_query = calculations.select().where(calculations.c.order_id == order_id)
         calc = await database.fetch_one(calc_query)
         
         deleted_total = calc["total"] if calc else 0
-        deleted_fuel = calc["fuel_payment"] if calc else 0
-        deleted_transport = calc["transport"] if calc else 0
         calc_id = calc["id"] if calc else None
         
         # Delete manual_edits first (they reference calculation)
@@ -2395,51 +2404,53 @@ async def delete_order(order_id: int):
         del_order = delete(orders).where(orders.c.id == order_id)
         await database.execute(del_order)
         
+        # FULL RECALCULATION of worker_totals (same logic as update_calculation)
+        # This is more reliable than incremental subtraction
+        query = text("""
+            SELECT c.total, c.fuel_payment, c.transport, o.is_client_payment
+            FROM calculations c
+            JOIN orders o ON c.order_id = o.id
+            WHERE c.upload_id = :upload_id
+            AND (o.worker = :worker OR o.worker = :worker_client)
+        """).bindparams(
+            upload_id=upload_id,
+            worker=base_worker,
+            worker_client=f"{base_worker} (оплата клиентом)"
+        )
+        
+        all_calcs = await database.fetch_all(query)
+        
+        company_amount = sum(c["total"] or 0 for c in all_calcs if not c["is_client_payment"])
+        client_amount = sum(c["total"] or 0 for c in all_calcs if c["is_client_payment"])
+        total_amount = company_amount + client_amount
+        
+        new_fuel = sum(c["fuel_payment"] or 0 for c in all_calcs)
+        new_transport = sum(c["transport"] or 0 for c in all_calcs)
+        
+        # Count orders
+        company_count = sum(1 for c in all_calcs if not c["is_client_payment"])
+        client_count = sum(1 for c in all_calcs if c["is_client_payment"])
+        
         # Update worker_totals
-        wt_query = worker_totals.select().where(
+        update_wt = update(worker_totals).where(
             and_(
                 worker_totals.c.upload_id == upload_id,
                 worker_totals.c.worker == base_worker
             )
+        ).values(
+            total_amount=total_amount,
+            company_amount=company_amount,
+            client_amount=client_amount,
+            fuel_total=new_fuel,
+            transport_total=new_transport,
+            orders_count=company_count + client_count,
+            company_orders_count=company_count,
+            client_orders_count=client_count
         )
-        wt = await database.fetch_one(wt_query)
+        await database.execute(update_wt)
         
-        if wt:
-            new_total = (wt["total_amount"] or 0) - deleted_total
-            new_fuel = (wt["fuel_total"] or 0) - deleted_fuel
-            new_transport = (wt["transport_total"] or 0) - deleted_transport
-            new_count = (wt["orders_count"] or 0) - 1
-            
-            # Update company or client amount based on order type
-            if is_client_payment:
-                new_client = (wt["client_amount"] or 0) - deleted_total
-                new_company = wt["company_amount"] or 0
-                new_client_count = (wt["client_orders_count"] or 0) - 1
-                new_company_count = wt["company_orders_count"] or 0
-            else:
-                new_company = (wt["company_amount"] or 0) - deleted_total
-                new_client = wt["client_amount"] or 0
-                new_company_count = (wt["company_orders_count"] or 0) - 1
-                new_client_count = wt["client_orders_count"] or 0
-            
-            update_wt = update(worker_totals).where(
-                and_(
-                    worker_totals.c.upload_id == upload_id,
-                    worker_totals.c.worker == base_worker
-                )
-            ).values(
-                total_amount=max(0, new_total),
-                company_amount=max(0, new_company),
-                client_amount=max(0, new_client),
-                fuel_total=max(0, new_fuel),
-                transport_total=max(0, new_transport),
-                orders_count=max(0, new_count),
-                company_orders_count=max(0, new_company_count),
-                client_orders_count=max(0, new_client_count)
-            )
-            await database.execute(update_wt)
-        
-        print(f"🗑️ Deleted order {order_id} (worker: {full_worker}, total: {deleted_total})")
+        print(f"🗑️ Deleted order {order_id} (worker: {base_worker}, deleted_total: {deleted_total})")
+        print(f"   Recalculated: company={company_amount}, client={client_amount}, total={total_amount}")
         
         return JSONResponse({
             "success": True,
@@ -2515,50 +2526,54 @@ async def add_order_row(upload_id: int, worker: str, request: Request):
         )
         calc_id = await database.execute(calc_insert)
         
+        # FULL RECALCULATION of worker_totals (same logic as update_calculation)
+        from sqlalchemy import text
+        
+        query = text("""
+            SELECT c.total, c.fuel_payment, c.transport, o.is_client_payment
+            FROM calculations c
+            JOIN orders o ON c.order_id = o.id
+            WHERE c.upload_id = :upload_id
+            AND (o.worker = :worker OR o.worker = :worker_client)
+        """).bindparams(
+            upload_id=upload_id,
+            worker=base_worker,
+            worker_client=f"{base_worker} (оплата клиентом)"
+        )
+        
+        all_calcs = await database.fetch_all(query)
+        
+        company_amount = sum(c["total"] or 0 for c in all_calcs if not c["is_client_payment"])
+        client_amount = sum(c["total"] or 0 for c in all_calcs if c["is_client_payment"])
+        total_amount = company_amount + client_amount
+        
+        new_fuel = sum(c["fuel_payment"] or 0 for c in all_calcs)
+        new_transport = sum(c["transport"] or 0 for c in all_calcs)
+        
+        # Count orders
+        company_count = sum(1 for c in all_calcs if not c["is_client_payment"])
+        client_count = sum(1 for c in all_calcs if c["is_client_payment"])
+        
         # Update worker_totals
-        wt_query = worker_totals.select().where(
+        update_wt = update(worker_totals).where(
             and_(
                 worker_totals.c.upload_id == upload_id,
                 worker_totals.c.worker == base_worker
             )
+        ).values(
+            total_amount=total_amount,
+            company_amount=company_amount,
+            client_amount=client_amount,
+            fuel_total=new_fuel,
+            transport_total=new_transport,
+            orders_count=company_count + client_count,
+            company_orders_count=company_count,
+            client_orders_count=client_count
         )
-        wt = await database.fetch_one(wt_query)
-        
-        if wt:
-            new_total = (wt["total_amount"] or 0) + total
-            new_fuel = (wt["fuel_total"] or 0) + fuel_payment
-            new_transport = (wt["transport_total"] or 0) + transport
-            new_count = (wt["orders_count"] or 0) + 1
-            
-            if is_client_payment:
-                new_client = (wt["client_amount"] or 0) + total
-                new_company = wt["company_amount"] or 0
-                new_client_count = (wt["client_orders_count"] or 0) + 1
-                new_company_count = wt["company_orders_count"] or 0
-            else:
-                new_company = (wt["company_amount"] or 0) + total
-                new_client = wt["client_amount"] or 0
-                new_company_count = (wt["company_orders_count"] or 0) + 1
-                new_client_count = wt["client_orders_count"] or 0
-            
-            update_wt = update(worker_totals).where(
-                and_(
-                    worker_totals.c.upload_id == upload_id,
-                    worker_totals.c.worker == base_worker
-                )
-            ).values(
-                total_amount=new_total,
-                company_amount=new_company,
-                client_amount=new_client,
-                fuel_total=new_fuel,
-                transport_total=new_transport,
-                orders_count=new_count,
-                company_orders_count=new_company_count,
-                client_orders_count=new_client_count
-            )
-            await database.execute(update_wt)
+        await database.execute(update_wt)
         
         print(f"➕ Added new row for {worker_decoded}: order_code={order_code}, total={total}")
+        print(f"   Recalculated: company={company_amount}, client={client_amount}, total={total_amount}")
         
         # Return the new order data
         return JSONResponse({
@@ -2747,6 +2762,92 @@ async def get_1c_status():
         "base_url": ONEС_CONFIG["base_url"] if ONEС_CONFIG["enabled"] else None,
         "message": "Интеграция с 1С активна" if ONEС_CONFIG["enabled"] else "Интеграция с 1С не настроена"
     })
+
+
+@app.post("/api/upload/{upload_id}/recalculate")
+async def recalculate_worker_totals(upload_id: int):
+    """
+    Force recalculation of all worker_totals for an upload.
+    Use this to fix any inconsistencies in the data.
+    """
+    try:
+        if not database:
+            raise HTTPException(status_code=500, detail="Database not connected")
+        
+        from sqlalchemy import and_, update, text
+        from database import worker_totals
+        
+        # Get all workers for this upload
+        wt_query = worker_totals.select().where(worker_totals.c.upload_id == upload_id)
+        all_wt = await database.fetch_all(wt_query)
+        
+        recalculated = []
+        
+        for wt in all_wt:
+            base_worker = wt["worker"]
+            
+            # Full recalculation using JOIN
+            query = text("""
+                SELECT c.total, c.fuel_payment, c.transport, o.is_client_payment
+                FROM calculations c
+                JOIN orders o ON c.order_id = o.id
+                WHERE c.upload_id = :upload_id
+                AND (o.worker = :worker OR o.worker = :worker_client)
+            """).bindparams(
+                upload_id=upload_id,
+                worker=base_worker,
+                worker_client=f"{base_worker} (оплата клиентом)"
+            )
+            
+            all_calcs = await database.fetch_all(query)
+            
+            company_amount = sum(c["total"] or 0 for c in all_calcs if not c["is_client_payment"])
+            client_amount = sum(c["total"] or 0 for c in all_calcs if c["is_client_payment"])
+            total_amount = company_amount + client_amount
+            
+            new_fuel = sum(c["fuel_payment"] or 0 for c in all_calcs)
+            new_transport = sum(c["transport"] or 0 for c in all_calcs)
+            
+            company_count = sum(1 for c in all_calcs if not c["is_client_payment"])
+            client_count = sum(1 for c in all_calcs if c["is_client_payment"])
+            
+            # Update worker_totals
+            update_wt = update(worker_totals).where(
+                and_(
+                    worker_totals.c.upload_id == upload_id,
+                    worker_totals.c.worker == base_worker
+                )
+            ).values(
+                total_amount=total_amount,
+                company_amount=company_amount,
+                client_amount=client_amount,
+                fuel_total=new_fuel,
+                transport_total=new_transport,
+                orders_count=company_count + client_count,
+                company_orders_count=company_count,
+                client_orders_count=client_count
+            )
+            await database.execute(update_wt)
+            
+            recalculated.append({
+                "worker": base_worker,
+                "company_amount": company_amount,
+                "client_amount": client_amount,
+                "total_amount": total_amount
+            })
+            
+            print(f"🔄 Recalculated {base_worker}: company={company_amount}, client={client_amount}, total={total_amount}")
+        
+        return JSONResponse({
+            "success": True,
+            "recalculated_count": len(recalculated),
+            "workers": recalculated
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":
