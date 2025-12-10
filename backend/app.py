@@ -2301,13 +2301,13 @@ async def update_calculation(calc_id: int, request: Request):
             JOIN orders o ON c.order_id = o.id
             WHERE c.upload_id = :upload_id
             AND (o.worker = :worker OR o.worker = :worker_client)
-        """)
+        """).bindparams(
+            upload_id=upload_id,
+            worker=base_worker,
+            worker_client=f"{base_worker} (оплата клиентом)"
+        )
         
-        all_calcs = await database.fetch_all(query, {
-            "upload_id": upload_id,
-            "worker": base_worker,
-            "worker_client": f"{base_worker} (оплата клиентом)"
-        })
+        all_calcs = await database.fetch_all(query)
         
         company_amount = sum(c["total"] or 0 for c in all_calcs if not c["is_client_payment"])
         client_amount = sum(c["total"] or 0 for c in all_calcs if c["is_client_payment"])
@@ -2660,6 +2660,93 @@ async def upload_page(request: Request, upload_id: int):
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
     return response
+
+
+# ============================================================================
+# 1C INTEGRATION
+# ============================================================================
+
+# 1C Configuration - UPDATE THESE VALUES
+ONEС_CONFIG = {
+    "enabled": False,  # Set to True when 1C HTTP service is ready
+    "base_url": "http://your-1c-server/your-database/hs/salary",  # Update with your 1C server URL
+    "username": "api_user",  # 1C username for API access
+    "password": "api_password",  # 1C password
+    "timeout": 10,  # Request timeout in seconds
+}
+
+
+@app.get("/api/1c/order/{order_code}")
+async def get_1c_order_info(order_code: str):
+    """
+    Get order information from 1C.
+    This endpoint proxies requests to the 1C HTTP service.
+    """
+    import httpx
+    from urllib.parse import quote
+    
+    # Check if 1C integration is enabled
+    if not ONEС_CONFIG["enabled"]:
+        return JSONResponse({
+            "success": False,
+            "error": "Интеграция с 1С не настроена",
+            "hint": "Необходимо настроить HTTP-сервис в 1С и обновить конфигурацию"
+        })
+    
+    try:
+        # Build 1C API URL
+        url = f"{ONEС_CONFIG['base_url']}/orders/{quote(order_code)}"
+        
+        # Make request to 1C with basic auth
+        auth = (ONEС_CONFIG["username"], ONEС_CONFIG["password"])
+        
+        async with httpx.AsyncClient(timeout=ONEС_CONFIG["timeout"]) as client:
+            response = await client.get(url, auth=auth)
+            
+            if response.status_code == 200:
+                data = response.json()
+                return JSONResponse(data)
+            elif response.status_code == 401:
+                return JSONResponse({
+                    "success": False,
+                    "error": "Ошибка авторизации в 1С"
+                })
+            elif response.status_code == 404:
+                return JSONResponse({
+                    "success": False,
+                    "error": f"Заказ {order_code} не найден в 1С"
+                })
+            else:
+                return JSONResponse({
+                    "success": False,
+                    "error": f"Ошибка 1С: {response.status_code}"
+                })
+                
+    except httpx.TimeoutException:
+        return JSONResponse({
+            "success": False,
+            "error": "Превышено время ожидания ответа от 1С"
+        })
+    except httpx.ConnectError:
+        return JSONResponse({
+            "success": False,
+            "error": "Не удалось подключиться к серверу 1С"
+        })
+    except Exception as e:
+        return JSONResponse({
+            "success": False,
+            "error": f"Ошибка: {str(e)}"
+        })
+
+
+@app.get("/api/1c/status")
+async def get_1c_status():
+    """Check 1C integration status"""
+    return JSONResponse({
+        "enabled": ONEС_CONFIG["enabled"],
+        "base_url": ONEС_CONFIG["base_url"] if ONEС_CONFIG["enabled"] else None,
+        "message": "Интеграция с 1С активна" if ONEС_CONFIG["enabled"] else "Интеграция с 1С не настроена"
+    })
 
 
 if __name__ == "__main__":
