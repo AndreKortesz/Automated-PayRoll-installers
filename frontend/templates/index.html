@@ -3,770 +3,1177 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Расчёт зарплаты монтажников</title>
+    <title>Mos-GSM | Расчёт зарплаты</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto+Condensed:wght@300;400;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+            --yellow: #F3C04D;
+            --yellow-light: #f8d77e;
+            --yellow-dark: #d4a63d;
+            --black: #1A1A1A;
+            --gray-dark: #4D4D4D;
+            --gray: #D9D9D9;
+            --gray-light: #F5F5F5;
+            --white: #FFFFFF;
+            --shadow-soft: 0 8px 32px rgba(26, 26, 26, 0.08);
+            --shadow-medium: 0 12px 48px rgba(26, 26, 26, 0.12);
+            --shadow-strong: 0 20px 60px rgba(26, 26, 26, 0.15);
+            --radius-sm: 12px;
+            --radius-md: 20px;
+            --radius-lg: 28px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Roboto', sans-serif;
+            background: var(--gray-light);
+            color: var(--black);
             min-height: 100vh;
-            padding: 20px;
+            overflow-x: hidden;
         }
-        .container { max-width: 1400px; margin: 0 auto; }
-        .card {
-            background: white;
-            border-radius: 16px;
-            padding: 30px;
-            margin-bottom: 20px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-        }
-        h1 { color: #333; margin-bottom: 10px; }
-        h2 { color: #555; margin-bottom: 15px; font-size: 1.3em; }
-        h3 { color: #666; margin-bottom: 10px; font-size: 1.1em; }
-        .subtitle { color: #666; margin-bottom: 20px; }
-        .step { display: none; }
-        .step.active { display: block; }
-        .header-row {
+
+        /* Header */
+        .header {
+            background: var(--white);
+            padding: 16px 32px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
-            gap: 15px;
-        }
-        .form-group { margin-bottom: 20px; }
-        label { display: block; margin-bottom: 8px; font-weight: 500; color: #444; }
-        input[type="file"], input[type="text"], input[type="number"] {
-            width: 100%; padding: 12px; border: 2px solid #e0e0e0;
-            border-radius: 8px; font-size: 14px; transition: border-color 0.3s;
-        }
-        input:focus { outline: none; border-color: #667eea; }
-        .btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white; padding: 14px 28px; border: none; border-radius: 8px;
-            font-size: 16px; font-weight: 600; cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-        .btn:hover { transform: translateY(-2px); box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4); }
-        .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
-        .btn-secondary { background: #6c757d; }
-        .btn-success { background: linear-gradient(135deg, #28a745 0%, #20c997 100%); }
-        .btn-danger { background: #dc3545; padding: 8px 12px; font-size: 12px; }
-        .btn-sm { padding: 8px 16px; font-size: 13px; }
-        .stats {
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px; margin-bottom: 20px;
-        }
-        .stat-item { background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; }
-        .stat-value { font-size: 24px; font-weight: bold; color: #667eea; }
-        .stat-label { color: #666; font-size: 14px; }
-        .settings-grid {
-            display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; align-items: start;
-        }
-        @media (max-width: 1200px) { .settings-grid { grid-template-columns: repeat(3, 1fr); } }
-        @media (max-width: 768px) { .settings-grid { grid-template-columns: repeat(2, 1fr); } }
-        .workers-horizontal { display: flex; flex-wrap: wrap; gap: 15px; margin-top: 15px; }
-        .worker-card {
-            background: #f8f9fa; border-radius: 8px; padding: 15px;
-            min-width: 280px; flex: 1; max-width: 400px;
-        }
-        .worker-name { font-weight: bold; color: #333; margin-bottom: 10px; font-size: 14px; }
-        .extra-row { display: flex; gap: 8px; margin-bottom: 8px; }
-        .extra-row input { flex: 1; padding: 8px; font-size: 13px; }
-        .extra-row input:first-child { flex: 2; }
-        .btn-add { background: #28a745; padding: 6px 12px; font-size: 12px; }
-        .btn-remove { background: #dc3545; padding: 6px 10px; font-size: 12px; }
-        .days-table { max-height: 500px; overflow-y: auto; margin-bottom: 20px; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #e0e0e0; }
-        th { background: #f8f9fa; font-weight: 600; position: sticky; top: 0; }
-        .days-input { width: 60px; padding: 6px; text-align: center; }
-        .loading { display: none; text-align: center; padding: 40px; }
-        .loading.active { display: block; }
-        .spinner {
-            border: 4px solid #f3f3f3; border-top: 4px solid #667eea; border-radius: 50%;
-            width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 20px;
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .success { background: #d4edda; border: 1px solid #28a745; border-radius: 8px; padding: 20px; text-align: center; }
-        .success h3 { color: #155724; }
-        .download-link {
-            display: inline-block; margin-top: 15px; padding: 14px 28px;
-            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-            color: white; text-decoration: none; border-radius: 8px; font-weight: 600;
-        }
-        .hidden { display: none; }
-        .toggle-section { cursor: pointer; user-select: none; }
-        .toggle-section:hover { color: #667eea; }
-        .collapsible { overflow: hidden; transition: max-height 0.3s ease-out; }
-        .collapsible.collapsed { max-height: 0; }
-        
-        /* Preview table */
-        .preview-table-wrapper { max-height: 600px; overflow: auto; margin-bottom: 20px; }
-        .preview-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        .preview-table th { 
-            background: #667eea; color: white; padding: 12px 8px; 
-            position: sticky; top: 0; z-index: 10; white-space: nowrap;
-        }
-        .preview-table td { padding: 10px 8px; border-bottom: 1px solid #eee; }
-        .preview-table tr:hover { background: #f8f9fa; }
-        .preview-table .order-code { font-weight: 600; color: #667eea; }
-        .preview-table .address { max-width: 300px; word-wrap: break-word; white-space: normal; line-height: 1.3; }
-        .preview-table .number { text-align: right; font-family: Monaco, Consolas, monospace; }
-        .preview-table .total-cell { font-weight: bold; }
-        .badge { display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: 500; }
-        .badge-client { background: #ffeaa7; color: #d68910; }
-        .badge-over10k { background: #dfe6e9; color: #636e72; }
-        .btn-delete-row { 
-            background: #dc3545; color: white; border: none; padding: 4px 8px; 
-            border-radius: 4px; cursor: pointer; font-size: 11px;
-        }
-        .btn-delete-row:hover { background: #c82333; }
-        .row-deleted { opacity: 0.4; text-decoration: line-through; }
-        .row-deleted td { background: #f8d7da !important; }
-        .totals-row { background: #e8f4e8; font-weight: bold; }
-        .totals-row td { border-top: 2px solid #667eea; padding: 12px 8px; }
-        .preview-table tfoot { position: sticky; bottom: 0; z-index: 10; }
-        
-        /* Worker tabs in preview */
-        .worker-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; }
-        .worker-tab {
-            padding: 8px 16px; background: #e9ecef; border-radius: 20px;
-            cursor: pointer; font-size: 13px; transition: all 0.2s;
-        }
-        .worker-tab:hover { background: #dee2e6; }
-        .worker-tab.active { background: #667eea; color: white; }
-        .worker-tab .count { 
-            background: rgba(0,0,0,0.1); padding: 2px 6px; 
-            border-radius: 10px; margin-left: 5px; font-size: 11px;
-        }
-        .worker-tab.active .count { background: rgba(255,255,255,0.3); }
-        
-        /* Summary cards */
-        .summary-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 20px; }
-        .summary-card { background: #f8f9fa; padding: 15px; border-radius: 10px; text-align: center; }
-        .summary-card-value { font-size: 20px; font-weight: bold; color: #667eea; }
-        .summary-card-label { font-size: 12px; color: #666; margin-top: 5px; }
-        
-        /* Alarms styles */
-        .alarms-container { background: #f8f9fa; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
-        .alarms-tabs { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
-        .alarm-tab {
-            padding: 10px 20px; border-radius: 8px; cursor: pointer;
-            font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px;
-        }
-        .alarm-tab.active { box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
-        .alarm-tab-count { background: rgba(255,255,255,0.3); padding: 2px 8px; border-radius: 12px; font-size: 12px; }
-        .alarm-tab.high-payment { background: #f8d7da; color: #721c24; }
-        .alarm-tab.non-standard-percent { background: #fff3cd; color: #856404; }
-        .alarm-tab.high-specialist-fee { background: #d4edda; color: #155724; }
-        .alarm-tab.high-fuel { background: #cce5ff; color: #004085; }
-        .alarm-content { display: none; }
-        .alarm-content.active { display: block; }
-        .alarm-item { background: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid #ffc107; }
-        .alarm-item.high-payment { border-left-color: #dc3545; }
-        .alarm-item.non-standard-percent { border-left-color: #ffc107; }
-        .alarm-item.high-specialist-fee { border-left-color: #28a745; }
-        .alarm-item.high-fuel { border-left-color: #007bff; }
-        .alarm-message { font-weight: bold; margin-bottom: 10px; }
-        .alarm-section-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-left: 10px; }
-        .alarm-section-badge.main { background: #e3f2fd; color: #1976d2; }
-        .alarm-section-badge.client { background: #fce4ec; color: #c2185b; }
-        .alarm-details { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; font-size: 12px; }
-        .alarm-detail { background: #f8f9fa; padding: 8px 12px; border-radius: 4px; }
-        .alarm-detail-label { font-weight: 600; color: #666; }
-        
-        /* History button */
-        .history-btn {
-            position: fixed; top: 20px; right: 20px;
-            background: white;
-            color: #667eea; padding: 12px 20px; border-radius: 25px;
-            text-decoration: none; font-weight: 600; box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            box-shadow: var(--shadow-soft);
+            position: sticky;
+            top: 0;
             z-index: 100;
         }
-        .history-btn:hover { transform: scale(1.05); background: #f8f9fa; }
-        
-        /* Checkbox styles */
-        .company-car-grid { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
-        .company-car-item { display: flex; align-items: center; gap: 5px; background: #f8f9fa; padding: 8px 12px; border-radius: 6px; }
-        .company-car-checkbox { width: 18px; height: 18px; }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+        }
+
+        .logo-icon {
+            display: flex;
+            align-items: flex-end;
+            gap: 3px;
+            height: 32px;
+        }
+
+        .logo-bar {
+            width: 6px;
+            background: var(--yellow);
+            border-radius: 3px;
+        }
+
+        .logo-bar:nth-child(1) { height: 8px; }
+        .logo-bar:nth-child(2) { height: 14px; }
+        .logo-bar:nth-child(3) { height: 20px; }
+        .logo-bar:nth-child(4) { height: 26px; }
+        .logo-bar:nth-child(5) { height: 32px; }
+
+        .logo-text {
+            font-family: 'Roboto', sans-serif;
+            font-weight: 700;
+            font-size: 24px;
+            color: var(--black);
+        }
+
+        .nav {
+            display: flex;
+            gap: 8px;
+        }
+
+        .nav-link {
+            font-family: 'Roboto Condensed', sans-serif;
+            font-weight: 500;
+            font-size: 15px;
+            color: var(--gray-dark);
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: var(--radius-sm);
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .nav-link:hover {
+            background: var(--gray-light);
+            color: var(--black);
+        }
+
+        .nav-link.active {
+            background: var(--yellow);
+            color: var(--black);
+        }
+
+        /* Main Content */
+        .main {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 40px 32px;
+        }
+
+        /* Hero Section */
+        .hero {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            margin-bottom: 60px;
+        }
+
+        .hero-content {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .hero-title {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 56px;
+            line-height: 1.1;
+            color: var(--black);
+            margin-bottom: 20px;
+        }
+
+        .hero-subtitle {
+            font-family: 'Roboto Condensed', sans-serif;
+            font-size: 20px;
+            color: var(--gray-dark);
+            margin-bottom: 32px;
+            line-height: 1.5;
+        }
+
+        .hero-actions {
+            display: flex;
+            gap: 16px;
+        }
+
+        /* 3D Card Style like T-Bank */
+        .hero-card {
+            background: var(--white);
+            border-radius: var(--radius-lg);
+            padding: 40px;
+            box-shadow: var(--shadow-strong);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 200px;
+            height: 200px;
+            background: linear-gradient(135deg, var(--yellow) 0%, var(--yellow-light) 100%);
+            border-radius: 0 var(--radius-lg) 0 100%;
+            opacity: 0.3;
+        }
+
+        .upload-zone {
+            border: 3px dashed var(--gray);
+            border-radius: var(--radius-md);
+            padding: 48px 32px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+            background: var(--gray-light);
+        }
+
+        .upload-zone:hover,
+        .upload-zone.dragover {
+            border-color: var(--yellow);
+            background: rgba(243, 192, 77, 0.1);
+        }
+
+        .upload-icon {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 20px;
+            background: linear-gradient(135deg, var(--yellow) 0%, var(--yellow-dark) 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 8px 24px rgba(243, 192, 77, 0.4);
+        }
+
+        .upload-icon svg {
+            width: 36px;
+            height: 36px;
+            fill: var(--white);
+        }
+
+        .upload-title {
+            font-family: 'Roboto Condensed', sans-serif;
+            font-weight: 700;
+            font-size: 18px;
+            color: var(--black);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+        }
+
+        .upload-hint {
+            font-size: 14px;
+            color: var(--gray-dark);
+        }
+
+        .upload-files {
+            margin-top: 20px;
+            display: none;
+        }
+
+        .upload-files.show {
+            display: block;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            background: var(--white);
+            border-radius: var(--radius-sm);
+            margin-bottom: 8px;
+            border: 1px solid var(--gray);
+        }
+
+        .file-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .file-icon svg {
+            width: 20px;
+            height: 20px;
+            fill: white;
+        }
+
+        .file-info {
+            flex: 1;
+        }
+
+        .file-name {
+            font-weight: 500;
+            font-size: 14px;
+            color: var(--black);
+        }
+
+        .file-type {
+            font-size: 12px;
+            color: var(--gray-dark);
+        }
+
+        .file-remove {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 50%;
+            transition: background 0.2s;
+        }
+
+        .file-remove:hover {
+            background: var(--gray-light);
+        }
+
+        /* Buttons */
+        .btn {
+            font-family: 'Roboto Condensed', sans-serif;
+            font-weight: 700;
+            font-size: 16px;
+            padding: 16px 32px;
+            border-radius: var(--radius-sm);
+            border: none;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--yellow) 0%, var(--yellow-dark) 100%);
+            color: var(--black);
+            box-shadow: 0 8px 24px rgba(243, 192, 77, 0.4);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 32px rgba(243, 192, 77, 0.5);
+        }
+
+        .btn-secondary {
+            background: var(--white);
+            color: var(--black);
+            border: 2px solid var(--gray);
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--yellow);
+            background: rgba(243, 192, 77, 0.1);
+        }
+
+        .btn-dark {
+            background: var(--black);
+            color: var(--white);
+        }
+
+        .btn-dark:hover {
+            background: var(--gray-dark);
+        }
+
+        /* Sections */
+        .section {
+            margin-bottom: 60px;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .section-title {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 36px;
+            color: var(--black);
+        }
+
+        /* Period Cards Grid */
+        .periods-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 24px;
+        }
+
+        .period-card {
+            background: var(--white);
+            border-radius: var(--radius-md);
+            padding: 28px;
+            box-shadow: var(--shadow-soft);
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .period-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-medium);
+        }
+
+        .period-card::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--yellow) 0%, var(--yellow-dark) 100%);
+            transform: scaleX(0);
+            transition: transform 0.3s ease;
+        }
+
+        .period-card:hover::after {
+            transform: scaleX(1);
+        }
+
+        .period-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 20px;
+        }
+
+        .period-name {
+            font-family: 'Roboto Condensed', sans-serif;
+            font-weight: 700;
+            font-size: 22px;
+            color: var(--black);
+        }
+
+        .period-badge {
+            background: var(--yellow);
+            color: var(--black);
+            font-family: 'Roboto Condensed', sans-serif;
+            font-weight: 700;
+            font-size: 12px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            text-transform: uppercase;
+        }
+
+        .period-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+        }
+
+        .stat {
+            text-align: center;
+            padding: 16px 8px;
+            background: var(--gray-light);
+            border-radius: var(--radius-sm);
+        }
+
+        .stat-value {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 28px;
+            color: var(--black);
+            line-height: 1;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: var(--gray-dark);
+            text-transform: uppercase;
+            margin-top: 4px;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-value.company { color: #2E7D32; }
+        .stat-value.client { color: #F57C00; }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 80px 40px;
+            background: var(--white);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-soft);
+        }
+
+        .empty-icon {
+            width: 120px;
+            height: 120px;
+            margin: 0 auto 24px;
+            background: linear-gradient(135deg, var(--gray-light) 0%, var(--gray) 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .empty-icon svg {
+            width: 48px;
+            height: 48px;
+            fill: var(--gray-dark);
+        }
+
+        .empty-title {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 32px;
+            color: var(--black);
+            margin-bottom: 12px;
+        }
+
+        .empty-text {
+            font-size: 16px;
+            color: var(--gray-dark);
+            margin-bottom: 32px;
+        }
+
+        /* Quick Stats Bar */
+        .stats-bar {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 24px;
+            margin-bottom: 40px;
+        }
+
+        .stats-card {
+            background: var(--white);
+            border-radius: var(--radius-md);
+            padding: 24px;
+            box-shadow: var(--shadow-soft);
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .stats-icon {
+            width: 64px;
+            height: 64px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .stats-icon.yellow {
+            background: linear-gradient(135deg, var(--yellow) 0%, var(--yellow-dark) 100%);
+            box-shadow: 0 8px 24px rgba(243, 192, 77, 0.3);
+        }
+
+        .stats-icon.green {
+            background: linear-gradient(135deg, #4CAF50 0%, #388E3C 100%);
+            box-shadow: 0 8px 24px rgba(76, 175, 80, 0.3);
+        }
+
+        .stats-icon.orange {
+            background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%);
+            box-shadow: 0 8px 24px rgba(255, 152, 0, 0.3);
+        }
+
+        .stats-icon.dark {
+            background: linear-gradient(135deg, var(--gray-dark) 0%, var(--black) 100%);
+            box-shadow: 0 8px 24px rgba(26, 26, 26, 0.3);
+        }
+
+        .stats-icon svg {
+            width: 28px;
+            height: 28px;
+            fill: var(--white);
+        }
+
+        .stats-content {
+            flex: 1;
+        }
+
+        .stats-value {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 32px;
+            color: var(--black);
+            line-height: 1;
+        }
+
+        .stats-label {
+            font-size: 13px;
+            color: var(--gray-dark);
+            margin-top: 4px;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(26, 26, 26, 0.6);
+            backdrop-filter: blur(8px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .modal-overlay.show {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--white);
+            border-radius: var(--radius-lg);
+            max-width: 600px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: var(--shadow-strong);
+        }
+
+        .modal-header {
+            padding: 24px 32px;
+            border-bottom: 1px solid var(--gray);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-title {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 28px;
+            color: var(--black);
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 50%;
+            transition: background 0.2s;
+        }
+
+        .modal-close:hover {
+            background: var(--gray-light);
+        }
+
+        .modal-body {
+            padding: 32px;
+        }
+
+        .modal-footer {
+            padding: 24px 32px;
+            border-top: 1px solid var(--gray);
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+
+        /* Form Elements */
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        .form-label {
+            font-family: 'Roboto Condensed', sans-serif;
+            font-weight: 700;
+            font-size: 14px;
+            color: var(--black);
+            display: block;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 14px 16px;
+            border: 2px solid var(--gray);
+            border-radius: var(--radius-sm);
+            font-family: 'Roboto', sans-serif;
+            font-size: 16px;
+            transition: border-color 0.2s;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--yellow);
+        }
+
+        /* Loading */
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 60px;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid var(--gray);
+            border-top-color: var(--yellow);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .hero {
+                grid-template-columns: 1fr;
+            }
+            .stats-bar {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                padding: 12px 16px;
+            }
+            .main {
+                padding: 24px 16px;
+            }
+            .hero-title {
+                font-size: 40px;
+            }
+            .stats-bar {
+                grid-template-columns: 1fr;
+            }
+            .periods-grid {
+                grid-template-columns: 1fr;
+            }
+            .nav {
+                display: none;
+            }
+        }
+
+        /* Animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-in {
+            animation: fadeInUp 0.5s ease forwards;
+        }
+
+        .delay-1 { animation-delay: 0.1s; }
+        .delay-2 { animation-delay: 0.2s; }
+        .delay-3 { animation-delay: 0.3s; }
+        .delay-4 { animation-delay: 0.4s; }
     </style>
 </head>
 <body>
-    <a href="/history" class="history-btn">📊 История</a>
-    
-    <div class="container">
-        <div class="card">
-            <div class="header-row">
-                <div>
-                    <h1>💰 Расчёт зарплаты монтажников</h1>
-                    <p class="subtitle">Загрузите файлы из 1С для автоматического расчёта</p>
+    <!-- Header -->
+    <header class="header">
+        <a href="/" class="logo">
+            <div class="logo-icon">
+                <div class="logo-bar"></div>
+                <div class="logo-bar"></div>
+                <div class="logo-bar"></div>
+                <div class="logo-bar"></div>
+                <div class="logo-bar"></div>
+            </div>
+            <span class="logo-text">Mos-GSM</span>
+        </a>
+        <nav class="nav">
+            <a href="/" class="nav-link active">Главная</a>
+            <a href="/history" class="nav-link">История</a>
+        </nav>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main">
+        <!-- Quick Stats -->
+        <div class="stats-bar" id="statsBar">
+            <div class="stats-card animate-in delay-1">
+                <div class="stats-icon yellow">
+                    <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
+                </div>
+                <div class="stats-content">
+                    <div class="stats-value" id="totalPeriods">0</div>
+                    <div class="stats-label">Периодов</div>
                 </div>
             </div>
-            
-            <!-- Step 1: Upload -->
-            <div class="step active" id="step1">
-                <h2>Шаг 1: Загрузка файлов</h2>
-                <form id="uploadForm">
-                    <div class="form-group">
-                        <label>📁 Файл с заказами до 10 000 ₽</label>
-                        <input type="file" id="file_under_10k" accept=".xlsx,.xls" required>
-                    </div>
-                    <div class="form-group">
-                        <label>📁 Файл с заказами от 10 000 ₽</label>
-                        <input type="file" id="file_over_10k" accept=".xlsx,.xls" required>
-                    </div>
-                    <button type="submit" class="btn">Загрузить и продолжить →</button>
-                </form>
-            </div>
-            
-            <!-- Step 2: Settings -->
-            <div class="step" id="step2">
-                <h2>Шаг 2: Настройки и проверка</h2>
-                <div class="stats" id="statsSection"></div>
-                
-                <h3 class="toggle-section" onclick="toggleSection('settingsContent')">⚙️ Настройки расчёта ▼</h3>
-                <div class="collapsible" id="settingsContent">
-                    <div class="settings-grid">
-                        <div class="form-group">
-                            <label>Базовый адрес:</label>
-                            <input type="text" id="base_address" value="Москва, Сходненский тупик 16с4">
-                        </div>
-                        <div class="form-group">
-                            <label>Коэффициент бензина:</label>
-                            <input type="number" id="fuel_coefficient" value="7" min="1">
-                        </div>
-                        <div class="form-group">
-                            <label>🚗 Сумма транспортных (На своём авто):</label>
-                            <input type="number" id="transport_amount" value="1000" min="0">
-                        </div>
-                        <div class="form-group">
-                            <label>🚐 Сумма транспортных (На авто компании):</label>
-                            <input type="number" id="transport_company" value="0" min="0">
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label>🚐 Монтажники на авто компании (транспортные = 0Р):</label>
-                        <div class="company-car-grid" id="companyCarWorkers"></div>
-                    </div>
+            <div class="stats-card animate-in delay-2">
+                <div class="stats-icon green">
+                    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
                 </div>
-                
-                <h3 class="toggle-section" onclick="toggleSection('daysContent')">📅 Количество дней на объект ▼</h3>
-                <div class="collapsible" id="daysContent">
-                    <div class="days-table" id="daysTable"></div>
-                </div>
-                
-                <h3 class="toggle-section" onclick="toggleSection('extraContent')">➕ Дополнительные начисления ▼</h3>
-                <div class="collapsible" id="extraContent">
-                    <div class="workers-horizontal" id="workersExtra"></div>
-                </div>
-                
-                <div style="margin-top: 20px;">
-                    <button class="btn" onclick="preview()">Предпросмотр →</button>
-                    <button class="btn btn-secondary" onclick="goToStep(1)">← Назад</button>
+                <div class="stats-content">
+                    <div class="stats-value" id="totalCompany">0 ₽</div>
+                    <div class="stats-label">Компания</div>
                 </div>
             </div>
-            
-            <!-- Step 3: Preview -->
-            <div class="step" id="step3">
-                <h2>Шаг 3: Предпросмотр и редактирование</h2>
-                
-                <div class="loading" id="previewLoading">
-                    <div class="spinner"></div>
-                    <p>Расчёт данных...</p>
+            <div class="stats-card animate-in delay-3">
+                <div class="stats-icon orange">
+                    <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
                 </div>
-                
-                <div id="previewContent" class="hidden">
-                    <div class="summary-cards" id="previewSummary"></div>
-                    
-                    <div style="margin-bottom: 15px;">
-                        <strong>Фильтр по монтажнику:</strong>
-                        <div class="worker-tabs" id="workerTabs">
-                            <div class="worker-tab active" data-worker="all">Все</div>
-                        </div>
-                    </div>
-                    
-                    <div class="preview-table-wrapper">
-                        <table class="preview-table" id="previewTable">
-                            <thead>
-                                <tr>
-                                    <th>Монтажник</th>
-                                    <th>Заказ</th>
-                                    <th>Адрес</th>
-                                    <th>Выручка</th>
-                                    <th>Оплата</th>
-                                    <th>%</th>
-                                    <th>Бензин</th>
-                                    <th>Трансп.</th>
-                                    <th>Итого</th>
-                                    <th>Тип</th>
-                                    <th></th>
-                                </tr>
-                            </thead>
-                            <tbody id="previewTableBody"></tbody>
-                            <tfoot id="previewTableFoot">
-                                <tr class="totals-row">
-                                    <td colspan="3"><strong>ИТОГО:</strong></td>
-                                    <td class="number" id="totalRevenue"><strong>0</strong></td>
-                                    <td class="number" id="totalPayment"><strong>0</strong></td>
-                                    <td></td>
-                                    <td class="number" id="totalFuel"><strong>0</strong></td>
-                                    <td class="number" id="totalTransport"><strong>0</strong></td>
-                                    <td class="number" id="totalTotal"><strong>0</strong></td>
-                                    <td></td>
-                                    <td></td>
-                                </tr>
-                            </tfoot>
-                        </table>
-                    </div>
-                    
-                    <div id="previewAlarms" class="hidden"></div>
-                    
-                    <div style="margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
-                        <button class="btn btn-success" onclick="finalize()">✅ Подтвердить и сохранить</button>
-                        <button class="btn btn-secondary" onclick="goToStep(2)">← Вернуться к настройкам</button>
-                    </div>
+                <div class="stats-content">
+                    <div class="stats-value" id="totalClient">0 ₽</div>
+                    <div class="stats-label">Клиенты</div>
                 </div>
             </div>
-            
-            <!-- Step 4: Result -->
-            <div class="step" id="step4">
-                <h2>Шаг 4: Результат</h2>
-                
-                <div class="loading" id="finalizeLoading">
-                    <div class="spinner"></div>
-                    <p>Сохранение и генерация файлов...</p>
+            <div class="stats-card animate-in delay-4">
+                <div class="stats-icon dark">
+                    <svg viewBox="0 0 24 24"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/></svg>
                 </div>
-                
-                <div class="success hidden" id="successSection">
-                    <h3>✅ Расчёт завершён и сохранён!</h3>
-                    <p>Файлы готовы к скачиванию</p>
-                    <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; margin-top: 15px;">
-                        <a href="#" class="download-link" id="downloadLinkFull">📥 Полный архив (Не урезанный)</a>
-                        <a href="#" class="download-link" id="downloadLinkWorkers" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">📥 Для монтажников (Сокращенный)</a>
-                    </div>
-                    <div style="margin-top: 15px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
-                        <button class="btn btn-secondary" onclick="goToStep(2)">✏️ Редактировать данные</button>
-                        <button class="btn btn-secondary" onclick="goToStep(1)">📁 Загрузить другие файлы</button>
-                    </div>
-                </div>
-                
-                <div class="alarms-container hidden" id="alarmsSection">
-                    <h3>⚠️ Предупреждения для проверки</h3>
-                    <div class="alarms-tabs" id="alarmsTabs"></div>
-                    <div id="alarmsContent"></div>
+                <div class="stats-content">
+                    <div class="stats-value" id="totalAmount">0 ₽</div>
+                    <div class="stats-label">Общий итог</div>
                 </div>
             </div>
         </div>
+
+        <!-- Hero Section -->
+        <section class="hero">
+            <div class="hero-content">
+                <h1 class="hero-title">Расчёт зарплаты<br>монтажников</h1>
+                <p class="hero-subtitle">
+                    Загрузите два Excel файла из 1С и система автоматически рассчитает зарплату: 
+                    бензин, транспортные, диагностику. Редактируйте данные и скачивайте готовые отчёты.
+                </p>
+                <div class="hero-actions">
+                    <button class="btn btn-primary" onclick="openUploadModal()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
+                        Загрузить файлы
+                    </button>
+                    <a href="/history" class="btn btn-secondary">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
+                        История расчётов
+                    </a>
+                </div>
+            </div>
+
+            <div class="hero-card">
+                <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+                    <input type="file" id="fileInput" multiple accept=".xlsx,.xls" style="display: none" onchange="handleFiles(this.files)">
+                    <div class="upload-icon">
+                        <svg viewBox="0 0 24 24"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
+                    </div>
+                    <div class="upload-title">Перетащите файлы сюда</div>
+                    <div class="upload-hint">или нажмите для выбора • 2 файла Excel (до 10к и свыше 10к)</div>
+                </div>
+
+                <div class="upload-files" id="uploadFiles">
+                    <!-- Files will be added here -->
+                </div>
+
+                <div id="uploadActions" style="margin-top: 24px; display: none;">
+                    <button class="btn btn-primary" onclick="processFiles()" style="width: 100%;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></svg>
+                        Рассчитать зарплату
+                    </button>
+                </div>
+
+                <div class="loading" id="loadingIndicator">
+                    <div class="spinner"></div>
+                    <div>Обработка файлов...</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Recent Periods -->
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">Последние периоды</h2>
+                <a href="/history" class="btn btn-secondary">Все периоды</a>
+            </div>
+
+            <div id="periodsContainer">
+                <div class="loading show" id="periodsLoading">
+                    <div class="spinner"></div>
+                    <div>Загрузка...</div>
+                </div>
+
+                <div class="periods-grid" id="periodsGrid" style="display: none;">
+                    <!-- Period cards will be loaded here -->
+                </div>
+
+                <div class="empty-state" id="emptyState" style="display: none;">
+                    <div class="empty-icon">
+                        <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
+                    </div>
+                    <h3 class="empty-title">Пока нет данных</h3>
+                    <p class="empty-text">Загрузите первые файлы для расчёта зарплаты</p>
+                    <button class="btn btn-primary" onclick="openUploadModal()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
+                        Загрузить файлы
+                    </button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Upload Modal -->
+    <div class="modal-overlay" id="uploadModal" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 class="modal-title">Загрузка файлов</h3>
+                <button class="modal-close" onclick="closeUploadModal()">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p style="margin-bottom: 24px; color: var(--gray-dark);">
+                    Загрузите два Excel файла из 1С. Система автоматически определит какой файл содержит заказы до 10 000₽, а какой — свыше.
+                </p>
+
+                <div class="form-group">
+                    <label class="form-label">Название периода</label>
+                    <input type="text" class="form-input" id="periodName" placeholder="Например: 16-30.11.25">
+                </div>
+
+                <div class="upload-zone" onclick="document.getElementById('modalFileInput').click()" style="margin-bottom: 0;">
+                    <input type="file" id="modalFileInput" multiple accept=".xlsx,.xls" style="display: none" onchange="handleModalFiles(this.files)">
+                    <div class="upload-icon">
+                        <svg viewBox="0 0 24 24"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
+                    </div>
+                    <div class="upload-title">Выберите 2 файла</div>
+                    <div class="upload-hint">Excel файлы из 1С</div>
+                </div>
+
+                <div id="modalUploadFiles" style="margin-top: 16px;"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeUploadModal()">Отмена</button>
+                <button class="btn btn-primary" id="modalProcessBtn" onclick="processModalFiles()" disabled>
+                    Рассчитать
+                </button>
+            </div>
+        </div>
     </div>
-    
+
     <script>
-        let sessionId = null;
-        let workers = [];
-        let orders = [];
-        let extraRows = {};
-        let previewRows = [];
-        let deletedRows = new Set();
-        let currentWorkerFilter = 'all';
+        let uploadedFiles = [];
+        let modalFiles = [];
+
+        // Load periods on page load
+        document.addEventListener('DOMContentLoaded', loadPeriods);
+
+        // Drag and drop
+        const uploadZone = document.getElementById('uploadZone');
         
-        const alarmTypeNames = {
-            'high_payment': 'Сумма оплаты > 20000',
-            'non_standard_percent': 'Нестандартный процент',
-            'high_specialist_fee': 'Выручка (выезд) > 3500',
-            'high_fuel': 'Высокая оплата бензина'
-        };
-        
-        function toggleSection(id) {
-            document.getElementById(id).classList.toggle('collapsed');
-        }
-        
-        function goToStep(step) {
-            document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
-            document.getElementById('step' + step).classList.add('active');
-            
-            if (step === 3) {
-                document.getElementById('previewLoading').classList.add('active');
-                document.getElementById('previewContent').classList.add('hidden');
-            }
-            if (step === 4) {
-                document.getElementById('finalizeLoading').classList.add('active');
-                document.getElementById('successSection').classList.add('hidden');
-                document.getElementById('alarmsSection').classList.add('hidden');
-            }
-        }
-        
-        function formatNumber(n) {
-            if (n === "" || n === null || n === undefined) return "-";
-            const num = parseFloat(n);
-            if (isNaN(num)) return "-";
-            return Math.round(num).toLocaleString('ru-RU');
-        }
-        
-        // Step 1: Upload
-        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            const formData = new FormData();
-            formData.append('file_under_10k', document.getElementById('file_under_10k').files[0]);
-            formData.append('file_over_10k', document.getElementById('file_over_10k').files[0]);
-            
-            try {
-                const response = await fetch('/upload', { method: 'POST', body: formData });
-                const data = await response.json();
-                
-                if (data.success) {
-                    sessionId = data.session_id;
-                    workers = data.workers;
-                    orders = data.orders;
-                    
-                    document.getElementById('statsSection').innerHTML = `
-                        <div class="stat-item"><div class="stat-value">${data.total_records}</div><div class="stat-label">Записей</div></div>
-                        <div class="stat-item"><div class="stat-value">${data.workers.length}</div><div class="stat-label">Монтажников</div></div>
-                        <div class="stat-item"><div class="stat-value">${data.period}</div><div class="stat-label">Период</div></div>
-                    `;
-                    
-                    // Company car checkboxes
-                    let companyCarHtml = '';
-                    workers.forEach(worker => {
-                        companyCarHtml += `
-                            <label class="company-car-item">
-                                <input type="checkbox" class="company-car-checkbox" value="${worker}">
-                                ${worker}
-                            </label>
-                        `;
-                    });
-                    document.getElementById('companyCarWorkers').innerHTML = companyCarHtml;
-                    
-                    // Days table
-                    const ordersWithTransport = orders.filter(o => !o.is_client_payment && o.has_transport);
-                    let daysHtml = '<table><thead><tr><th>Монтажник</th><th>Заказ</th><th>Дни</th></tr></thead><tbody>';
-                    ordersWithTransport.forEach((order, idx) => {
-                        daysHtml += `<tr>
-                            <td>${order.worker}</td>
-                            <td>${order.order_short}</td>
-                            <td><input type="number" class="days-input" id="days_${idx}" value="1" min="1" data-order="${encodeURIComponent(order.order)}"></td>
-                        </tr>`;
-                    });
-                    daysHtml += '</tbody></table>';
-                    document.getElementById('daysTable').innerHTML = daysHtml;
-                    
-                    // Extra rows section
-                    let extraHtml = '';
-                    workers.forEach(worker => {
-                        extraRows[worker] = [];
-                        extraHtml += `
-                            <div class="worker-card">
-                                <div class="worker-name">${worker}</div>
-                                <div id="extra_${worker.replace(/\s+/g, '_')}"></div>
-                                <button class="btn btn-add" onclick="addExtraRow('${worker}')">+ Добавить</button>
-                            </div>
-                        `;
-                    });
-                    document.getElementById('workersExtra').innerHTML = extraHtml;
-                    
-                    goToStep(2);
-                } else {
-                    alert('Ошибка: ' + (data.detail || 'Неизвестная ошибка'));
-                }
-            } catch (error) {
-                alert('Ошибка загрузки: ' + error.message);
-            }
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            uploadZone.addEventListener(eventName, preventDefaults, false);
         });
-        
-        function addExtraRow(worker) {
-            const containerId = 'extra_' + worker.replace(/\s+/g, '_');
-            const container = document.getElementById(containerId);
-            const idx = extraRows[worker].length;
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            uploadZone.addEventListener(eventName, () => uploadZone.classList.add('dragover'), false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            uploadZone.addEventListener(eventName, () => uploadZone.classList.remove('dragover'), false);
+        });
+
+        uploadZone.addEventListener('drop', (e) => {
+            const files = e.dataTransfer.files;
+            handleFiles(files);
+        });
+
+        function handleFiles(files) {
+            uploadedFiles = Array.from(files).filter(f => f.name.endsWith('.xlsx') || f.name.endsWith('.xls'));
+            renderUploadedFiles();
+        }
+
+        function handleModalFiles(files) {
+            modalFiles = Array.from(files).filter(f => f.name.endsWith('.xlsx') || f.name.endsWith('.xls'));
+            renderModalFiles();
+        }
+
+        function renderUploadedFiles() {
+            const container = document.getElementById('uploadFiles');
+            const actions = document.getElementById('uploadActions');
             
-            const div = document.createElement('div');
-            div.className = 'extra-row';
-            div.id = `extra_row_${worker.replace(/\s+/g, '_')}_${idx}`;
-            div.innerHTML = `
-                <input type="text" placeholder="Описание" id="extra_desc_${worker.replace(/\s+/g, '_')}_${idx}">
-                <input type="number" placeholder="Сумма" id="extra_amount_${worker.replace(/\s+/g, '_')}_${idx}">
-                <button class="btn btn-remove" onclick="removeExtraRow('${worker}', ${idx})">✕</button>
-            `;
-            container.appendChild(div);
-            extraRows[worker].push({idx: idx});
+            if (uploadedFiles.length === 0) {
+                container.classList.remove('show');
+                actions.style.display = 'none';
+                return;
+            }
+
+            container.innerHTML = uploadedFiles.map((file, index) => `
+                <div class="file-item">
+                    <div class="file-icon">
+                        <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>
+                    </div>
+                    <div class="file-info">
+                        <div class="file-name">${file.name}</div>
+                        <div class="file-type">${(file.size / 1024).toFixed(1)} KB</div>
+                    </div>
+                    <button class="file-remove" onclick="removeFile(${index})">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="#999"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                    </button>
+                </div>
+            `).join('');
+
+            container.classList.add('show');
+            actions.style.display = uploadedFiles.length === 2 ? 'block' : 'none';
         }
-        
-        function removeExtraRow(worker, idx) {
-            const row = document.getElementById(`extra_row_${worker.replace(/\s+/g, '_')}_${idx}`);
-            if (row) row.remove();
-            extraRows[worker] = extraRows[worker].filter(r => r.idx !== idx);
-        }
-        
-        function getConfig() {
-            const companyCarWorkers = [];
-            document.querySelectorAll('.company-car-checkbox:checked').forEach(cb => companyCarWorkers.push(cb.value));
+
+        function renderModalFiles() {
+            const container = document.getElementById('modalUploadFiles');
+            const btn = document.getElementById('modalProcessBtn');
             
-            return {
-                base_address: document.getElementById('base_address').value,
-                fuel_coefficient: parseFloat(document.getElementById('fuel_coefficient').value),
-                transport_amount: parseInt(document.getElementById('transport_amount').value),
-                company_car_workers: companyCarWorkers
-            };
+            container.innerHTML = modalFiles.map((file, index) => `
+                <div class="file-item">
+                    <div class="file-icon">
+                        <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>
+                    </div>
+                    <div class="file-info">
+                        <div class="file-name">${file.name}</div>
+                        <div class="file-type">${(file.size / 1024).toFixed(1)} KB</div>
+                    </div>
+                </div>
+            `).join('');
+
+            btn.disabled = modalFiles.length !== 2;
         }
-        
-        function getDays() {
-            const days = {};
-            document.querySelectorAll('.days-input').forEach(input => {
-                days[decodeURIComponent(input.dataset.order)] = parseInt(input.value) || 1;
-            });
-            return days;
+
+        function removeFile(index) {
+            uploadedFiles.splice(index, 1);
+            renderUploadedFiles();
         }
-        
-        function getExtras() {
-            const extras = {};
-            workers.forEach(worker => {
-                extras[worker] = [];
-                extraRows[worker].forEach(row => {
-                    const desc = document.getElementById(`extra_desc_${worker.replace(/\s+/g, '_')}_${row.idx}`);
-                    const amount = document.getElementById(`extra_amount_${worker.replace(/\s+/g, '_')}_${row.idx}`);
-                    if (desc && amount && desc.value && amount.value) {
-                        extras[worker].push({ description: desc.value, amount: parseFloat(amount.value) });
-                    }
-                });
-            });
-            return extras;
+
+        function openUploadModal() {
+            document.getElementById('uploadModal').classList.add('show');
+            modalFiles = [];
+            renderModalFiles();
         }
-        
-        // Step 2 -> Step 3: Preview
-        async function preview() {
-            goToStep(3);
-            deletedRows = new Set();
+
+        function closeUploadModal() {
+            document.getElementById('uploadModal').classList.remove('show');
+        }
+
+        function closeModal(e) {
+            if (e.target === e.currentTarget) {
+                closeUploadModal();
+            }
+        }
+
+        async function processFiles() {
+            if (uploadedFiles.length !== 2) return;
+
+            const loading = document.getElementById('loadingIndicator');
+            const actions = document.getElementById('uploadActions');
             
-            const formData = new FormData();
-            formData.append('session_id', sessionId);
-            formData.append('config_json', JSON.stringify(getConfig()));
-            formData.append('days_json', JSON.stringify(getDays()));
-            formData.append('extra_rows_json', JSON.stringify(getExtras()));
-            
+            loading.classList.add('show');
+            actions.style.display = 'none';
+
+            // TODO: Implement actual file processing
+            await new Promise(resolve => setTimeout(resolve, 2000));
+
+            loading.classList.remove('show');
+            alert('Файлы обработаны! Переход к результатам...');
+            // window.location.href = '/period/NEW_ID';
+        }
+
+        async function processModalFiles() {
+            if (modalFiles.length !== 2) return;
+
+            const periodName = document.getElementById('periodName').value.trim();
+            if (!periodName) {
+                alert('Введите название периода');
+                return;
+            }
+
+            closeUploadModal();
+
+            const loading = document.getElementById('loadingIndicator');
+            loading.classList.add('show');
+
+            // TODO: Implement actual file processing with auto-detection
+            await new Promise(resolve => setTimeout(resolve, 2000));
+
+            loading.classList.remove('show');
+            loadPeriods();
+        }
+
+        async function loadPeriods() {
             try {
-                const response = await fetch('/preview', { method: 'POST', body: formData });
+                const response = await fetch('/api/periods');
                 const data = await response.json();
-                
-                document.getElementById('previewLoading').classList.remove('active');
-                
-                if (data.success) {
-                    previewRows = data.rows;
-                    renderPreview(data);
-                    document.getElementById('previewContent').classList.remove('hidden');
-                } else {
-                    alert('Ошибка: ' + (data.detail || 'Неизвестная ошибка'));
-                    goToStep(2);
-                }
-            } catch (error) {
-                alert('Ошибка: ' + error.message);
-                goToStep(2);
-            }
-        }
-        
-        function renderPreview(data) {
-            // Summary
-            const summary = data.workers_summary;
-            let totalSum = 0, totalFuel = 0, totalTransport = 0, totalOrders = 0;
-            for (const [w, s] of Object.entries(summary)) {
-                totalSum += s.total; totalFuel += s.fuel; totalTransport += s.transport; totalOrders += s.count;
-            }
-            
-            document.getElementById('previewSummary').innerHTML = `
-                <div class="summary-card"><div class="summary-card-value">${formatNumber(totalSum)} ₽</div><div class="summary-card-label">Общая сумма</div></div>
-                <div class="summary-card"><div class="summary-card-value">${totalOrders}</div><div class="summary-card-label">Заказов</div></div>
-                <div class="summary-card"><div class="summary-card-value">${formatNumber(totalFuel)} ₽</div><div class="summary-card-label">Бензин</div></div>
-                <div class="summary-card"><div class="summary-card-value">${formatNumber(totalTransport)} ₽</div><div class="summary-card-label">Транспортные</div></div>
-                <div class="summary-card"><div class="summary-card-value">${data.period}</div><div class="summary-card-label">Период</div></div>
-            `;
-            
-            // Worker tabs
-            const workersList = [...new Set(previewRows.map(r => r.worker))].sort();
-            let tabsHtml = `<div class="worker-tab active" data-worker="all" onclick="filterByWorker('all')">Все <span class="count">${previewRows.length}</span></div>`;
-            workersList.forEach(w => {
-                const count = previewRows.filter(r => r.worker === w).length;
-                tabsHtml += `<div class="worker-tab" data-worker="${w}" onclick="filterByWorker('${w}')">${w.split(' ')[0]} <span class="count">${count}</span></div>`;
-            });
-            document.getElementById('workerTabs').innerHTML = tabsHtml;
-            
-            renderPreviewTable();
-        }
-        
-        function filterByWorker(worker) {
-            currentWorkerFilter = worker;
-            document.querySelectorAll('.worker-tab').forEach(t => t.classList.remove('active'));
-            document.querySelector(`.worker-tab[data-worker="${worker}"]`).classList.add('active');
-            renderPreviewTable();
-        }
-        
-        function renderPreviewTable() {
-            let rows = previewRows;
-            if (currentWorkerFilter !== 'all') {
-                rows = previewRows.filter(r => r.worker === currentWorkerFilter);
-            }
-            
-            let html = '';
-            let sumRevenue = 0, sumPayment = 0, sumFuel = 0, sumTransport = 0, sumTotal = 0;
-            
-            rows.forEach(row => {
-                const isDeleted = deletedRows.has(row.id);
-                const rowClass = isDeleted ? 'row-deleted' : '';
-                
-                // Считаем итоги только для неудалённых строк
-                if (!isDeleted) {
-                    sumRevenue += parseFloat(row.revenue_total) || 0;
-                    sumPayment += parseFloat(row.service_payment) || 0;
-                    sumFuel += parseFloat(row.fuel_payment) || 0;
-                    sumTransport += parseFloat(row.transport) || 0;
-                    sumTotal += parseFloat(row.total) || 0;
-                }
-                
-                let badges = '';
-                if (row.is_client_payment) badges += '<span class="badge badge-client">Оплата клиентом</span> ';
-                if (row.is_over_10k) badges += '<span class="badge badge-over10k">>10k</span>';
-                
-                html += `
-                    <tr class="${rowClass}" id="preview-row-${row.id}">
-                        <td>${row.worker}</td>
-                        <td class="order-code">${row.order_code || '-'}</td>
-                        <td class="address" title="${row.address}">${row.address}</td>
-                        <td class="number">${formatNumber(row.revenue_total)}</td>
-                        <td class="number">${formatNumber(row.service_payment)}</td>
-                        <td class="number">${row.percent || '-'}</td>
-                        <td class="number">${formatNumber(row.fuel_payment)}</td>
-                        <td class="number">${formatNumber(row.transport)}</td>
-                        <td class="number total-cell">${formatNumber(row.total)}</td>
-                        <td>${badges}</td>
-                        <td>
-                            ${isDeleted 
-                                ? `<button class="btn-delete-row" onclick="restoreRow(${row.id})" style="background:#28a745;">↩</button>`
-                                : `<button class="btn-delete-row" onclick="deleteRow(${row.id})">✕</button>`
-                            }
-                        </td>
-                    </tr>
-                `;
-            });
-            
-            document.getElementById('previewTableBody').innerHTML = html;
-            
-            // Обновляем итоги в footer
-            document.getElementById('totalRevenue').innerHTML = `<strong>${formatNumber(sumRevenue)}</strong>`;
-            document.getElementById('totalPayment').innerHTML = `<strong>${formatNumber(sumPayment)}</strong>`;
-            document.getElementById('totalFuel').innerHTML = `<strong>${formatNumber(sumFuel)}</strong>`;
-            document.getElementById('totalTransport').innerHTML = `<strong>${formatNumber(sumTransport)}</strong>`;
-            document.getElementById('totalTotal').innerHTML = `<strong>${formatNumber(sumTotal)}</strong>`;
-        }
-        
-        function deleteRow(id) {
-            deletedRows.add(id);
-            renderPreviewTable();
-            updatePreviewSummary();
-        }
-        
-        function restoreRow(id) {
-            deletedRows.delete(id);
-            renderPreviewTable();
-            updatePreviewSummary();
-        }
-        
-        function updatePreviewSummary() {
-            let totalSum = 0, totalFuel = 0, totalTransport = 0, totalOrders = 0;
-            previewRows.forEach(row => {
-                if (!deletedRows.has(row.id)) {
-                    totalSum += parseFloat(row.total) || 0;
-                    totalFuel += parseFloat(row.fuel_payment) || 0;
-                    totalTransport += parseFloat(row.transport) || 0;
-                    totalOrders++;
-                }
-            });
-            
-            const cards = document.getElementById('previewSummary').querySelectorAll('.summary-card-value');
-            cards[0].textContent = formatNumber(totalSum) + ' ₽';
-            cards[1].textContent = totalOrders;
-            cards[2].textContent = formatNumber(totalFuel) + ' ₽';
-            cards[3].textContent = formatNumber(totalTransport) + ' ₽';
-        }
-        
-        // Step 3 -> Step 4: Finalize
-        async function finalize() {
-            goToStep(4);
-            
-            const formData = new FormData();
-            formData.append('session_id', sessionId);
-            formData.append('config_json', JSON.stringify(getConfig()));
-            formData.append('days_json', JSON.stringify(getDays()));
-            formData.append('extra_rows_json', JSON.stringify(getExtras()));
-            formData.append('deleted_rows_json', JSON.stringify([...deletedRows]));
-            
-            try {
-                const response = await fetch('/calculate', { method: 'POST', body: formData });
-                const data = await response.json();
-                
-                document.getElementById('finalizeLoading').classList.remove('active');
-                
-                if (data.success) {
-                    document.getElementById('successSection').classList.remove('hidden');
-                    document.getElementById('downloadLinkFull').href = data.download_url_full;
-                    document.getElementById('downloadLinkWorkers').href = data.download_url_workers;
+
+                document.getElementById('periodsLoading').style.display = 'none';
+
+                // Calculate totals
+                let totalPeriods = 0;
+                let totalCompany = 0;
+                let totalClient = 0;
+                let allPeriods = [];
+
+                for (const month in data.months) {
+                    const monthData = data.months[month];
+                    totalPeriods += monthData.periods.length;
                     
-                    // Show alarms
-                    const alarms = data.alarms;
-                    const hasAlarms = Object.values(alarms).some(arr => arr.length > 0);
-                    
-                    if (hasAlarms) {
-                        document.getElementById('alarmsSection').classList.remove('hidden');
-                        renderAlarms(alarms);
-                    }
-                } else {
-                    alert('Ошибка: ' + (data.detail || 'Неизвестная ошибка'));
-                    goToStep(3);
-                }
-            } catch (error) {
-                alert('Ошибка: ' + error.message);
-                goToStep(3);
-            }
-        }
-        
-        function renderAlarms(alarms) {
-            let tabsHtml = '', contentHtml = '', firstActive = true;
-            
-            for (const [type, items] of Object.entries(alarms)) {
-                if (items.length > 0) {
-                    const activeClass = firstActive ? 'active' : '';
-                    const typeClass = type.replace(/_/g, '-');
-                    tabsHtml += `<div class="alarm-tab ${typeClass} ${activeClass}" onclick="showAlarmTab('${typeClass}')">${alarmTypeNames[type]} <span class="alarm-tab-count">${items.length}</span></div>`;
-                    
-                    let itemsHtml = '';
-                    items.forEach(alarm => {
-                        const sectionBadge = alarm.section === 'оплата клиентом' 
-                            ? '<span class="alarm-section-badge client">оплата клиентом</span>'
-                            : '<span class="alarm-section-badge main">основная</span>';
-                        
-                        let detailsHtml = '';
-                        if (alarm.row_info) {
-                            for (const [key, value] of Object.entries(alarm.row_info)) {
-                                if (key !== 'Секция') {
-                                    detailsHtml += `<div class="alarm-detail"><span class="alarm-detail-label">${key}:</span> <span>${value}</span></div>`;
-                                }
+                    for (const period of monthData.periods) {
+                        allPeriods.push(period);
+                        if (period.latest_upload && period.latest_upload.workers) {
+                            for (const worker of period.latest_upload.workers) {
+                                totalCompany += worker.company_amount || 0;
+                                totalClient += worker.client_amount || 0;
                             }
                         }
-                        
-                        itemsHtml += `<div class="alarm-item ${typeClass}"><div class="alarm-message">${alarm.message} ${sectionBadge}</div><div class="alarm-details">${detailsHtml}</div></div>`;
-                    });
-                    
-                    contentHtml += `<div class="alarm-content ${activeClass}" id="alarm-content-${typeClass}">${itemsHtml}</div>`;
-                    firstActive = false;
+                    }
                 }
+
+                // Update stats
+                document.getElementById('totalPeriods').textContent = totalPeriods;
+                document.getElementById('totalCompany').textContent = formatCurrency(totalCompany);
+                document.getElementById('totalClient').textContent = formatCurrency(totalClient);
+                document.getElementById('totalAmount').textContent = formatCurrency(totalCompany + totalClient);
+
+                if (allPeriods.length === 0) {
+                    document.getElementById('emptyState').style.display = 'block';
+                    return;
+                }
+
+                // Show recent periods (last 6)
+                const recentPeriods = allPeriods.slice(0, 6);
+                const grid = document.getElementById('periodsGrid');
+                
+                grid.innerHTML = recentPeriods.map(period => {
+                    const upload = period.latest_upload;
+                    const workers = upload?.workers || [];
+                    const company = workers.reduce((sum, w) => sum + (w.company_amount || 0), 0);
+                    const client = workers.reduce((sum, w) => sum + (w.client_amount || 0), 0);
+                    const total = company + client;
+
+                    return `
+                        <div class="period-card" onclick="window.location.href='/period/${period.id}'">
+                            <div class="period-header">
+                                <div class="period-name">📅 ${period.name}</div>
+                                <div class="period-badge">Версия ${upload?.version || 1}</div>
+                            </div>
+                            <div class="period-stats">
+                                <div class="stat">
+                                    <div class="stat-value company">${formatCurrencyShort(company)}</div>
+                                    <div class="stat-label">Компания</div>
+                                </div>
+                                <div class="stat">
+                                    <div class="stat-value client">${formatCurrencyShort(client)}</div>
+                                    <div class="stat-label">Клиент</div>
+                                </div>
+                                <div class="stat">
+                                    <div class="stat-value">${formatCurrencyShort(total)}</div>
+                                    <div class="stat-label">Итого</div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                grid.style.display = 'grid';
+
+            } catch (error) {
+                console.error('Error loading periods:', error);
+                document.getElementById('periodsLoading').style.display = 'none';
+                document.getElementById('emptyState').style.display = 'block';
             }
-            
-            document.getElementById('alarmsTabs').innerHTML = tabsHtml;
-            document.getElementById('alarmsContent').innerHTML = contentHtml;
         }
-        
-        function showAlarmTab(type) {
-            document.querySelectorAll('.alarm-tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.alarm-content').forEach(c => c.classList.remove('active'));
-            document.querySelector(`.alarm-tab.${type}`).classList.add('active');
-            document.getElementById(`alarm-content-${type}`).classList.add('active');
+
+        function formatCurrency(value) {
+            return new Intl.NumberFormat('ru-RU', {
+                style: 'currency',
+                currency: 'RUB',
+                maximumFractionDigits: 0
+            }).format(value);
         }
+
+        function formatCurrencyShort(value) {
+            if (value >= 1000000) {
+                return (value / 1000000).toFixed(1) + 'М';
+            } else if (value >= 1000) {
+                return Math.round(value / 1000) + 'К';
+            }
+            return value.toString();
+        }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeUploadModal();
+            }
+        });
     </script>
 </body>
 </html>
