@@ -1148,7 +1148,10 @@ async def index(request: Request):
 async def detect_file_type(file: UploadFile = File(...)):
     """
     Detect if uploaded Excel file contains orders under 10k or over 10k.
-    Reads the first value in the 'Стоимость' (cost) column to determine type.
+    Looks for the filter condition in "Отбор" row that specifies:
+    - "Меньше или равно" -> under 10k
+    - "Больше или равно" -> over 10k
+    Also extracts period name from "Период:" row.
     """
     try:
         content = await file.read()
@@ -1156,60 +1159,36 @@ async def detect_file_type(file: UploadFile = File(...)):
         # Parse Excel file
         df = pd.read_excel(BytesIO(content), header=None)
         
-        # Find header row (looking for "Стоимость" column)
-        header_row = None
-        cost_col = None
+        file_type = "unknown"
+        period_name = None
         
-        for idx, row in df.iterrows():
-            for col_idx, cell in enumerate(row):
-                cell_str = str(cell).strip().lower() if pd.notna(cell) else ""
-                if "стоимость" in cell_str:
-                    header_row = idx
-                    cost_col = col_idx
-                    break
-            if header_row is not None:
-                break
-        
-        if header_row is None or cost_col is None:
-            # Try alternative column names
-            for idx, row in df.iterrows():
-                for col_idx, cell in enumerate(row):
-                    cell_str = str(cell).strip().lower() if pd.notna(cell) else ""
-                    if any(x in cell_str for x in ["итого", "сумма", "всего"]):
-                        header_row = idx
-                        cost_col = col_idx
-                        break
-                if header_row is not None:
-                    break
-        
-        if header_row is None:
-            return JSONResponse({"success": True, "type": "unknown", "reason": "Не найдена колонка стоимости"})
-        
-        # Find first numeric value in the cost column after header
-        first_value = None
-        for idx in range(header_row + 1, min(header_row + 50, len(df))):
-            cell = df.iloc[idx, cost_col]
-            if pd.notna(cell):
-                try:
-                    val = float(str(cell).replace(" ", "").replace(",", "."))
-                    if val > 0:
-                        first_value = val
-                        break
-                except:
+        # Search through first 20 rows for filter info and period
+        for idx in range(min(20, len(df))):
+            for col_idx in range(min(10, len(df.columns))):
+                cell = df.iloc[idx, col_idx]
+                if pd.isna(cell):
                     continue
-        
-        if first_value is None:
-            return JSONResponse({"success": True, "type": "unknown", "reason": "Не найдено значение стоимости"})
-        
-        # Determine type based on value
-        # Files with orders under 10k typically have first values < 10000
-        # Files with orders over 10k typically have first values >= 10000
-        file_type = "under" if first_value < 10000 else "over"
+                cell_str = str(cell).strip()
+                
+                # Look for filter condition (Отбор row)
+                # The filter text contains "Выручка от услуг Меньше или равно" or "Больше или равно"
+                if "выручка от услуг" in cell_str.lower():
+                    if "меньше или равно" in cell_str.lower():
+                        file_type = "under"
+                    elif "больше или равно" in cell_str.lower():
+                        file_type = "over"
+                
+                # Look for period info
+                if "период:" in cell_str.lower():
+                    # Extract period like "16.11.2025 - 30.11.2025"
+                    match = re.search(r'(\d{2}\.\d{2}\.\d{4})\s*-\s*(\d{2}\.\d{2}\.\d{4})', cell_str)
+                    if match:
+                        period_name = f"{match.group(1)} - {match.group(2)}"
         
         return JSONResponse({
             "success": True, 
             "type": file_type,
-            "first_value": first_value,
+            "period": period_name,
             "filename": file.filename
         })
         
