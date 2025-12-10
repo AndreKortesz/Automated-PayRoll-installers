@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>История расчётов | Mos-GSM</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto+Condensed:wght@300;400;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --yellow: #F3C04D;
+            --yellow-light: #f8d77e;
+            --yellow-dark: #d4a63d;
+            --black: #1A1A1A;
+            --gray-dark: #4D4D4D;
+            --gray: #D9D9D9;
+            --gray-light: #F5F5F5;
+            --white: #FFFFFF;
+            --green: #2E7D32;
+            --green-light: #4CAF50;
+            --orange: #F57C00;
+            --red: #D32F2F;
+            --shadow-soft: 0 8px 32px rgba(26, 26, 26, 0.08);
+            --shadow-medium: 0 12px 48px rgba(26, 26, 26, 0.12);
+            --radius-sm: 12px;
+            --radius-md: 20px;
+            --radius-lg: 28px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background: var(--gray-light);
+            color: var(--black);
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            background: var(--white);
+            padding: 16px 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: var(--shadow-soft);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+        }
+
+        .logo-icon {
+            display: flex;
+            align-items: flex-end;
+            gap: 3px;
+            height: 32px;
+        }
+
+        .logo-bar {
+            width: 6px;
+            background: var(--yellow);
+            border-radius: 3px;
+        }
+
+        .logo-bar:nth-child(1) { height: 8px; }
+        .logo-bar:nth-child(2) { height: 14px; }
+        .logo-bar:nth-child(3) { height: 20px; }
+        .logo-bar:nth-child(4) { height: 26px; }
+        .logo-bar:nth-child(5) { height: 32px; }
+
+        .logo-text {
+            font-family: 'Roboto', sans-serif;
+            font-weight: 700;
+            font-size: 24px;
+            color: var(--black);
+        }
+
+        .nav {
+            display: flex;
+            gap: 8px;
+        }
+
+        .nav-link {
+            font-family: 'Roboto Condensed', sans-serif;
+            font-weight: 500;
+            font-size: 15px;
+            color: var(--gray-dark);
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: var(--radius-sm);
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .nav-link:hover { background: var(--gray-light); color: var(--black); }
+        .nav-link.active { background: var(--yellow); color: var(--black); }
+
+        /* Main */
+        .main {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 40px 32px;
+        }
+
+        /* Page Header */
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 40px;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .page-title {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 48px;
+            color: var(--black);
+        }
+
+        .page-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        /* Buttons */
+        .btn {
+            font-family: 'Roboto Condensed', sans-serif;
+            font-weight: 700;
+            font-size: 15px;
+            padding: 14px 28px;
+            border-radius: var(--radius-sm);
+            border: none;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--yellow) 0%, var(--yellow-dark) 100%);
+            color: var(--black);
+            box-shadow: 0 8px 24px rgba(243, 192, 77, 0.4);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 32px rgba(243, 192, 77, 0.5);
+        }
+
+        .btn-secondary {
+            background: var(--white);
+            color: var(--black);
+            border: 2px solid var(--gray);
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--yellow);
+            background: rgba(243, 192, 77, 0.1);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #4CAF50 0%, #388E3C 100%);
+            color: var(--white);
+        }
+
+        .btn-sm {
+            padding: 10px 18px;
+            font-size: 13px;
+        }
+
+        /* Stats Bar */
+        .stats-bar {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 24px;
+            margin-bottom: 40px;
+        }
+
+        .stats-card {
+            background: var(--white);
+            border-radius: var(--radius-md);
+            padding: 24px;
+            box-shadow: var(--shadow-soft);
+            text-align: center;
+        }
+
+        .stats-value {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 36px;
+            color: var(--black);
+            line-height: 1;
+        }
+
+        .stats-value.green { color: var(--green); }
+        .stats-value.orange { color: var(--orange); }
+
+        .stats-label {
+            font-size: 13px;
+            color: var(--gray-dark);
+            margin-top: 8px;
+            text-transform: uppercase;
+        }
+
+        /* Month Card */
+        .month-card {
+            background: var(--white);
+            border-radius: var(--radius-lg);
+            margin-bottom: 24px;
+            box-shadow: var(--shadow-soft);
+            overflow: hidden;
+        }
+
+        .month-header {
+            background: linear-gradient(135deg, var(--yellow) 0%, var(--yellow-dark) 100%);
+            padding: 20px 28px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        .month-title {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 28px;
+            color: var(--black);
+        }
+
+        .month-badge {
+            background: var(--black);
+            color: var(--white);
+            font-family: 'Roboto Condensed', sans-serif;
+            font-weight: 700;
+            font-size: 14px;
+            padding: 8px 16px;
+            border-radius: 20px;
+        }
+
+        .month-content {
+            padding: 24px;
+        }
+
+        /* Period Item */
+        .period-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 24px;
+            background: var(--gray-light);
+            border-radius: var(--radius-md);
+            margin-bottom: 12px;
+            transition: all 0.2s ease;
+        }
+
+        .period-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .period-item:hover {
+            transform: translateX(4px);
+            box-shadow: var(--shadow-soft);
+        }
+
+        .period-info {
+            flex: 1;
+        }
+
+        .period-name {
+            font-family: 'Roboto Condensed', sans-serif;
+            font-weight: 700;
+            font-size: 18px;
+            color: var(--black);
+            margin-bottom: 4px;
+        }
+
+        .period-meta {
+            font-size: 13px;
+            color: var(--gray-dark);
+        }
+
+        .period-stats {
+            display: flex;
+            gap: 24px;
+            margin-right: 24px;
+        }
+
+        .period-stat {
+            text-align: center;
+        }
+
+        .period-stat-value {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 22px;
+            line-height: 1;
+        }
+
+        .period-stat-value.green { color: var(--green); }
+        .period-stat-value.orange { color: var(--orange); }
+
+        .period-stat-label {
+            font-size: 10px;
+            color: var(--gray-dark);
+            text-transform: uppercase;
+            margin-top: 2px;
+        }
+
+        .period-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .icon-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+
+        .icon-btn.download {
+            background: linear-gradient(135deg, #4CAF50 0%, #388E3C 100%);
+        }
+
+        .icon-btn.download:hover {
+            transform: scale(1.1);
+        }
+
+        .icon-btn.download svg {
+            width: 20px;
+            height: 20px;
+            fill: white;
+        }
+
+        .icon-btn.workers {
+            background: var(--gray);
+        }
+
+        .icon-btn.workers:hover {
+            background: var(--gray-dark);
+        }
+
+        .icon-btn.workers svg {
+            width: 20px;
+            height: 20px;
+            fill: white;
+        }
+
+        .period-link {
+            font-family: 'Roboto Condensed', sans-serif;
+            font-weight: 700;
+            font-size: 14px;
+            color: var(--yellow-dark);
+            text-decoration: none;
+            padding: 10px 16px;
+            border-radius: var(--radius-sm);
+            transition: all 0.2s;
+            text-transform: uppercase;
+            background: rgba(243, 192, 77, 0.1);
+        }
+
+        .period-link:hover {
+            background: var(--yellow);
+            color: var(--black);
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 80px 40px;
+            background: var(--white);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-soft);
+        }
+
+        .empty-icon {
+            width: 120px;
+            height: 120px;
+            margin: 0 auto 24px;
+            background: linear-gradient(135deg, var(--gray-light) 0%, var(--gray) 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .empty-icon svg {
+            width: 48px;
+            height: 48px;
+            fill: var(--gray-dark);
+        }
+
+        .empty-title {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 32px;
+            color: var(--black);
+            margin-bottom: 12px;
+        }
+
+        .empty-text {
+            font-size: 16px;
+            color: var(--gray-dark);
+            margin-bottom: 32px;
+        }
+
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 60px;
+        }
+
+        .spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid var(--gray);
+            border-top-color: var(--yellow);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .stats-bar { grid-template-columns: repeat(2, 1fr); }
+            .period-stats { display: none; }
+        }
+
+        @media (max-width: 768px) {
+            .header { padding: 12px 16px; }
+            .main { padding: 24px 16px; }
+            .page-title { font-size: 36px; }
+            .stats-bar { grid-template-columns: 1fr 1fr; }
+            .nav { display: none; }
+            .period-item { flex-direction: column; align-items: flex-start; gap: 16px; }
+            .period-actions { width: 100%; justify-content: flex-end; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <a href="/" class="logo">
+            <div class="logo-icon">
+                <div class="logo-bar"></div>
+                <div class="logo-bar"></div>
+                <div class="logo-bar"></div>
+                <div class="logo-bar"></div>
+                <div class="logo-bar"></div>
+            </div>
+            <span class="logo-text">Mos-GSM</span>
+        </a>
+        <nav class="nav">
+            <a href="/" class="nav-link">Главная</a>
+            <a href="/history" class="nav-link active">История</a>
+            <a href="/comparison" class="nav-link">Сравнение</a>
+        </nav>
+    </header>
+
+    <!-- Main -->
+    <main class="main">
+        <!-- Page Header -->
+        <div class="page-header">
+            <h1 class="page-title">История расчётов</h1>
+            <div class="page-actions">
+                <a href="/comparison" class="btn btn-secondary">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/></svg>
+                    Сравнение
+                </a>
+                <a href="/" class="btn btn-primary">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                    Новый расчёт
+                </a>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="stats-bar" id="statsBar">
+            <div class="stats-card">
+                <div class="stats-value" id="statMonths">-</div>
+                <div class="stats-label">Месяцев</div>
+            </div>
+            <div class="stats-card">
+                <div class="stats-value" id="statPeriods">-</div>
+                <div class="stats-label">Периодов</div>
+            </div>
+            <div class="stats-card">
+                <div class="stats-value green" id="statCompany">-</div>
+                <div class="stats-label">Компания</div>
+            </div>
+            <div class="stats-card">
+                <div class="stats-value orange" id="statClient">-</div>
+                <div class="stats-label">Клиенты</div>
+            </div>
+        </div>
+
+        <!-- Content -->
+        <div id="content">
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>Загрузка данных...</p>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const monthNames = {
+            '01': 'Январь', '02': 'Февраль', '03': 'Март', '04': 'Апрель',
+            '05': 'Май', '06': 'Июнь', '07': 'Июль', '08': 'Август',
+            '09': 'Сентябрь', '10': 'Октябрь', '11': 'Ноябрь', '12': 'Декабрь'
+        };
+
+        async function loadHistory() {
+            try {
+                const response = await fetch('/api/periods');
+                const data = await response.json();
+                
+                const content = document.getElementById('content');
+                document.getElementById('loading').style.display = 'none';
+
+                if (!data.success) {
+                    throw new Error(data.error || 'Failed to load');
+                }
+
+                const months = data.months || [];
+
+                if (months.length === 0) {
+                    content.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-icon">
+                                <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
+                            </div>
+                            <h3 class="empty-title">Пока нет данных</h3>
+                            <p class="empty-text">Загрузите файлы и выполните расчёт, чтобы история появилась здесь</p>
+                            <a href="/" class="btn btn-primary">Начать расчёт</a>
+                        </div>
+                    `;
+                    return;
+                }
+
+                // Calculate totals
+                let totalPeriods = 0;
+                let totalCompany = 0;
+                let totalClient = 0;
+
+                months.forEach(m => {
+                    totalPeriods += m.periods.length;
+                    m.periods.forEach(p => {
+                        totalCompany += p.company_amount || 0;
+                        totalClient += p.client_amount || 0;
+                    });
+                });
+
+                // Update stats
+                document.getElementById('statMonths').textContent = months.length;
+                document.getElementById('statPeriods').textContent = totalPeriods;
+                document.getElementById('statCompany').textContent = formatCurrency(totalCompany);
+                document.getElementById('statClient').textContent = formatCurrency(totalClient);
+
+                // Render months
+                let html = '';
+
+                months.forEach(month => {
+                    const [year, monthNum] = month.month.split('-');
+                    const monthName = monthNames[monthNum] || monthNum;
+
+                    html += `
+                        <div class="month-card">
+                            <div class="month-header">
+                                <span class="month-title">${monthName} ${year}</span>
+                                <span class="month-badge">${month.periods.length} период(ов)</span>
+                            </div>
+                            <div class="month-content">
+                    `;
+
+                    month.periods.forEach(period => {
+                        const createdDate = period.created_at ? new Date(period.created_at).toLocaleDateString('ru-RU') : '';
+                        const company = period.company_amount || 0;
+                        const client = period.client_amount || 0;
+                        const total = period.total_amount || (company + client);
+                        const uploadId = period.latest_upload_id;
+
+                        html += `
+                            <div class="period-item">
+                                <div class="period-info">
+                                    <div class="period-name">📅 ${period.name}</div>
+                                    <div class="period-meta">Создан: ${createdDate} • Итого: ${formatCurrency(total)}</div>
+                                </div>
+                                <div class="period-stats">
+                                    <div class="period-stat">
+                                        <div class="period-stat-value green">${formatCurrencyShort(company)}</div>
+                                        <div class="period-stat-label">Компания</div>
+                                    </div>
+                                    <div class="period-stat">
+                                        <div class="period-stat-value orange">${formatCurrencyShort(client)}</div>
+                                        <div class="period-stat-label">Клиент</div>
+                                    </div>
+                                </div>
+                                <div class="period-actions">
+                                    ${uploadId ? `
+                                        <a href="/api/period/${period.id}/download/full" class="icon-btn download" title="Полный архив">
+                                            <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                                        </a>
+                                        <a href="/api/period/${period.id}/download/workers" class="icon-btn workers" title="Для монтажников">
+                                            <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                                        </a>
+                                    ` : ''}
+                                    <a href="/period/${period.id}" class="period-link">Подробнее →</a>
+                                </div>
+                            </div>
+                        `;
+                    });
+
+                    html += `
+                            </div>
+                        </div>
+                    `;
+                });
+
+                content.innerHTML = html;
+
+            } catch (error) {
+                document.getElementById('content').innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">
+                            <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+                        </div>
+                        <h3 class="empty-title">Ошибка загрузки</h3>
+                        <p class="empty-text">${error.message}</p>
+                        <button class="btn btn-primary" onclick="loadHistory()">Попробовать снова</button>
+                    </div>
+                `;
+            }
+        }
+
+        function formatCurrency(value) {
+            if (value >= 1000000) {
+                return (value / 1000000).toFixed(1) + ' млн ₽';
+            }
+            return Math.round(value).toLocaleString('ru-RU') + ' ₽';
+        }
+
+        function formatCurrencyShort(value) {
+            if (value >= 1000000) {
+                return (value / 1000000).toFixed(1) + 'М';
+            } else if (value >= 1000) {
+                return Math.round(value / 1000) + 'К';
+            }
+            return Math.round(value).toString();
+        }
+
+        // Reload on focus
+        window.addEventListener('focus', loadHistory);
+        window.addEventListener('pageshow', (e) => { if (e.persisted) loadHistory(); });
+
+        loadHistory();
+    </script>
+</body>
+</html>
