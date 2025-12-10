@@ -1144,6 +1144,83 @@ async def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request, "config": DEFAULT_CONFIG})
 
 
+@app.post("/api/detect-file-type")
+async def detect_file_type(file: UploadFile = File(...)):
+    """
+    Detect if uploaded Excel file contains orders under 10k or over 10k.
+    Reads the first value in the 'Стоимость' (cost) column to determine type.
+    """
+    try:
+        content = await file.read()
+        
+        # Parse Excel file
+        df = pd.read_excel(BytesIO(content), header=None)
+        
+        # Find header row (looking for "Стоимость" column)
+        header_row = None
+        cost_col = None
+        
+        for idx, row in df.iterrows():
+            for col_idx, cell in enumerate(row):
+                cell_str = str(cell).strip().lower() if pd.notna(cell) else ""
+                if "стоимость" in cell_str:
+                    header_row = idx
+                    cost_col = col_idx
+                    break
+            if header_row is not None:
+                break
+        
+        if header_row is None or cost_col is None:
+            # Try alternative column names
+            for idx, row in df.iterrows():
+                for col_idx, cell in enumerate(row):
+                    cell_str = str(cell).strip().lower() if pd.notna(cell) else ""
+                    if any(x in cell_str for x in ["итого", "сумма", "всего"]):
+                        header_row = idx
+                        cost_col = col_idx
+                        break
+                if header_row is not None:
+                    break
+        
+        if header_row is None:
+            return JSONResponse({"success": True, "type": "unknown", "reason": "Не найдена колонка стоимости"})
+        
+        # Find first numeric value in the cost column after header
+        first_value = None
+        for idx in range(header_row + 1, min(header_row + 50, len(df))):
+            cell = df.iloc[idx, cost_col]
+            if pd.notna(cell):
+                try:
+                    val = float(str(cell).replace(" ", "").replace(",", "."))
+                    if val > 0:
+                        first_value = val
+                        break
+                except:
+                    continue
+        
+        if first_value is None:
+            return JSONResponse({"success": True, "type": "unknown", "reason": "Не найдено значение стоимости"})
+        
+        # Determine type based on value
+        # Files with orders under 10k typically have first values < 10000
+        # Files with orders over 10k typically have first values >= 10000
+        file_type = "under" if first_value < 10000 else "over"
+        
+        return JSONResponse({
+            "success": True, 
+            "type": file_type,
+            "first_value": first_value,
+            "filename": file.filename
+        })
+        
+    except Exception as e:
+        return JSONResponse({
+            "success": True,
+            "type": "unknown",
+            "error": str(e)
+        })
+
+
 @app.post("/upload")
 async def upload_files(
     request: Request,
