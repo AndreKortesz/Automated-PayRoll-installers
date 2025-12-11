@@ -266,20 +266,41 @@ async def geocode_address(address: str, api_key: str) -> tuple:
 
 
 async def get_distance_osrm(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Get driving distance in km using OSRM (free)"""
+    """Get driving distance in km using OSRM (free), with fallback to straight-line distance"""
     try:
         async with httpx.AsyncClient() as client:
             url = f"http://router.project-osrm.org/route/v1/driving/{lon1},{lat1};{lon2},{lat2}"
             params = {"overview": "false"}
             response = await client.get(url, params=params, timeout=10)
             data = response.json()
-            
+
             if data.get("code") == "Ok" and data.get("routes"):
                 distance_meters = data["routes"][0]["distance"]
                 return distance_meters / 1000
+            else:
+                print(f"  ⚠️ OSRM error: {data.get('code', 'unknown')} - {data.get('message', '')}")
+    except httpx.TimeoutException:
+        print(f"  ⚠️ OSRM timeout - using straight-line distance")
     except Exception as e:
-        pass
-    return 0
+        print(f"  ⚠️ OSRM error: {type(e).__name__}: {e}")
+
+    # Fallback: calculate straight-line distance using Haversine formula
+    # and multiply by 1.4 to approximate road distance
+    import math
+    R = 6371  # Earth's radius in km
+    lat1_rad = math.radians(lat1)
+    lat2_rad = math.radians(lat2)
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+
+    a = math.sin(dlat/2)**2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(dlon/2)**2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+    straight_line_km = R * c
+
+    # Road distance is typically 1.3-1.5x straight line distance
+    road_distance_km = straight_line_km * 1.4
+    print(f"  📏 Fallback: straight-line {straight_line_km:.1f}km × 1.4 = {road_distance_km:.1f}km")
+    return road_distance_km
 
 
 def is_moscow_region(address: str) -> bool:
