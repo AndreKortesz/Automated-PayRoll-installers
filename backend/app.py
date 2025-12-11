@@ -1426,6 +1426,18 @@ async def upload_files(
         except Exception as e:
             print(f"⚠️ Changes comparison error (non-critical): {e}")
         
+        # Store changes_summary in session for review page
+        session_data[session_id]["changes_summary"] = changes_summary
+        
+        # Check if there are changes to review
+        has_changes = (
+            changes_summary.get("has_previous", False) and (
+                len(changes_summary.get("added", [])) > 0 or
+                len(changes_summary.get("deleted", [])) > 0 or
+                len(changes_summary.get("modified", [])) > 0
+            )
+        )
+        
         return JSONResponse({
             "success": True,
             "session_id": session_id,
@@ -1433,11 +1445,395 @@ async def upload_files(
             "workers": workers,
             "orders": orders,
             "total_records": len(combined),
-            "changes": changes_summary
+            "changes": changes_summary,
+            "has_changes": has_changes,
+            "redirect_to_review": has_changes  # Flag for frontend
         })
         
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# ===== REVIEW CHANGES PAGE =====
+@app.get("/review")
+async def review_page(request: Request):
+    """Render the review changes page"""
+    return templates.TemplateResponse("review.html", {"request": request})
+
+
+@app.get("/api/review/{session_id}")
+async def get_review_data(session_id: str):
+    """Get changes data for review page"""
+    try:
+        if session_id not in session_data:
+            return JSONResponse({"success": False, "error": "Сессия истекла"})
+        
+        session = session_data[session_id]
+        changes = session.get("changes_summary", {})
+        
+        return JSONResponse({
+            "success": True,
+            "session_id": session_id,
+            "period": session.get("period", ""),
+            "previous_version": changes.get("previous_version", 1),
+            "changes": {
+                "added": changes.get("added", []),
+                "deleted": changes.get("deleted", []),
+                "modified": changes.get("modified", [])
+            }
+        })
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)})
+
+
+@app.post("/api/apply-review")
+async def apply_review_changes(request: Request):
+    """Apply selected changes and proceed with calculation"""
+    try:
+        data = await request.json()
+        session_id = data.get("session_id")
+        selections = data.get("selections", {})
+        
+        if session_id not in session_data:
+            return JSONResponse({"success": False, "error": "Сессия истекла"})
+        
+        session = session_data[session_id]
+        combined_records = session.get("combined", [])
+        changes = session.get("changes_summary", {})
+        
+        # Convert combined back to list of dicts for modification
+        modified_records = list(combined_records)
+        
+        # Process deleted items that should be restored
+        deleted_to_restore = selections.get("deleted", [])
+        if deleted_to_restore and changes.get("has_previous"):
+            # We need to fetch the old orders from database
+            try:
+                from database import get_orders_by_upload
+                period_id = await get_or_create_period(session["period"])
+                period_details = await get_period_details(period_id)
+                
+                if period_details and period_details.get("uploads"):
+                    latest_upload_id = period_details["uploads"][0]["id"]
+                    old_orders = await get_orders_by_upload(latest_upload_id)
+                    
+                    for old_order in old_orders:
+                        key = old_order.get("order_code", "") + "_" + old_order.get("worker", "")
+                        if key in deleted_to_restore:
+                            # Add this order back to combined records
+                            restored_record = {
+                                "worker": old_order.get("worker", ""),
+                                "order": old_order.get("order_full", old_order.get("order_code", "")),
+                                "revenue_total": old_order.get("revenue_total", 0),
+                                "revenue_services": old_order.get("revenue_services", 0),
+                                "diagnostic": old_order.get("diagnostic", 0),
+                                "diagnostic_payment": old_order.get("diagnostic_payment", 0),
+                                "specialist_fee": old_order.get("specialist_fee", 0),
+                                "additional_expenses": old_order.get("additional_expenses", 0),
+                                "service_payment": old_order.get("service_payment", 0),
+                                "percent": old_order.get("percent", 0),
+                                "is_client_payment": old_order.get("is_client_payment", False),
+                                "is_restored": True  # Mark as restored
+                            }
+                            modified_records.append(restored_record)
+            except Exception as e:
+                print(f"Error restoring deleted orders: {e}")
+        
+        # Process modified items where user wants to keep old values
+        modified_to_revert = selections.get("modified", [])
+        if modified_to_revert and changes.get("has_previous"):
+            try:
+                from database import get_orders_by_upload
+                period_id = await get_or_create_period(session["period"])
+                period_details = await get_period_details(period_id)
+                
+                if period_details and period_details.get("uploads"):
+                    latest_upload_id = period_details["uploads"][0]["id"]
+                    old_orders = await get_orders_by_upload(latest_upload_id)
+                    old_orders_map = {}
+                    for o in old_orders:
+                        old_orders_map[o.get("order_code", "") + "_" + o.get("worker", "")] = o
+                    
+                    # Update records with old values
+                    for i, record in enumerate(modified_records):
+                        order_text = str(record.get("order", ""))
+                        order_code_match = re.search(r'(КАУТ|ИБУТ|ТДУТ)-\d+', order_text)
+                        order_code = order_code_match.group(0) if order_code_match else ""
+                        worker = str(record.get("worker", "")).replace(" (оплата клиентом)", "")
+                        key = order_code + "_" + worker
+                        
+                        if key in modified_to_revert and key in old_orders_map:
+                            old = old_orders_map[key]
+                            # Revert numeric fields to old values
+                            modified_records[i]["revenue_total"] = old.get("revenue_total", 0)
+                            modified_records[i]["revenue_services"] = old.get("revenue_services", 0)
+                            modified_records[i]["diagnostic"] = old.get("diagnostic", 0)
+                            modified_records[i]["specialist_fee"] = old.get("specialist_fee", 0)
+                            modified_records[i]["additional_expenses"] = old.get("additional_expenses", 0)
+                            modified_records[i]["service_payment"] = old.get("service_payment", 0)
+                            modified_records[i]["percent"] = old.get("percent", 0)
+                            modified_records[i]["is_reverted"] = True
+            except Exception as e:
+                print(f"Error reverting modified orders: {e}")
+        
+        # Process added items - remove those not selected
+        added_to_skip = set()
+        for item in changes.get("added", []):
+            key = item["order_code"] + "_" + item["worker"]
+            if key not in selections.get("added", []):
+                added_to_skip.add(key)
+        
+        if added_to_skip:
+            filtered_records = []
+            for record in modified_records:
+                order_text = str(record.get("order", ""))
+                order_code_match = re.search(r'(КАУТ|ИБУТ|ТДУТ)-\d+', order_text)
+                order_code = order_code_match.group(0) if order_code_match else ""
+                worker = str(record.get("worker", "")).replace(" (оплата клиентом)", "")
+                key = order_code + "_" + worker
+                
+                if key not in added_to_skip:
+                    filtered_records.append(record)
+            modified_records = filtered_records
+        
+        # Update session with modified records
+        session["combined"] = modified_records
+        session["review_applied"] = True
+        session_data[session_id] = session
+        
+        # Now proceed with calculation (similar to /calculate endpoint)
+        # Use default config and calculate
+        config = DEFAULT_CONFIG.copy()
+        name_map = session.get("name_map", {})
+        
+        calculated_data = []
+        for row in modified_records:
+            calc_row = await calculate_row(row, config, {})
+            calculated_data.append(calc_row)
+        
+        calculated_data.sort(key=lambda x: normalize_worker_name(x.get("worker", ""), name_map).replace(" (оплата клиентом)", ""))
+        
+        # Save to database
+        period = session["period"]
+        period_id = await get_or_create_period(period)
+        upload_id = await create_upload(period_id)
+        
+        worker_totals = {}
+        
+        for row in calculated_data:
+            worker = row.get("worker", "")
+            if not worker or pd.isna(worker):
+                continue
+            
+            is_worker_total = row.get("is_worker_total", False)
+            
+            if is_worker_total:
+                base_worker = worker.replace(" (оплата клиентом)", "")
+                is_client = "(оплата клиентом)" in worker
+                
+                if base_worker not in worker_totals:
+                    worker_totals[base_worker] = {"company": 0, "client": 0}
+                
+                total_val = float(row.get("total", 0) or 0)
+                if is_client:
+                    worker_totals[base_worker]["client"] = total_val
+                else:
+                    worker_totals[base_worker]["company"] = total_val
+            else:
+                # Save individual order
+                order_text = str(row.get("order", ""))
+                order_code = ""
+                address = ""
+                
+                match = re.search(r'(КАУТ|ИБУТ|ТДУТ)-\d+', order_text)
+                if match:
+                    order_code = match.group(0)
+                
+                if ", " in order_text:
+                    parts = order_text.split(", ", 1)
+                    if len(parts) > 1:
+                        address = parts[1].split("\n")[0][:100]
+                
+                order_id = await save_order(
+                    upload_id=upload_id,
+                    worker=worker.replace(" (оплата клиентом)", ""),
+                    order_code=order_code,
+                    order_full=order_text[:500],
+                    address=address,
+                    is_client_payment="(оплата клиентом)" in worker,
+                    revenue_total=float(row.get("revenue_total", 0) or 0),
+                    revenue_services=float(row.get("revenue_services", 0) or 0),
+                    diagnostic=float(row.get("diagnostic", 0) or 0),
+                    diagnostic_payment=float(row.get("diagnostic_payment", 0) or 0),
+                    specialist_fee=float(row.get("specialist_fee", 0) or 0),
+                    additional_expenses=float(row.get("additional_expenses", 0) or 0),
+                    service_payment=float(row.get("service_payment", 0) or 0),
+                    percent=float(str(row.get("percent", "0")).replace("%", "").replace(",", ".") or 0)
+                )
+                
+                # Save calculation for this order
+                await save_calculation(
+                    order_id=order_id,
+                    fuel_payment=float(row.get("fuel_payment", 0) or 0),
+                    transport=float(row.get("transport", 0) or 0),
+                    diagnostic_50=float(row.get("diagnostic_50", 0) or 0),
+                    total=float(row.get("total", 0) or 0)
+                )
+        
+        # Save worker totals
+        for worker, totals in worker_totals.items():
+            await save_worker_total(
+                upload_id=upload_id,
+                worker=worker,
+                company_amount=totals["company"],
+                client_amount=totals["client"]
+            )
+        
+        # Compare with previous upload and save changes
+        prev_upload_id = await get_previous_upload(period_id, upload_id)
+        if prev_upload_id:
+            changes_list = await compare_uploads(prev_upload_id, upload_id)
+            for change in changes_list:
+                if change["type"] == "added":
+                    await save_change(upload_id, change["order_code"], change["worker"], "added")
+                elif change["type"] == "deleted":
+                    await save_change(upload_id, change["order_code"], change["worker"], "deleted")
+                else:
+                    for field_change in change.get("changes", []):
+                        await save_change(
+                            upload_id, change["order_code"], change["worker"], 
+                            "modified", field_change["field"],
+                            str(field_change["old"]), str(field_change["new"])
+                        )
+        
+        # Cleanup session
+        del session_data[session_id]
+        
+        return JSONResponse({
+            "success": True,
+            "period_id": period_id,
+            "upload_id": upload_id
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JSONResponse({"success": False, "error": str(e)})
+
+
+@app.post("/api/process-first-upload")
+async def process_first_upload(request: Request):
+    """Process first upload for a period (no previous version to compare)"""
+    try:
+        data = await request.json()
+        session_id = data.get("session_id")
+        
+        if session_id not in session_data:
+            return JSONResponse({"success": False, "error": "Сессия истекла"})
+        
+        session = session_data[session_id]
+        combined_records = session.get("combined", [])
+        
+        # Use default config
+        config = DEFAULT_CONFIG.copy()
+        name_map = session.get("name_map", {})
+        
+        calculated_data = []
+        for row in combined_records:
+            calc_row = await calculate_row(row, config, {})
+            calculated_data.append(calc_row)
+        
+        calculated_data.sort(key=lambda x: normalize_worker_name(x.get("worker", ""), name_map).replace(" (оплата клиентом)", ""))
+        
+        # Save to database
+        period = session["period"]
+        period_id = await get_or_create_period(period)
+        upload_id = await create_upload(period_id)
+        
+        worker_totals = {}
+        
+        for row in calculated_data:
+            worker = row.get("worker", "")
+            if not worker or pd.isna(worker):
+                continue
+            
+            is_worker_total = row.get("is_worker_total", False)
+            
+            if is_worker_total:
+                base_worker = worker.replace(" (оплата клиентом)", "")
+                is_client = "(оплата клиентом)" in worker
+                
+                if base_worker not in worker_totals:
+                    worker_totals[base_worker] = {"company": 0, "client": 0}
+                
+                total_val = float(row.get("total", 0) or 0)
+                if is_client:
+                    worker_totals[base_worker]["client"] = total_val
+                else:
+                    worker_totals[base_worker]["company"] = total_val
+            else:
+                # Save individual order
+                order_text = str(row.get("order", ""))
+                order_code = ""
+                address = ""
+                
+                match = re.search(r'(КАУТ|ИБУТ|ТДУТ)-\d+', order_text)
+                if match:
+                    order_code = match.group(0)
+                
+                if ", " in order_text:
+                    parts = order_text.split(", ", 1)
+                    if len(parts) > 1:
+                        address = parts[1].split("\n")[0][:100]
+                
+                order_id = await save_order(
+                    upload_id=upload_id,
+                    worker=worker.replace(" (оплата клиентом)", ""),
+                    order_code=order_code,
+                    order_full=order_text[:500],
+                    address=address,
+                    is_client_payment="(оплата клиентом)" in worker,
+                    revenue_total=float(row.get("revenue_total", 0) or 0),
+                    revenue_services=float(row.get("revenue_services", 0) or 0),
+                    diagnostic=float(row.get("diagnostic", 0) or 0),
+                    diagnostic_payment=float(row.get("diagnostic_payment", 0) or 0),
+                    specialist_fee=float(row.get("specialist_fee", 0) or 0),
+                    additional_expenses=float(row.get("additional_expenses", 0) or 0),
+                    service_payment=float(row.get("service_payment", 0) or 0),
+                    percent=float(str(row.get("percent", "0")).replace("%", "").replace(",", ".") or 0)
+                )
+                
+                # Save calculation for this order
+                await save_calculation(
+                    order_id=order_id,
+                    fuel_payment=float(row.get("fuel_payment", 0) or 0),
+                    transport=float(row.get("transport", 0) or 0),
+                    diagnostic_50=float(row.get("diagnostic_50", 0) or 0),
+                    total=float(row.get("total", 0) or 0)
+                )
+        
+        # Save worker totals
+        for worker, totals in worker_totals.items():
+            await save_worker_total(
+                upload_id=upload_id,
+                worker=worker,
+                company_amount=totals["company"],
+                client_amount=totals["client"]
+            )
+        
+        # Cleanup session
+        del session_data[session_id]
+        
+        return JSONResponse({
+            "success": True,
+            "period_id": period_id,
+            "upload_id": upload_id
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JSONResponse({"success": False, "error": str(e)})
 
 
 @app.post("/preview")
