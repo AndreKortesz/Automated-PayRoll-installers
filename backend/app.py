@@ -1326,12 +1326,17 @@ async def upload_files(
                             changes_summary["previous_upload_id"] = latest_upload_id
                             
                             # Build maps for comparison
+                            # IMPORTANT: Normalize worker names from DB using current name_map
+                            # to ensure consistent keys between old and new data
                             old_map = {}
                             for o in old_orders:
                                 # Skip extra rows for normal comparison
                                 if o.get("is_extra_row", False):
                                     continue
-                                key = (o.get("order_code", ""), o.get("worker", ""))
+                                # Normalize worker name from DB to match new file names
+                                worker_from_db = o.get("worker", "")
+                                worker_normalized = normalize_worker_name(worker_from_db, name_map).replace(" (оплата клиентом)", "")
+                                key = (o.get("order_code", ""), worker_normalized)
                                 old_map[key] = o
                             
                             print(f"📊 Comparison: {len(old_map)} orders in DB")
@@ -1350,7 +1355,8 @@ async def upload_files(
                                 if not order_code:
                                     continue
                                     
-                                worker = normalize_worker_name(str(row.get("worker", ""))).replace(" (оплата клиентом)", "")
+                                # IMPORTANT: Use name_map for consistent normalization with old_map
+                                worker = normalize_worker_name(str(row.get("worker", "")), name_map).replace(" (оплата клиентом)", "")
                                 
                                 # Extract address from order text
                                 address = ""
@@ -1641,6 +1647,7 @@ async def apply_review_changes(request: Request):
         session = session_data[session_id]
         combined_records = session.get("combined", [])
         changes = session.get("changes_summary", {})
+        name_map = session.get("name_map", {})  # Get name_map for consistent normalization
         
         # Convert combined back to list of dicts for modification
         modified_records = list(combined_records)
@@ -1742,14 +1749,17 @@ async def apply_review_changes(request: Request):
                     if old_orders:
                         old_orders_map = {}
                         for o in old_orders:
-                            old_orders_map[o.get("order_code", "") + "_" + o.get("worker", "")] = o
-                        
+                            # Normalize worker name for consistent key matching
+                            worker_normalized = normalize_worker_name(o.get("worker", ""), name_map).replace(" (оплата клиентом)", "")
+                            old_orders_map[o.get("order_code", "") + "_" + worker_normalized] = o
+
                         # Update records with old values
                         for i, record in enumerate(modified_records):
                             order_text = str(record.get("order", ""))
                             order_code_match = re.search(r'(КАУТ|ИБУТ|ТДУТ)-\d+', order_text)
                             order_code = order_code_match.group(0) if order_code_match else ""
-                            worker = str(record.get("worker", "")).replace(" (оплата клиентом)", "")
+                            # Normalize worker name for consistent key matching
+                            worker = normalize_worker_name(str(record.get("worker", "")), name_map).replace(" (оплата клиентом)", "")
                             key = order_code + "_" + worker
                             
                             if key in modified_to_revert and key in old_orders_map:
@@ -1779,9 +1789,10 @@ async def apply_review_changes(request: Request):
                 order_text = str(record.get("order", ""))
                 order_code_match = re.search(r'(КАУТ|ИБУТ|ТДУТ)-\d+', order_text)
                 order_code = order_code_match.group(0) if order_code_match else ""
-                worker = str(record.get("worker", "")).replace(" (оплата клиентом)", "")
+                # Normalize worker name for consistent key matching
+                worker = normalize_worker_name(str(record.get("worker", "")), name_map).replace(" (оплата клиентом)", "")
                 key = order_code + "_" + worker
-                
+
                 if key not in added_to_skip:
                     filtered_records.append(record)
             modified_records = filtered_records
