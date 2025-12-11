@@ -1456,6 +1456,28 @@ async def upload_files(
                                         "details": details
                                     })
                             
+                            # Add extra rows from previous version to deleted
+                            # (they need to be restored if user wants to keep them)
+                            for extra_order in extra_rows_from_prev:
+                                calc = extra_order.get("calculation", {})
+                                calc_total = calc.get("total", 0) if calc else 0
+                                
+                                # Use order text as display name for extra rows
+                                order_text = extra_order.get("order", "") or extra_order.get("order_full", "")
+                                
+                                details = {}
+                                if calc_total:
+                                    details["Итого"] = f"{calc_total:,.0f}".replace(",", " ")
+                                
+                                changes_summary["deleted"].append({
+                                    "order_code": order_text[:50] if order_text else "EXTRA",  # Use order text as identifier
+                                    "worker": extra_order.get("worker", ""),
+                                    "address": "",
+                                    "details": details,
+                                    "is_extra_row": True
+                                })
+                                print(f"📋 Added extra row to deleted: {order_text[:30]}_{extra_order.get('worker', '')} total={calc_total}")
+                            
                             # Find modified - compare all fields
                             compare_fields = [
                                 ("revenue_total", "Выручка итого"),
