@@ -1658,6 +1658,9 @@ async def apply_review_changes(request: Request):
                         if key in deleted_to_restore:
                             # Get calculation data if available
                             calc = old_order.get("calculation", {})
+                            calc_total = calc.get("total", 0) if calc else 0
+                            
+                            print(f"📋 Restoring {key}: calc={calc}, total={calc_total}")
                             
                             # Add this order back to combined records
                             restored_record = {
@@ -1677,10 +1680,10 @@ async def apply_review_changes(request: Request):
                                 # Preserve calculation values for extra rows
                                 "fuel_payment": calc.get("fuel_payment", 0) if calc else 0,
                                 "transport": calc.get("transport", 0) if calc else 0,
-                                "total": calc.get("total", 0) if calc else 0,
+                                "total": calc_total,
                             }
                             modified_records.append(restored_record)
-                            print(f"✅ Restored: {key} (extra_row={is_extra})")
+                            print(f"✅ Restored: {key} (extra_row={is_extra}, total={calc_total})")
             except Exception as e:
                 print(f"Error restoring deleted orders: {e}")
                 import traceback
@@ -1794,7 +1797,9 @@ async def apply_review_changes(request: Request):
                     address = parts[1].split("\n")[0][:100]
             
             base_worker = worker.replace(" (оплата клиентом)", "")
-            is_client = "(оплата клиентом)" in worker
+            # Check is_client_payment from record first, then from worker name
+            is_client = row.get("is_client_payment", False) or "(оплата клиентом)" in worker
+            is_extra = row.get("is_extra_row", False)
             
             order_data = {
                 "worker": base_worker,
@@ -1802,6 +1807,7 @@ async def apply_review_changes(request: Request):
                 "order": order_text[:500],
                 "address": address,
                 "is_client_payment": is_client,
+                "is_extra_row": is_extra,
                 "revenue_total": float(row.get("revenue_total", 0) or 0),
                 "revenue_services": float(row.get("revenue_services", 0) or 0),
                 "diagnostic": float(row.get("diagnostic", 0) or 0),
@@ -1936,7 +1942,9 @@ async def process_first_upload(request: Request):
                     address = parts[1].split("\n")[0][:100]
             
             base_worker = worker.replace(" (оплата клиентом)", "")
-            is_client = "(оплата клиентом)" in worker
+            # Check is_client_payment from record first, then from worker name
+            is_client = row.get("is_client_payment", False) or "(оплата клиентом)" in worker
+            is_extra = row.get("is_extra_row", False)
             
             order_data = {
                 "worker": base_worker,
@@ -1944,6 +1952,7 @@ async def process_first_upload(request: Request):
                 "order": order_text[:500],
                 "address": address,
                 "is_client_payment": is_client,
+                "is_extra_row": is_extra,
                 "revenue_total": float(row.get("revenue_total", 0) or 0),
                 "revenue_services": float(row.get("revenue_services", 0) or 0),
                 "diagnostic": float(row.get("diagnostic", 0) or 0),
