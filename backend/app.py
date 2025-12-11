@@ -1708,6 +1708,7 @@ async def apply_review_changes(request: Request):
         period_id = await get_or_create_period(period)
         upload_id = await create_upload(period_id)
         
+        # First pass: save all orders and collect totals
         worker_totals = {}
         
         for row in calculated_data:
@@ -1717,58 +1718,62 @@ async def apply_review_changes(request: Request):
             
             is_worker_total = row.get("is_worker_total", False)
             
+            # Skip worker total rows - we'll calculate totals from orders
             if is_worker_total:
-                base_worker = worker.replace(" (оплата клиентом)", "")
-                is_client = "(оплата клиентом)" in worker
-                
-                if base_worker not in worker_totals:
-                    worker_totals[base_worker] = {"company": 0, "client": 0}
-                
-                total_val = float(row.get("total", 0) or 0)
-                if is_client:
-                    worker_totals[base_worker]["client"] = total_val
-                else:
-                    worker_totals[base_worker]["company"] = total_val
+                continue
+            
+            # Save individual order
+            order_text = str(row.get("order", ""))
+            order_code = ""
+            address = ""
+            
+            match = re.search(r'(КАУТ|ИБУТ|ТДУТ)-\d+', order_text)
+            if match:
+                order_code = match.group(0)
+            
+            if ", " in order_text:
+                parts = order_text.split(", ", 1)
+                if len(parts) > 1:
+                    address = parts[1].split("\n")[0][:100]
+            
+            base_worker = worker.replace(" (оплата клиентом)", "")
+            is_client = "(оплата клиентом)" in worker
+            
+            order_id = await save_order(
+                upload_id=upload_id,
+                worker=base_worker,
+                order_code=order_code,
+                order_full=order_text[:500],
+                address=address,
+                is_client_payment=is_client,
+                revenue_total=float(row.get("revenue_total", 0) or 0),
+                revenue_services=float(row.get("revenue_services", 0) or 0),
+                diagnostic=float(row.get("diagnostic", 0) or 0),
+                diagnostic_payment=float(row.get("diagnostic_payment", 0) or 0),
+                specialist_fee=float(row.get("specialist_fee", 0) or 0),
+                additional_expenses=float(row.get("additional_expenses", 0) or 0),
+                service_payment=float(row.get("service_payment", 0) or 0),
+                percent=float(str(row.get("percent", "0")).replace("%", "").replace(",", ".") or 0)
+            )
+            
+            # Save calculation for this order
+            total_val = float(row.get("total", 0) or 0)
+            await save_calculation(
+                order_id=order_id,
+                fuel_payment=float(row.get("fuel_payment", 0) or 0),
+                transport=float(row.get("transport", 0) or 0),
+                diagnostic_50=float(row.get("diagnostic_50", 0) or 0),
+                total=total_val
+            )
+            
+            # Accumulate totals per worker
+            if base_worker not in worker_totals:
+                worker_totals[base_worker] = {"company": 0, "client": 0}
+            
+            if is_client:
+                worker_totals[base_worker]["client"] += total_val
             else:
-                # Save individual order
-                order_text = str(row.get("order", ""))
-                order_code = ""
-                address = ""
-                
-                match = re.search(r'(КАУТ|ИБУТ|ТДУТ)-\d+', order_text)
-                if match:
-                    order_code = match.group(0)
-                
-                if ", " in order_text:
-                    parts = order_text.split(", ", 1)
-                    if len(parts) > 1:
-                        address = parts[1].split("\n")[0][:100]
-                
-                order_id = await save_order(
-                    upload_id=upload_id,
-                    worker=worker.replace(" (оплата клиентом)", ""),
-                    order_code=order_code,
-                    order_full=order_text[:500],
-                    address=address,
-                    is_client_payment="(оплата клиентом)" in worker,
-                    revenue_total=float(row.get("revenue_total", 0) or 0),
-                    revenue_services=float(row.get("revenue_services", 0) or 0),
-                    diagnostic=float(row.get("diagnostic", 0) or 0),
-                    diagnostic_payment=float(row.get("diagnostic_payment", 0) or 0),
-                    specialist_fee=float(row.get("specialist_fee", 0) or 0),
-                    additional_expenses=float(row.get("additional_expenses", 0) or 0),
-                    service_payment=float(row.get("service_payment", 0) or 0),
-                    percent=float(str(row.get("percent", "0")).replace("%", "").replace(",", ".") or 0)
-                )
-                
-                # Save calculation for this order
-                await save_calculation(
-                    order_id=order_id,
-                    fuel_payment=float(row.get("fuel_payment", 0) or 0),
-                    transport=float(row.get("transport", 0) or 0),
-                    diagnostic_50=float(row.get("diagnostic_50", 0) or 0),
-                    total=float(row.get("total", 0) or 0)
-                )
+                worker_totals[base_worker]["company"] += total_val
         
         # Save worker totals
         for worker, totals in worker_totals.items():
@@ -1840,6 +1845,7 @@ async def process_first_upload(request: Request):
         period_id = await get_or_create_period(period)
         upload_id = await create_upload(period_id)
         
+        # First pass: save all orders and collect totals
         worker_totals = {}
         
         for row in calculated_data:
@@ -1849,58 +1855,62 @@ async def process_first_upload(request: Request):
             
             is_worker_total = row.get("is_worker_total", False)
             
+            # Skip worker total rows - we'll calculate totals from orders
             if is_worker_total:
-                base_worker = worker.replace(" (оплата клиентом)", "")
-                is_client = "(оплата клиентом)" in worker
-                
-                if base_worker not in worker_totals:
-                    worker_totals[base_worker] = {"company": 0, "client": 0}
-                
-                total_val = float(row.get("total", 0) or 0)
-                if is_client:
-                    worker_totals[base_worker]["client"] = total_val
-                else:
-                    worker_totals[base_worker]["company"] = total_val
+                continue
+            
+            # Save individual order
+            order_text = str(row.get("order", ""))
+            order_code = ""
+            address = ""
+            
+            match = re.search(r'(КАУТ|ИБУТ|ТДУТ)-\d+', order_text)
+            if match:
+                order_code = match.group(0)
+            
+            if ", " in order_text:
+                parts = order_text.split(", ", 1)
+                if len(parts) > 1:
+                    address = parts[1].split("\n")[0][:100]
+            
+            base_worker = worker.replace(" (оплата клиентом)", "")
+            is_client = "(оплата клиентом)" in worker
+            
+            order_id = await save_order(
+                upload_id=upload_id,
+                worker=base_worker,
+                order_code=order_code,
+                order_full=order_text[:500],
+                address=address,
+                is_client_payment=is_client,
+                revenue_total=float(row.get("revenue_total", 0) or 0),
+                revenue_services=float(row.get("revenue_services", 0) or 0),
+                diagnostic=float(row.get("diagnostic", 0) or 0),
+                diagnostic_payment=float(row.get("diagnostic_payment", 0) or 0),
+                specialist_fee=float(row.get("specialist_fee", 0) or 0),
+                additional_expenses=float(row.get("additional_expenses", 0) or 0),
+                service_payment=float(row.get("service_payment", 0) or 0),
+                percent=float(str(row.get("percent", "0")).replace("%", "").replace(",", ".") or 0)
+            )
+            
+            # Save calculation for this order
+            total_val = float(row.get("total", 0) or 0)
+            await save_calculation(
+                order_id=order_id,
+                fuel_payment=float(row.get("fuel_payment", 0) or 0),
+                transport=float(row.get("transport", 0) or 0),
+                diagnostic_50=float(row.get("diagnostic_50", 0) or 0),
+                total=total_val
+            )
+            
+            # Accumulate totals per worker
+            if base_worker not in worker_totals:
+                worker_totals[base_worker] = {"company": 0, "client": 0}
+            
+            if is_client:
+                worker_totals[base_worker]["client"] += total_val
             else:
-                # Save individual order
-                order_text = str(row.get("order", ""))
-                order_code = ""
-                address = ""
-                
-                match = re.search(r'(КАУТ|ИБУТ|ТДУТ)-\d+', order_text)
-                if match:
-                    order_code = match.group(0)
-                
-                if ", " in order_text:
-                    parts = order_text.split(", ", 1)
-                    if len(parts) > 1:
-                        address = parts[1].split("\n")[0][:100]
-                
-                order_id = await save_order(
-                    upload_id=upload_id,
-                    worker=worker.replace(" (оплата клиентом)", ""),
-                    order_code=order_code,
-                    order_full=order_text[:500],
-                    address=address,
-                    is_client_payment="(оплата клиентом)" in worker,
-                    revenue_total=float(row.get("revenue_total", 0) or 0),
-                    revenue_services=float(row.get("revenue_services", 0) or 0),
-                    diagnostic=float(row.get("diagnostic", 0) or 0),
-                    diagnostic_payment=float(row.get("diagnostic_payment", 0) or 0),
-                    specialist_fee=float(row.get("specialist_fee", 0) or 0),
-                    additional_expenses=float(row.get("additional_expenses", 0) or 0),
-                    service_payment=float(row.get("service_payment", 0) or 0),
-                    percent=float(str(row.get("percent", "0")).replace("%", "").replace(",", ".") or 0)
-                )
-                
-                # Save calculation for this order
-                await save_calculation(
-                    order_id=order_id,
-                    fuel_payment=float(row.get("fuel_payment", 0) or 0),
-                    transport=float(row.get("transport", 0) or 0),
-                    diagnostic_50=float(row.get("diagnostic_50", 0) or 0),
-                    total=float(row.get("total", 0) or 0)
-                )
+                worker_totals[base_worker]["company"] += total_val
         
         # Save worker totals
         for worker, totals in worker_totals.items():
@@ -2380,6 +2390,8 @@ async def api_get_periods():
         for p in periods:
             period_details = await get_period_details(p["id"])
             total_amount = 0
+            company_amount = 0
+            client_amount = 0
             latest_upload_id = None
             
             if period_details and period_details.get("uploads"):
@@ -2389,11 +2401,16 @@ async def api_get_periods():
                 upload_details = await get_upload_details(latest_upload_id)
                 if upload_details:
                     worker_totals = upload_details.get("worker_totals", [])
-                    total_amount = sum(wt.get("total_amount", 0) for wt in worker_totals)
+                    for wt in worker_totals:
+                        company_amount += wt.get("company_amount", 0) or 0
+                        client_amount += wt.get("client_amount", 0) or 0
+                    total_amount = company_amount + client_amount
             
             enriched_periods.append({
                 **p,
                 "total_amount": total_amount,
+                "company_amount": company_amount,
+                "client_amount": client_amount,
                 "latest_upload_id": latest_upload_id
             })
         
@@ -3492,6 +3509,96 @@ async def recalculate_worker_totals(upload_id: int):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/recalculate-all-totals")
+async def recalculate_all_totals():
+    """Recalculate worker_totals for ALL uploads based on actual order calculations"""
+    try:
+        from sqlalchemy import text
+        
+        # Get all uploads
+        query = text("SELECT DISTINCT upload_id FROM orders")
+        uploads = await database.fetch_all(query)
+        
+        recalculated_uploads = []
+        
+        for upload_row in uploads:
+            upload_id = upload_row["upload_id"]
+            
+            # Get all orders with calculations for this upload
+            query = text("""
+                SELECT o.worker, o.is_client_payment, c.total
+                FROM orders o
+                JOIN calculations c ON c.order_id = o.id
+                WHERE o.upload_id = :upload_id
+            """).bindparams(upload_id=upload_id)
+            
+            order_calcs = await database.fetch_all(query)
+            
+            # Aggregate by worker
+            worker_sums = {}
+            for oc in order_calcs:
+                worker = oc["worker"]
+                if worker not in worker_sums:
+                    worker_sums[worker] = {"company": 0, "client": 0}
+                
+                total = oc["total"] or 0
+                if oc["is_client_payment"]:
+                    worker_sums[worker]["client"] += total
+                else:
+                    worker_sums[worker]["company"] += total
+            
+            # Update worker_totals
+            for worker, sums in worker_sums.items():
+                # Check if worker_total exists
+                check_query = text("""
+                    SELECT id FROM worker_totals WHERE upload_id = :upload_id AND worker = :worker
+                """).bindparams(upload_id=upload_id, worker=worker)
+                existing = await database.fetch_one(check_query)
+                
+                if existing:
+                    update_query = text("""
+                        UPDATE worker_totals 
+                        SET company_amount = :company, client_amount = :client, total_amount = :total
+                        WHERE upload_id = :upload_id AND worker = :worker
+                    """).bindparams(
+                        company=sums["company"],
+                        client=sums["client"],
+                        total=sums["company"] + sums["client"],
+                        upload_id=upload_id,
+                        worker=worker
+                    )
+                    await database.execute(update_query)
+                else:
+                    insert_query = text("""
+                        INSERT INTO worker_totals (upload_id, worker, company_amount, client_amount, total_amount)
+                        VALUES (:upload_id, :worker, :company, :client, :total)
+                    """).bindparams(
+                        upload_id=upload_id,
+                        worker=worker,
+                        company=sums["company"],
+                        client=sums["client"],
+                        total=sums["company"] + sums["client"]
+                    )
+                    await database.execute(insert_query)
+            
+            recalculated_uploads.append({
+                "upload_id": upload_id,
+                "workers_count": len(worker_sums)
+            })
+            print(f"✅ Recalculated upload {upload_id}: {len(worker_sums)} workers")
+        
+        return JSONResponse({
+            "success": True,
+            "recalculated_uploads": len(recalculated_uploads),
+            "details": recalculated_uploads
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JSONResponse({"success": False, "error": str(e)})
 
 
 if __name__ == "__main__":
