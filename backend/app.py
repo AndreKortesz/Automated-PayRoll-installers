@@ -3674,6 +3674,7 @@ async def recalculate_all_totals():
 @app.get("/api/delete-upload/{upload_id}")
 async def delete_upload(upload_id: int):
     """Delete an upload and all its related data (GET for browser access)"""
+    from sqlalchemy import text
     try:
         # Delete in correct order due to foreign keys
         await database.execute(text("DELETE FROM manual_edits WHERE upload_id = :id").bindparams(id=upload_id))
@@ -3695,6 +3696,7 @@ async def delete_upload(upload_id: int):
 @app.get("/api/list-uploads/{period_id}")
 async def list_uploads(period_id: int):
     """List all uploads for a period with their order counts"""
+    from sqlalchemy import text
     try:
         query = text("""
             SELECT u.id, u.version, u.created_at,
