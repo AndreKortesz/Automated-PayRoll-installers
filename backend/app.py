@@ -1471,6 +1471,15 @@ async def upload_files(
                             print(f"📊 Sample old_map keys: {list(old_map.keys())[:5]}")
                             print(f"📊 Sample new_map keys: {list(new_map.keys())[:5]}")
                             
+                            # Debug: compare a sample order
+                            for key in list(new_map.keys())[:3]:
+                                if key in old_map:
+                                    old_o = old_map[key]
+                                    new_o = new_map[key]
+                                    print(f"📊 Sample compare {key}:")
+                                    print(f"   old revenue_total={old_o.get('revenue_total')} ({type(old_o.get('revenue_total')).__name__})")
+                                    print(f"   new revenue_total={new_o.get('revenue_total')} ({type(new_o.get('revenue_total')).__name__})")
+                            
                             for key in new_map:
                                 if key[0] and key in old_map:  # Both exist
                                     old_order = old_map[key]
@@ -1637,53 +1646,65 @@ async def apply_review_changes(request: Request):
                 period_details = await get_period_details(period_id)
                 
                 if period_details and period_details.get("uploads"):
-                    latest_upload_id = period_details["uploads"][0]["id"]
-                    old_orders = await get_orders_by_upload(latest_upload_id)
+                    # Find latest upload with actual orders (skip empty uploads)
+                    latest_upload_id = None
+                    old_orders = []
+                    for upload in period_details["uploads"]:
+                        upload_id_check = upload["id"]
+                        orders_check = await get_orders_by_upload(upload_id_check)
+                        if orders_check and len(orders_check) > 0:
+                            latest_upload_id = upload_id_check
+                            old_orders = orders_check
+                            print(f"📋 Found previous version with {len(old_orders)} orders for restoration")
+                            break
                     
-                    # Get upload details for extra rows with calculations
-                    upload_details = await get_upload_details(latest_upload_id)
-                    
-                    for old_order in old_orders:
-                        order_code = old_order.get("order_code", "")
-                        order_full = old_order.get("order_full", "")
-                        worker = old_order.get("worker", "")
-                        is_extra = old_order.get("is_extra_row", False)
+                    if not latest_upload_id or not old_orders:
+                        print("⚠️ No previous version with orders found for restoration")
+                    else:
+                        # Get upload details for extra rows with calculations
+                        upload_details = await get_upload_details(latest_upload_id)
                         
-                        # For extra rows, use order_full as key if no order_code
-                        if is_extra and not order_code:
-                            key = (order_full[:50] if order_full else "EXTRA") + "_" + worker
-                        else:
-                            key = order_code + "_" + worker
-                        
-                        if key in deleted_to_restore:
-                            # Get calculation data if available
-                            calc = old_order.get("calculation", {})
-                            calc_total = calc.get("total", 0) if calc else 0
+                        for old_order in old_orders:
+                            order_code = old_order.get("order_code", "")
+                            order_full = old_order.get("order_full", "")
+                            worker = old_order.get("worker", "")
+                            is_extra = old_order.get("is_extra_row", False)
                             
-                            print(f"📋 Restoring {key}: calc={calc}, total={calc_total}")
+                            # For extra rows, use order_full as key if no order_code
+                            if is_extra and not order_code:
+                                key = (order_full[:50] if order_full else "EXTRA") + "_" + worker
+                            else:
+                                key = order_code + "_" + worker
                             
-                            # Add this order back to combined records
-                            restored_record = {
-                                "worker": worker,
-                                "order": order_full or order_code,
-                                "revenue_total": old_order.get("revenue_total", 0),
-                                "revenue_services": old_order.get("revenue_services", 0),
-                                "diagnostic": old_order.get("diagnostic", 0),
-                                "diagnostic_payment": old_order.get("diagnostic_payment", 0),
-                                "specialist_fee": old_order.get("specialist_fee", 0),
-                                "additional_expenses": old_order.get("additional_expenses", 0),
-                                "service_payment": old_order.get("service_payment", 0),
-                                "percent": old_order.get("percent", 0),
-                                "is_client_payment": old_order.get("is_client_payment", False),
-                                "is_restored": True,  # Mark as restored
-                                "is_extra_row": is_extra,
-                                # Preserve calculation values for extra rows
-                                "fuel_payment": calc.get("fuel_payment", 0) if calc else 0,
-                                "transport": calc.get("transport", 0) if calc else 0,
-                                "total": calc_total,
-                            }
-                            modified_records.append(restored_record)
-                            print(f"✅ Restored: {key} (extra_row={is_extra}, total={calc_total})")
+                            if key in deleted_to_restore:
+                                # Get calculation data if available
+                                calc = old_order.get("calculation", {})
+                                calc_total = calc.get("total", 0) if calc else 0
+                                
+                                print(f"📋 Restoring {key}: calc={calc}, total={calc_total}")
+                                
+                                # Add this order back to combined records
+                                restored_record = {
+                                    "worker": worker,
+                                    "order": order_full or order_code,
+                                    "revenue_total": old_order.get("revenue_total", 0),
+                                    "revenue_services": old_order.get("revenue_services", 0),
+                                    "diagnostic": old_order.get("diagnostic", 0),
+                                    "diagnostic_payment": old_order.get("diagnostic_payment", 0),
+                                    "specialist_fee": old_order.get("specialist_fee", 0),
+                                    "additional_expenses": old_order.get("additional_expenses", 0),
+                                    "service_payment": old_order.get("service_payment", 0),
+                                    "percent": old_order.get("percent", 0),
+                                    "is_client_payment": old_order.get("is_client_payment", False),
+                                    "is_restored": True,  # Mark as restored
+                                    "is_extra_row": is_extra,
+                                    # Preserve calculation values for extra rows
+                                    "fuel_payment": calc.get("fuel_payment", 0) if calc else 0,
+                                    "transport": calc.get("transport", 0) if calc else 0,
+                                    "total": calc_total,
+                                }
+                                modified_records.append(restored_record)
+                                print(f"✅ Restored: {key} (extra_row={is_extra}, total={calc_total})")
             except Exception as e:
                 print(f"Error restoring deleted orders: {e}")
                 import traceback
@@ -1698,31 +1719,41 @@ async def apply_review_changes(request: Request):
                 period_details = await get_period_details(period_id)
                 
                 if period_details and period_details.get("uploads"):
-                    latest_upload_id = period_details["uploads"][0]["id"]
-                    old_orders = await get_orders_by_upload(latest_upload_id)
-                    old_orders_map = {}
-                    for o in old_orders:
-                        old_orders_map[o.get("order_code", "") + "_" + o.get("worker", "")] = o
+                    # Find latest upload with actual orders
+                    latest_upload_id = None
+                    old_orders = []
+                    for upload in period_details["uploads"]:
+                        upload_id_check = upload["id"]
+                        orders_check = await get_orders_by_upload(upload_id_check)
+                        if orders_check and len(orders_check) > 0:
+                            latest_upload_id = upload_id_check
+                            old_orders = orders_check
+                            break
                     
-                    # Update records with old values
-                    for i, record in enumerate(modified_records):
-                        order_text = str(record.get("order", ""))
-                        order_code_match = re.search(r'(КАУТ|ИБУТ|ТДУТ)-\d+', order_text)
-                        order_code = order_code_match.group(0) if order_code_match else ""
-                        worker = str(record.get("worker", "")).replace(" (оплата клиентом)", "")
-                        key = order_code + "_" + worker
+                    if old_orders:
+                        old_orders_map = {}
+                        for o in old_orders:
+                            old_orders_map[o.get("order_code", "") + "_" + o.get("worker", "")] = o
                         
-                        if key in modified_to_revert and key in old_orders_map:
-                            old = old_orders_map[key]
-                            # Revert numeric fields to old values
-                            modified_records[i]["revenue_total"] = old.get("revenue_total", 0)
-                            modified_records[i]["revenue_services"] = old.get("revenue_services", 0)
-                            modified_records[i]["diagnostic"] = old.get("diagnostic", 0)
-                            modified_records[i]["specialist_fee"] = old.get("specialist_fee", 0)
-                            modified_records[i]["additional_expenses"] = old.get("additional_expenses", 0)
-                            modified_records[i]["service_payment"] = old.get("service_payment", 0)
-                            modified_records[i]["percent"] = old.get("percent", 0)
-                            modified_records[i]["is_reverted"] = True
+                        # Update records with old values
+                        for i, record in enumerate(modified_records):
+                            order_text = str(record.get("order", ""))
+                            order_code_match = re.search(r'(КАУТ|ИБУТ|ТДУТ)-\d+', order_text)
+                            order_code = order_code_match.group(0) if order_code_match else ""
+                            worker = str(record.get("worker", "")).replace(" (оплата клиентом)", "")
+                            key = order_code + "_" + worker
+                            
+                            if key in modified_to_revert and key in old_orders_map:
+                                old = old_orders_map[key]
+                                # Revert numeric fields to old values
+                                modified_records[i]["revenue_total"] = old.get("revenue_total", 0)
+                                modified_records[i]["revenue_services"] = old.get("revenue_services", 0)
+                                modified_records[i]["diagnostic"] = old.get("diagnostic", 0)
+                                modified_records[i]["specialist_fee"] = old.get("specialist_fee", 0)
+                                modified_records[i]["additional_expenses"] = old.get("additional_expenses", 0)
+                                modified_records[i]["service_payment"] = old.get("service_payment", 0)
+                                modified_records[i]["percent"] = old.get("percent", 0)
+                                modified_records[i]["is_reverted"] = True
             except Exception as e:
                 print(f"Error reverting modified orders: {e}")
         
