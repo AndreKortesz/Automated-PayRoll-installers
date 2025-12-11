@@ -1181,10 +1181,11 @@ async def detect_file_type(file: UploadFile = File(...)):
                 
                 # Look for period info
                 if "период:" in cell_str.lower():
-                    # Extract period like "16.11.2025 - 30.11.2025"
-                    match = re.search(r'(\d{2}\.\d{2}\.\d{4})\s*-\s*(\d{2}\.\d{2}\.\d{4})', cell_str)
+                    # Extract period like "16.11.2025 - 30.11.2025" and normalize to "16-30.11.25"
+                    match = re.search(r'(\d{2})\.(\d{2})\.(\d{4})\s*-\s*(\d{2})\.(\d{2})\.(\d{4})', cell_str)
                     if match:
-                        period_name = f"{match.group(1)} - {match.group(2)}"
+                        d1, m1, y1, d2, m2, y2 = match.groups()
+                        period_name = f"{d1}-{d2}.{m1}.{y2[2:]}"
         
         return JSONResponse({
             "success": True, 
