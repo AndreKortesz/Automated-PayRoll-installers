@@ -1281,30 +1281,32 @@ async def upload_files(
                 
                 if period_details and period_details.get("uploads"):
                     uploads = period_details["uploads"]
-                    
-                    # Find the latest upload with actual orders (skip empty uploads)
-                    latest_upload_id = None
-                    latest_upload_version = None
-                    latest_upload_date = None
-                    old_orders = []
-                    
-                    for upload in uploads:
-                        upload_id_check = upload["id"]
-                        orders_check = await get_orders_by_upload(upload_id_check)
-                        if orders_check and len(orders_check) > 0:
-                            latest_upload_id = upload_id_check
-                            latest_upload_version = upload["version"]
-                            latest_upload_date = str(upload.get("created_at", ""))
-                            old_orders = orders_check
-                            print(f"📊 Found previous version {latest_upload_version} with {len(old_orders)} orders")
-                            break
-                        else:
-                            print(f"⚠️ Skipping empty version {upload['version']}")
-                    
-                    if latest_upload_id and old_orders:
+                    if len(uploads) > 0:
+                        # Find latest upload with actual orders (skip empty uploads)
+                        latest_upload_id = None
+                        latest_upload_version = None
+                        latest_upload_date = None
+                        old_orders = []
+                        
+                        for upload in uploads:
+                            upload_id_check = upload["id"]
+                            orders_check = await get_orders_by_upload(upload_id_check)
+                            if orders_check and len(orders_check) > 0:
+                                latest_upload_id = upload_id_check
+                                latest_upload_version = upload["version"]
+                                latest_upload_date = str(upload.get("created_at", ""))
+                                old_orders = orders_check
+                                print(f"📊 Found version {latest_upload_version} with {len(old_orders)} orders")
+                                break
+                            else:
+                                print(f"⚠️ Skipping empty version {upload['version']}")
+                        
+                        if not latest_upload_id:
+                            print("📊 No previous version with orders found")
+                        
                         # Also get extra rows (manual additions) from previous upload
                         from database import get_upload_details
-                        prev_upload_details = await get_upload_details(latest_upload_id)
+                        prev_upload_details = await get_upload_details(latest_upload_id) if latest_upload_id else None
                         extra_rows_from_prev = []
                         manual_edits_from_prev = []
                         
@@ -1317,21 +1319,22 @@ async def upload_files(
                             # Get manual edits
                             manual_edits_from_prev = prev_upload_details.get("manual_edits", [])
                         
-                        changes_summary["has_previous"] = True
-                        changes_summary["previous_version"] = latest_upload_version
-                        changes_summary["previous_date"] = latest_upload_date
-                        changes_summary["previous_upload_id"] = latest_upload_id
-                        
-                        # Build maps for comparison
-                        old_map = {}
-                        for o in old_orders:
-                            # Skip extra rows for normal comparison
-                            if o.get("is_extra_row", False):
-                                continue
-                            key = (o.get("order_code", ""), o.get("worker", ""))
-                            old_map[key] = o
-                        
-                        print(f"📊 Comparison: {len(old_map)} orders in DB")
+                        if old_orders:
+                            changes_summary["has_previous"] = True
+                            changes_summary["previous_version"] = latest_upload_version
+                            changes_summary["previous_date"] = latest_upload_date
+                            changes_summary["previous_upload_id"] = latest_upload_id
+                            
+                            # Build maps for comparison
+                            old_map = {}
+                            for o in old_orders:
+                                # Skip extra rows for normal comparison
+                                if o.get("is_extra_row", False):
+                                    continue
+                                key = (o.get("order_code", ""), o.get("worker", ""))
+                                old_map[key] = o
+                            
+                            print(f"📊 Comparison: {len(old_map)} orders in DB")
                             
                             new_map = {}
                             for _, row in combined.iterrows():
@@ -3668,22 +3671,16 @@ async def recalculate_all_totals():
         return JSONResponse({"success": False, "error": str(e)})
 
 
-@app.delete("/api/upload/{upload_id}")
+@app.get("/api/delete-upload/{upload_id}")
 async def delete_upload(upload_id: int):
-    """Delete an upload and all its related data"""
+    """Delete an upload and all its related data (GET for browser access)"""
     try:
         # Delete in correct order due to foreign keys
-        # 1. Delete manual_edits
         await database.execute(text("DELETE FROM manual_edits WHERE upload_id = :id").bindparams(id=upload_id))
-        # 2. Delete changes
         await database.execute(text("DELETE FROM changes WHERE upload_id = :id").bindparams(id=upload_id))
-        # 3. Delete worker_totals
         await database.execute(text("DELETE FROM worker_totals WHERE upload_id = :id").bindparams(id=upload_id))
-        # 4. Delete calculations
         await database.execute(text("DELETE FROM calculations WHERE upload_id = :id").bindparams(id=upload_id))
-        # 5. Delete orders
         await database.execute(text("DELETE FROM orders WHERE upload_id = :id").bindparams(id=upload_id))
-        # 6. Delete upload itself
         await database.execute(text("DELETE FROM uploads WHERE id = :id").bindparams(id=upload_id))
         
         print(f"✅ Deleted upload {upload_id}")
@@ -3692,6 +3689,34 @@ async def delete_upload(upload_id: int):
     except Exception as e:
         import traceback
         traceback.print_exc()
+        return JSONResponse({"success": False, "error": str(e)})
+
+
+@app.get("/api/list-uploads/{period_id}")
+async def list_uploads(period_id: int):
+    """List all uploads for a period with their order counts"""
+    try:
+        query = text("""
+            SELECT u.id, u.version, u.created_at,
+                   (SELECT COUNT(*) FROM orders WHERE upload_id = u.id) as orders_count
+            FROM uploads u
+            WHERE u.period_id = :period_id
+            ORDER BY u.version DESC
+        """)
+        results = await database.fetch_all(query.bindparams(period_id=period_id))
+        
+        uploads = []
+        for r in results:
+            uploads.append({
+                "id": r["id"],
+                "version": r["version"],
+                "created_at": str(r["created_at"]),
+                "orders_count": r["orders_count"]
+            })
+        
+        return JSONResponse({"success": True, "uploads": uploads})
+        
+    except Exception as e:
         return JSONResponse({"success": False, "error": str(e)})
 
 
