@@ -1406,18 +1406,30 @@ async def upload_files(
                                     })
                             
                             # Find deleted - include address from old data
+                            def safe_float_db(val):
+                                """Safely parse float from DB value that might be string like '30,00 %'"""
+                                if val is None or val == "":
+                                    return 0.0
+                                try:
+                                    if isinstance(val, (int, float)):
+                                        return float(val)
+                                    val_str = str(val).replace(" ", "").replace(",", ".").replace("%", "")
+                                    return float(val_str)
+                                except:
+                                    return 0.0
+                            
                             for key, order in old_map.items():
                                 if key[0] and key not in new_map:  # Has order_code and not in new
                                     # Build details from old order
                                     details = {}
-                                    if float(order.get("revenue_total", 0) or 0) > 0:
-                                        details["Выручка итого"] = f"{float(order.get('revenue_total', 0)):,.0f}".replace(",", " ")
-                                    if float(order.get("revenue_services", 0) or 0) != 0:
-                                        details["Выручка от услуг"] = f"{float(order.get('revenue_services', 0)):,.0f}".replace(",", " ")
-                                    if float(order.get("service_payment", 0) or 0) != 0:
-                                        details["Оплата услуг"] = f"{float(order.get('service_payment', 0)):,.0f}".replace(",", " ")
-                                    if float(order.get("percent", 0) or 0) > 0:
-                                        details["Процент"] = f"{float(order.get('percent', 0)):.0f}%"
+                                    if safe_float_db(order.get("revenue_total", 0)) > 0:
+                                        details["Выручка итого"] = f"{safe_float_db(order.get('revenue_total', 0)):,.0f}".replace(",", " ")
+                                    if safe_float_db(order.get("revenue_services", 0)) != 0:
+                                        details["Выручка от услуг"] = f"{safe_float_db(order.get('revenue_services', 0)):,.0f}".replace(",", " ")
+                                    if safe_float_db(order.get("service_payment", 0)) != 0:
+                                        details["Оплата услуг"] = f"{safe_float_db(order.get('service_payment', 0)):,.0f}".replace(",", " ")
+                                    if safe_float_db(order.get("percent", 0)) > 0:
+                                        details["Процент"] = f"{safe_float_db(order.get('percent', 0)):.0f}%"
                                     
                                     changes_summary["deleted"].append({
                                         "order_code": order.get("order_code", ""),
@@ -1448,7 +1460,9 @@ async def upload_files(
                                     
                                     field_changes = []
                                     for field_key, field_name in compare_fields:
-                                        old_val = float(old_order.get(field_key, 0) or 0)
+                                        # old_order comes from DB - might have string values like '30,00 %'
+                                        old_val = safe_float_db(old_order.get(field_key, 0))
+                                        # new_order comes from parsed file - already numeric
                                         new_val = float(new_order.get(field_key, 0) or 0)
                                         
                                         if abs(old_val - new_val) > 0.01:  # Compare with tolerance
