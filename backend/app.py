@@ -1483,7 +1483,25 @@ async def upload_files(
                             # Debug: show some keys from both maps
                             print(f"📊 Sample old_map keys: {list(old_map.keys())[:5]}")
                             print(f"📊 Sample new_map keys: {list(new_map.keys())[:5]}")
-                            
+
+                            # Debug: find КАУТ-001143 specifically
+                            debug_order = "КАУТ-001143"
+                            old_keys_with_debug = [k for k in old_map.keys() if debug_order in k[0]]
+                            new_keys_with_debug = [k for k in new_map.keys() if debug_order in k[0]]
+                            print(f"🔍 DEBUG {debug_order} in old_map: {old_keys_with_debug}")
+                            print(f"🔍 DEBUG {debug_order} in new_map: {new_keys_with_debug}")
+
+                            if old_keys_with_debug and new_keys_with_debug:
+                                old_key = old_keys_with_debug[0]
+                                new_key = new_keys_with_debug[0]
+                                print(f"🔍 DEBUG old_key={old_key}, new_key={new_key}, match={old_key == new_key}")
+                                if old_key in old_map:
+                                    old_data = old_map[old_key]
+                                    print(f"🔍 DEBUG old data: revenue_total={old_data.get('revenue_total')}, revenue_services={old_data.get('revenue_services')}, service_payment={old_data.get('service_payment')}")
+                                if new_key in new_map:
+                                    new_data = new_map[new_key]
+                                    print(f"🔍 DEBUG new data: revenue_total={new_data.get('revenue_total')}, revenue_services={new_data.get('revenue_services')}, service_payment={new_data.get('service_payment')}")
+
                             # Debug: compare a sample order
                             for key in list(new_map.keys())[:3]:
                                 if key in old_map:
