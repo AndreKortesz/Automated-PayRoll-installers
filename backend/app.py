@@ -4,7 +4,7 @@ FastAPI backend for processing Excel files and calculating salaries
 """
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form, Response
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.requests import Request
@@ -1189,12 +1189,15 @@ async def auth_login(request: Request):
 async def auth_callback(request: Request):
     """Handle Bitrix24 OAuth2 callback (supports both GET and POST)"""
 
-    # Get parameters from query string or form data
+    # Get parameters from query string AND form data
+    query_params = dict(request.query_params)
+    form_params = {}
     if request.method == "POST":
         form_data = await request.form()
-        params = dict(form_data)
-    else:
-        params = dict(request.query_params)
+        form_params = dict(form_data)
+
+    # Merge params (form data takes precedence)
+    params = {**query_params, **form_params}
 
     print(f"🔐 Auth callback received: method={request.method}, params={list(params.keys())}")
 
@@ -1207,44 +1210,38 @@ async def auth_callback(request: Request):
             "auth_configured": is_auth_configured()
         })
 
-    # Bitrix24 local app installation - redirect to OAuth
-    domain = params.get("DOMAIN") or params.get("domain")
-    app_sid = params.get("APP_SID")
+    # Get domain from query params
+    domain = params.get("DOMAIN") or params.get("domain") or os.getenv("BITRIX_DOMAIN", "")
 
-    if domain and not params.get("code"):
-        # This is the initial request from Bitrix24 - redirect to OAuth
-        from auth import BITRIX_CLIENT_ID, BITRIX_REDIRECT_URI
+    # Bitrix24 local app sends AUTH_ID directly (no code exchange needed!)
+    auth_id = params.get("AUTH_ID")
+    if auth_id:
+        access_token = auth_id
+        refresh_token = params.get("REFRESH_ID", "")
+        expires_in = int(params.get("AUTH_EXPIRES", 3600))
+        print(f"🔐 Using direct AUTH_ID from Bitrix24, expires in {expires_in}s")
+    else:
+        # Standard OAuth callback with code
+        code = params.get("code")
+        if not code:
+            return templates.TemplateResponse("login.html", {
+                "request": request,
+                "error": "Код авторизации не получен",
+                "auth_configured": is_auth_configured()
+            })
 
-        oauth_url = (
-            f"https://{domain}/oauth/authorize/"
-            f"?client_id={BITRIX_CLIENT_ID}"
-            f"&response_type=code"
-            f"&redirect_uri={BITRIX_REDIRECT_URI}"
-        )
-        print(f"🔐 Redirecting to OAuth: {oauth_url}")
-        return RedirectResponse(url=oauth_url, status_code=302)
+        # Exchange code for token
+        token_data = await exchange_code_for_token(code)
+        if not token_data:
+            return templates.TemplateResponse("login.html", {
+                "request": request,
+                "error": "Не удалось получить токен доступа"
+            })
 
-    # Standard OAuth callback with code
-    code = params.get("code")
-    if not code:
-        return templates.TemplateResponse("login.html", {
-            "request": request,
-            "error": "Код авторизации не получен",
-            "auth_configured": is_auth_configured()
-        })
-
-    # Exchange code for token
-    token_data = await exchange_code_for_token(code)
-    if not token_data:
-        return templates.TemplateResponse("login.html", {
-            "request": request,
-            "error": "Не удалось получить токен доступа"
-        })
-
-    access_token = token_data.get("access_token")
-    refresh_token = token_data.get("refresh_token")
-    domain = token_data.get("domain", os.getenv("BITRIX_DOMAIN", ""))
-    expires_in = token_data.get("expires_in", 3600)
+        access_token = token_data.get("access_token")
+        refresh_token = token_data.get("refresh_token")
+        domain = token_data.get("domain", domain)
+        expires_in = token_data.get("expires_in", 3600)
 
     # Get user info from Bitrix24
     bitrix_user = await get_bitrix_user(access_token, domain)
