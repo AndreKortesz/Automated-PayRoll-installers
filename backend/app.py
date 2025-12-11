@@ -1988,24 +1988,28 @@ async def apply_review_changes(request: Request):
             
             # Accumulate totals per worker
             if base_worker not in worker_totals:
-                worker_totals[base_worker] = {"company": 0, "client": 0}
-            
+                worker_totals[base_worker] = {"company": 0, "client": 0, "company_count": 0, "client_count": 0}
+
             if is_client:
                 worker_totals[base_worker]["client"] += total_val
+                worker_totals[base_worker]["client_count"] += 1
             else:
                 worker_totals[base_worker]["company"] += total_val
-        
+                worker_totals[base_worker]["company_count"] += 1
+
         # Save worker totals
         for worker, totals in worker_totals.items():
             await save_worker_total(
                 upload_id=upload_id,
                 worker=worker,
                 total=totals["company"] + totals["client"],
-                orders_count=0,
+                orders_count=totals["company_count"] + totals["client_count"],
                 fuel=0,
                 transport=0,
                 company_amount=totals["company"],
-                client_amount=totals["client"]
+                client_amount=totals["client"],
+                company_orders_count=totals["company_count"],
+                client_orders_count=totals["client_count"]
             )
         
         # Compare with previous upload and save changes
@@ -2138,24 +2142,28 @@ async def process_first_upload(request: Request):
             
             # Accumulate totals per worker
             if base_worker not in worker_totals:
-                worker_totals[base_worker] = {"company": 0, "client": 0}
-            
+                worker_totals[base_worker] = {"company": 0, "client": 0, "company_count": 0, "client_count": 0}
+
             if is_client:
                 worker_totals[base_worker]["client"] += total_val
+                worker_totals[base_worker]["client_count"] += 1
             else:
                 worker_totals[base_worker]["company"] += total_val
-        
+                worker_totals[base_worker]["company_count"] += 1
+
         # Save worker totals
         for worker, totals in worker_totals.items():
             await save_worker_total(
                 upload_id=upload_id,
                 worker=worker,
                 total=totals["company"] + totals["client"],
-                orders_count=0,
+                orders_count=totals["company_count"] + totals["client_count"],
                 fuel=0,
                 transport=0,
                 company_amount=totals["company"],
-                client_amount=totals["client"]
+                client_amount=totals["client"],
+                company_orders_count=totals["company_count"],
+                client_orders_count=totals["client_count"]
             )
         
         # Cleanup session
