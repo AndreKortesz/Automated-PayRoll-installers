@@ -1778,32 +1778,33 @@ async def apply_review_changes(request: Request):
             base_worker = worker.replace(" (оплата клиентом)", "")
             is_client = "(оплата клиентом)" in worker
             
-            order_id = await save_order(
-                upload_id=upload_id,
-                worker=base_worker,
-                order_code=order_code,
-                order_full=order_text[:500],
-                address=address,
-                is_client_payment=is_client,
-                revenue_total=float(row.get("revenue_total", 0) or 0),
-                revenue_services=float(row.get("revenue_services", 0) or 0),
-                diagnostic=float(row.get("diagnostic", 0) or 0),
-                diagnostic_payment=float(row.get("diagnostic_payment", 0) or 0),
-                specialist_fee=float(row.get("specialist_fee", 0) or 0),
-                additional_expenses=float(row.get("additional_expenses", 0) or 0),
-                service_payment=float(row.get("service_payment", 0) or 0),
-                percent=float(str(row.get("percent", "0")).replace("%", "").replace(",", ".") or 0)
-            )
+            order_data = {
+                "worker": base_worker,
+                "order_code": order_code,
+                "order": order_text[:500],
+                "address": address,
+                "is_client_payment": is_client,
+                "revenue_total": float(row.get("revenue_total", 0) or 0),
+                "revenue_services": float(row.get("revenue_services", 0) or 0),
+                "diagnostic": float(row.get("diagnostic", 0) or 0),
+                "diagnostic_payment": float(row.get("diagnostic_payment", 0) or 0),
+                "specialist_fee": float(row.get("specialist_fee", 0) or 0),
+                "additional_expenses": float(row.get("additional_expenses", 0) or 0),
+                "service_payment": float(row.get("service_payment", 0) or 0),
+                "percent": float(str(row.get("percent", "0")).replace("%", "").replace(",", ".") or 0)
+            }
+            order_id = await save_order(upload_id, order_data)
             
             # Save calculation for this order
             total_val = float(row.get("total", 0) or 0)
-            await save_calculation(
-                order_id=order_id,
-                fuel_payment=float(row.get("fuel_payment", 0) or 0),
-                transport=float(row.get("transport", 0) or 0),
-                diagnostic_50=float(row.get("diagnostic_50", 0) or 0),
-                total=total_val
-            )
+            calc_data = {
+                "worker": base_worker,
+                "fuel_payment": float(row.get("fuel_payment", 0) or 0),
+                "transport": float(row.get("transport", 0) or 0),
+                "diagnostic_50": float(row.get("diagnostic_50", 0) or 0),
+                "total": total_val
+            }
+            await save_calculation(upload_id, order_id, calc_data)
             
             # Accumulate totals per worker
             if base_worker not in worker_totals:
@@ -1819,6 +1820,10 @@ async def apply_review_changes(request: Request):
             await save_worker_total(
                 upload_id=upload_id,
                 worker=worker,
+                total=totals["company"] + totals["client"],
+                orders_count=0,
+                fuel=0,
+                transport=0,
                 company_amount=totals["company"],
                 client_amount=totals["client"]
             )
@@ -1915,32 +1920,33 @@ async def process_first_upload(request: Request):
             base_worker = worker.replace(" (оплата клиентом)", "")
             is_client = "(оплата клиентом)" in worker
             
-            order_id = await save_order(
-                upload_id=upload_id,
-                worker=base_worker,
-                order_code=order_code,
-                order_full=order_text[:500],
-                address=address,
-                is_client_payment=is_client,
-                revenue_total=float(row.get("revenue_total", 0) or 0),
-                revenue_services=float(row.get("revenue_services", 0) or 0),
-                diagnostic=float(row.get("diagnostic", 0) or 0),
-                diagnostic_payment=float(row.get("diagnostic_payment", 0) or 0),
-                specialist_fee=float(row.get("specialist_fee", 0) or 0),
-                additional_expenses=float(row.get("additional_expenses", 0) or 0),
-                service_payment=float(row.get("service_payment", 0) or 0),
-                percent=float(str(row.get("percent", "0")).replace("%", "").replace(",", ".") or 0)
-            )
+            order_data = {
+                "worker": base_worker,
+                "order_code": order_code,
+                "order": order_text[:500],
+                "address": address,
+                "is_client_payment": is_client,
+                "revenue_total": float(row.get("revenue_total", 0) or 0),
+                "revenue_services": float(row.get("revenue_services", 0) or 0),
+                "diagnostic": float(row.get("diagnostic", 0) or 0),
+                "diagnostic_payment": float(row.get("diagnostic_payment", 0) or 0),
+                "specialist_fee": float(row.get("specialist_fee", 0) or 0),
+                "additional_expenses": float(row.get("additional_expenses", 0) or 0),
+                "service_payment": float(row.get("service_payment", 0) or 0),
+                "percent": float(str(row.get("percent", "0")).replace("%", "").replace(",", ".") or 0)
+            }
+            order_id = await save_order(upload_id, order_data)
             
             # Save calculation for this order
             total_val = float(row.get("total", 0) or 0)
-            await save_calculation(
-                order_id=order_id,
-                fuel_payment=float(row.get("fuel_payment", 0) or 0),
-                transport=float(row.get("transport", 0) or 0),
-                diagnostic_50=float(row.get("diagnostic_50", 0) or 0),
-                total=total_val
-            )
+            calc_data = {
+                "worker": base_worker,
+                "fuel_payment": float(row.get("fuel_payment", 0) or 0),
+                "transport": float(row.get("transport", 0) or 0),
+                "diagnostic_50": float(row.get("diagnostic_50", 0) or 0),
+                "total": total_val
+            }
+            await save_calculation(upload_id, order_id, calc_data)
             
             # Accumulate totals per worker
             if base_worker not in worker_totals:
@@ -1956,6 +1962,10 @@ async def process_first_upload(request: Request):
             await save_worker_total(
                 upload_id=upload_id,
                 worker=worker,
+                total=totals["company"] + totals["client"],
+                orders_count=0,
+                fuel=0,
+                transport=0,
                 company_amount=totals["company"],
                 client_amount=totals["client"]
             )
