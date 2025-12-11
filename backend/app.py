@@ -1185,18 +1185,52 @@ async def auth_login(request: Request):
 
 
 @app.get("/auth/callback")
-async def auth_callback(request: Request, code: str = None, error: str = None):
-    """Handle Bitrix24 OAuth2 callback"""
+@app.post("/auth/callback")
+async def auth_callback(request: Request):
+    """Handle Bitrix24 OAuth2 callback (supports both GET and POST)"""
+
+    # Get parameters from query string or form data
+    if request.method == "POST":
+        form_data = await request.form()
+        params = dict(form_data)
+    else:
+        params = dict(request.query_params)
+
+    print(f"🔐 Auth callback received: method={request.method}, params={list(params.keys())}")
+
+    # Check for error
+    error = params.get("error")
     if error:
         return templates.TemplateResponse("login.html", {
             "request": request,
-            "error": f"Ошибка авторизации: {error}"
+            "error": f"Ошибка авторизации: {error}",
+            "auth_configured": is_auth_configured()
         })
 
+    # Bitrix24 local app installation - redirect to OAuth
+    domain = params.get("DOMAIN") or params.get("domain")
+    app_sid = params.get("APP_SID")
+
+    if domain and not params.get("code"):
+        # This is the initial request from Bitrix24 - redirect to OAuth
+        from auth import BITRIX_CLIENT_ID, BITRIX_REDIRECT_URI
+
+        oauth_url = (
+            f"https://{domain}/oauth/authorize/"
+            f"?client_id={BITRIX_CLIENT_ID}"
+            f"&response_type=code"
+            f"&redirect_uri={BITRIX_REDIRECT_URI}"
+        )
+        print(f"🔐 Redirecting to OAuth: {oauth_url}")
+        return RedirectResponse(url=oauth_url, status_code=302)
+
+    # Standard OAuth callback with code
+    code = params.get("code")
     if not code:
         return templates.TemplateResponse("login.html", {
             "request": request,
-            "error": "Код авторизации не получен"
+            "error": "Код авторизации не получен",
+            "auth_configured": is_auth_configured()
         })
 
     # Exchange code for token
