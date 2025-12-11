@@ -2457,14 +2457,32 @@ async def api_get_worker_orders(upload_id: int, worker: str):
     try:
         from urllib.parse import unquote
         worker_decoded = unquote(worker)
+        
+        # Get orders for this worker (both regular and client payment)
         orders = await get_worker_orders(upload_id, worker_decoded)
+        orders_client = await get_worker_orders(upload_id, f"{worker_decoded} (оплата клиентом)")
+        
+        # Get worker totals
+        upload_details = await get_upload_details(upload_id)
+        worker_totals = upload_details.get("worker_totals", []) if upload_details else []
+        
+        worker_total = None
+        for wt in worker_totals:
+            if wt.get("worker") == worker_decoded:
+                worker_total = wt
+                break
         
         return JSONResponse({
             "success": True,
-            "worker": worker_decoded,
-            "orders": orders
+            "data": {
+                "worker": worker_decoded,
+                "orders": orders + orders_client,
+                "worker_total": worker_total
+            }
         })
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return JSONResponse({"success": False, "error": str(e)})
 
 
@@ -2487,48 +2505,49 @@ async def api_worker_report(upload_id: int, worker: str):
         period_details = await get_period_details(period_id)
         period_name = period_details.get("period", {}).get("name", "") if period_details else ""
         
-        # Get worker orders
-        orders = await get_worker_orders(upload_id, worker_decoded)
+        # Get ALL orders for this upload (needed for proper report generation)
+        worker_totals_list = upload_details.get("worker_totals", [])
         
-        # Also get client payment orders
-        orders_client = await get_worker_orders(upload_id, f"{worker_decoded} (оплата клиентом)")
+        all_orders = []
+        for wt in worker_totals_list:
+            worker_orders = await get_worker_orders(upload_id, wt["worker"])
+            all_orders.extend(worker_orders)
+            worker_orders_client = await get_worker_orders(upload_id, f"{wt['worker']} (оплата клиентом)")
+            all_orders.extend(worker_orders_client)
         
-        # Build calculated data for report
+        # Build calculated_data structure (same as archive generation)
         calculated_data = []
-        for order in orders + orders_client:
+        for order in all_orders:
             calc = order.get("calculation", {})
-            is_client = "(оплата клиентом)" in order.get("worker", "")
-            
-            calculated_data.append({
-                "worker": order.get("worker", worker_decoded),
-                "order": order.get("order_full", order.get("order_code", "")),
+            row = {
+                "worker": order["worker"],
+                "order": order.get("order_full", "") or order.get("address", ""),
+                "order_code": order.get("order_code", ""),
+                "address": order.get("address", ""),
                 "revenue_total": order.get("revenue_total", 0),
                 "revenue_services": order.get("revenue_services", 0),
                 "diagnostic": order.get("diagnostic", 0),
-                "diagnostic_payment": calc.get("diagnostic_50", 0),
+                "diagnostic_payment": order.get("diagnostic_payment", 0),
                 "specialist_fee": order.get("specialist_fee", 0),
                 "additional_expenses": order.get("additional_expenses", 0),
                 "service_payment": order.get("service_payment", 0),
-                "percent": order.get("percent", 0),
-                "is_client_payment": is_client,
+                "percent": order.get("percent", ""),
+                "is_client_payment": order.get("is_client_payment", False),
+                "is_over_10k": order.get("is_over_10k", False),
+                "is_extra_row": order.get("is_extra_row", False),
                 "fuel_payment": calc.get("fuel_payment", 0),
                 "transport": calc.get("transport", 0),
+                "diagnostic_50": calc.get("diagnostic_50", 0),
                 "total": calc.get("total", 0),
-                "is_extra_row": order.get("is_extra_row", False),
-            })
+            }
+            calculated_data.append(row)
         
-        # Sort data
-        calculated_data.sort(key=lambda x: (
-            1 if "(оплата клиентом)" in x.get("worker", "") else 0,
-            x.get("order", "")
-        ))
-        
-        # Generate Excel report
+        # Generate worker report using same function as archive
         report_bytes = create_worker_report(calculated_data, worker_decoded, period_name, DEFAULT_CONFIG, for_workers=True)
         
         # Create safe filename
         worker_surname = worker_decoded.split()[0] if worker_decoded else "worker"
-        filename = f"{worker_surname}_{period_name.replace(' ', '_')}.xlsx"
+        filename = f"{worker_surname}_{period_name.replace('.', '_')}.xlsx"
         
         return Response(
             content=report_bytes,
