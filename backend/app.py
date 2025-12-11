@@ -1772,6 +1772,8 @@ async def apply_review_changes(request: Request):
                                 restored_record = {
                                     "worker": worker,
                                     "order": order_full or order_code,
+                                    "order_code": order_code,  # Preserve original order_code for extra rows
+                                    "address": old_order.get("address", ""),  # Preserve address
                                     "revenue_total": old_order.get("revenue_total", 0),
                                     "revenue_services": old_order.get("revenue_services", 0),
                                     "diagnostic": old_order.get("diagnostic", 0),
@@ -1904,14 +1906,19 @@ async def apply_review_changes(request: Request):
             
             # Save individual order
             order_text = str(row.get("order", ""))
-            order_code = ""
-            address = ""
-            
-            match = re.search(r'(КАУТ|ИБУТ|ТДУТ)-\d+', order_text)
-            if match:
-                order_code = match.group(0)
-            
-            if ", " in order_text:
+
+            # Use order_code from record if exists (for restored extra rows)
+            # Otherwise extract from order text
+            order_code = row.get("order_code", "")
+            if not order_code:
+                match = re.search(r'(КАУТ|ИБУТ|ТДУТ)-\d+', order_text)
+                if match:
+                    order_code = match.group(0)
+
+            # Use address from record if exists (for restored rows)
+            # Otherwise extract from order text
+            address = row.get("address", "")
+            if not address and ", " in order_text:
                 parts = order_text.split(", ", 1)
                 if len(parts) > 1:
                     address = parts[1].split("\n")[0][:100]
@@ -2049,14 +2056,19 @@ async def process_first_upload(request: Request):
             
             # Save individual order
             order_text = str(row.get("order", ""))
-            order_code = ""
-            address = ""
-            
-            match = re.search(r'(КАУТ|ИБУТ|ТДУТ)-\d+', order_text)
-            if match:
-                order_code = match.group(0)
-            
-            if ", " in order_text:
+
+            # Use order_code from record if exists (for restored extra rows)
+            # Otherwise extract from order text
+            order_code = row.get("order_code", "")
+            if not order_code:
+                match = re.search(r'(КАУТ|ИБУТ|ТДУТ)-\d+', order_text)
+                if match:
+                    order_code = match.group(0)
+
+            # Use address from record if exists (for restored rows)
+            # Otherwise extract from order text
+            address = row.get("address", "")
+            if not address and ", " in order_text:
                 parts = order_text.split(", ", 1)
                 if len(parts) > 1:
                     address = parts[1].split("\n")[0][:100]
