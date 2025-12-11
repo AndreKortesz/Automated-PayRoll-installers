@@ -3,12 +3,13 @@ Salary Calculation Service for Montazhniki
 FastAPI backend for processing Excel files and calculating salaries
 """
 
-from fastapi import FastAPI, UploadFile, File, HTTPException, Form
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form, Response
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.requests import Request
 from contextlib import asynccontextmanager
+from urllib.parse import quote
 import pandas as pd
 import numpy as np
 from openpyxl import Workbook, load_workbook
@@ -2467,6 +2468,83 @@ async def api_get_worker_orders(upload_id: int, worker: str):
         return JSONResponse({"success": False, "error": str(e)})
 
 
+@app.get("/api/worker-report/{upload_id}/{worker}")
+async def api_worker_report(upload_id: int, worker: str):
+    """Download Excel report for a specific worker"""
+    try:
+        from urllib.parse import unquote
+        worker_decoded = unquote(worker)
+        
+        # Get upload details
+        upload_details = await get_upload_details(upload_id)
+        if not upload_details:
+            raise HTTPException(status_code=404, detail="Upload not found")
+        
+        # Get period info
+        upload = upload_details.get("upload", {})
+        period_id = upload.get("period_id")
+        
+        period_details = await get_period_details(period_id)
+        period_name = period_details.get("period", {}).get("name", "") if period_details else ""
+        
+        # Get worker orders
+        orders = await get_worker_orders(upload_id, worker_decoded)
+        
+        # Also get client payment orders
+        orders_client = await get_worker_orders(upload_id, f"{worker_decoded} (оплата клиентом)")
+        
+        # Build calculated data for report
+        calculated_data = []
+        for order in orders + orders_client:
+            calc = order.get("calculation", {})
+            is_client = "(оплата клиентом)" in order.get("worker", "")
+            
+            calculated_data.append({
+                "worker": order.get("worker", worker_decoded),
+                "order": order.get("order_full", order.get("order_code", "")),
+                "revenue_total": order.get("revenue_total", 0),
+                "revenue_services": order.get("revenue_services", 0),
+                "diagnostic": order.get("diagnostic", 0),
+                "diagnostic_payment": calc.get("diagnostic_50", 0),
+                "specialist_fee": order.get("specialist_fee", 0),
+                "additional_expenses": order.get("additional_expenses", 0),
+                "service_payment": order.get("service_payment", 0),
+                "percent": order.get("percent", 0),
+                "is_client_payment": is_client,
+                "fuel_payment": calc.get("fuel_payment", 0),
+                "transport": calc.get("transport", 0),
+                "total": calc.get("total", 0),
+                "is_extra_row": order.get("is_extra_row", False),
+            })
+        
+        # Sort data
+        calculated_data.sort(key=lambda x: (
+            1 if "(оплата клиентом)" in x.get("worker", "") else 0,
+            x.get("order", "")
+        ))
+        
+        # Generate Excel report
+        report_bytes = create_worker_report(calculated_data, worker_decoded, period_name, DEFAULT_CONFIG, for_workers=True)
+        
+        # Create safe filename
+        worker_surname = worker_decoded.split()[0] if worker_decoded else "worker"
+        filename = f"{worker_surname}_{period_name.replace(' ', '_')}.xlsx"
+        
+        return Response(
+            content=report_bytes,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={
+                "Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/months-summary")
 async def api_months_summary():
     """Get summary by months for dashboard"""
@@ -3209,9 +3287,15 @@ async def period_page(request: Request, period_id: int):
 
 
 @app.get("/upload/{upload_id}")
-async def upload_page(request: Request, upload_id: int):
+async def upload_page(request: Request, upload_id: int, worker: str = ""):
     """Upload details page"""
-    response = templates.TemplateResponse("upload.html", {"request": request, "upload_id": upload_id})
+    # Get worker from query parameter
+    worker_name = worker or request.query_params.get("worker", "")
+    response = templates.TemplateResponse("upload.html", {
+        "request": request, 
+        "upload_id": upload_id,
+        "worker_name": worker_name
+    })
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
