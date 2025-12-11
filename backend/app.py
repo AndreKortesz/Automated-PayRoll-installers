@@ -1230,8 +1230,9 @@ async def auth_callback(request: Request):
                 "auth_configured": is_auth_configured()
             })
 
-        # Exchange code for token
-        token_data = await exchange_code_for_token(code)
+        # Exchange code for token (use server_domain from callback params)
+        server_domain = params.get("server_domain")
+        token_data = await exchange_code_for_token(code, server_domain)
         if not token_data:
             return templates.TemplateResponse("login.html", {
                 "request": request,
@@ -1290,7 +1291,8 @@ async def auth_callback(request: Request):
         value=session_id,
         httponly=True,
         max_age=86400,  # 24 hours
-        samesite="lax"
+        samesite="none",  # Required for iframe context (Bitrix24 app)
+        secure=True       # Required when samesite=none
     )
 
     print(f"✅ User logged in: {name} (ID: {bitrix_id}, role: {role})")
