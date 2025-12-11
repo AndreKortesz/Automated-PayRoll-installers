@@ -399,7 +399,21 @@ async def get_orders_by_upload(upload_id: int) -> List[dict]:
     """Get all orders for an upload"""
     query = orders.select().where(orders.c.upload_id == upload_id)
     results = await database.fetch_all(query)
-    return [dict(r) for r in results]
+    
+    # Get calculations for each order
+    order_list = []
+    for r in results:
+        order_dict = dict(r)
+        # Get calculation for this order
+        calc_query = calculations.select().where(calculations.c.order_id == r["id"])
+        calc = await database.fetch_one(calc_query)
+        if calc:
+            order_dict["calculation"] = dict(calc)
+        else:
+            order_dict["calculation"] = {}
+        order_list.append(order_dict)
+    
+    return order_list
 
 async def compare_uploads(old_upload_id: int, new_upload_id: int) -> List[dict]:
     """Compare two uploads and return changes"""

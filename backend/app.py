@@ -1284,10 +1284,26 @@ async def upload_files(
                         latest_upload_id = uploads[0]["id"]
                         old_orders = await get_orders_by_upload(latest_upload_id)
                         
+                        # Also get extra rows (manual additions) from previous upload
+                        from database import get_upload_details
+                        prev_upload_details = await get_upload_details(latest_upload_id)
+                        extra_rows_from_prev = []
+                        manual_edits_from_prev = []
+                        
+                        if prev_upload_details:
+                            # Get extra rows (is_extra_row=True)
+                            for o in old_orders:
+                                if o.get("is_extra_row", False):
+                                    extra_rows_from_prev.append(o)
+                            
+                            # Get manual edits
+                            manual_edits_from_prev = prev_upload_details.get("manual_edits", [])
+                        
                         if old_orders:
                             changes_summary["has_previous"] = True
                             changes_summary["previous_version"] = uploads[0]["version"]
                             changes_summary["previous_date"] = str(uploads[0].get("created_at", ""))
+                            changes_summary["previous_upload_id"] = latest_upload_id
                             
                             # Build maps for comparison
                             old_map = {}
@@ -1311,13 +1327,23 @@ async def upload_files(
                                 
                                 key = (order_code, worker)
                                 
-                                # Collect all numeric fields
-                                revenue_total = float(row.get("revenue_total", 0) or 0)
-                                revenue_services = float(row.get("revenue_services", 0) or 0)
-                                diagnostic = float(row.get("diagnostic", 0) or 0)
-                                specialist_fee = float(row.get("specialist_fee", 0) or 0)
-                                additional_expenses = float(row.get("additional_expenses", 0) or 0)
-                                service_payment = float(row.get("service_payment", 0) or 0)
+                                # Collect all numeric fields - with safe parsing
+                                def safe_float(val):
+                                    if val is None or val == "" or pd.isna(val):
+                                        return 0.0
+                                    try:
+                                        if isinstance(val, str):
+                                            val = val.replace(" ", "").replace(",", ".").replace("%", "")
+                                        return float(val)
+                                    except:
+                                        return 0.0
+                                
+                                revenue_total = safe_float(row.get("revenue_total", 0))
+                                revenue_services = safe_float(row.get("revenue_services", 0))
+                                diagnostic = safe_float(row.get("diagnostic", 0))
+                                specialist_fee = safe_float(row.get("specialist_fee", 0))
+                                additional_expenses = safe_float(row.get("additional_expenses", 0))
+                                service_payment = safe_float(row.get("service_payment", 0))
                                 percent_val = parse_percent(row.get("percent", 0))
                                 
                                 new_map[key] = {
@@ -1423,8 +1449,47 @@ async def upload_files(
                                             "address": new_order["address"],
                                             "changes": field_changes
                                         })
+                            
+                            # Add extra rows (manual additions) from previous version to deleted list
+                            # These are rows that were manually added and won't be in new 1C files
+                            changes_summary["extra_rows"] = []  # Store for later restoration
+                            for extra in extra_rows_from_prev:
+                                order_text = extra.get("order_full", "") or extra.get("order_code", "")
+                                worker = extra.get("worker", "")
+                                
+                                # Get calculation data for this extra row
+                                calc = extra.get("calculation", {})
+                                total = calc.get("total", 0) if calc else 0
+                                
+                                changes_summary["extra_rows"].append({
+                                    "id": extra.get("id"),
+                                    "order_code": extra.get("order_code", "") or order_text[:50],
+                                    "order_full": order_text,
+                                    "worker": worker,
+                                    "address": extra.get("address", ""),
+                                    "total": total,
+                                    "type": "extra_row"
+                                })
+                                
+                                # Add to deleted list for UI
+                                changes_summary["deleted"].append({
+                                    "order_code": order_text[:50] if not extra.get("order_code") else extra.get("order_code"),
+                                    "worker": worker,
+                                    "address": extra.get("address", "") or order_text,
+                                    "details": {
+                                        "Итого": f"{total:,.0f}".replace(",", " ") if total else "—"
+                                    },
+                                    "type": "extra_row",
+                                    "original_id": extra.get("id")
+                                })
+                            
+                            # Also add manual_edits info for potential restoration
+                            changes_summary["manual_edits_prev"] = manual_edits_from_prev
+                            
         except Exception as e:
             print(f"⚠️ Changes comparison error (non-critical): {e}")
+            import traceback
+            traceback.print_exc()
         
         # Store changes_summary in session for review page
         session_data[session_id]["changes_summary"] = changes_summary
@@ -1509,7 +1574,7 @@ async def apply_review_changes(request: Request):
         if deleted_to_restore and changes.get("has_previous"):
             # We need to fetch the old orders from database
             try:
-                from database import get_orders_by_upload
+                from database import get_orders_by_upload, get_upload_details
                 period_id = await get_or_create_period(session["period"])
                 period_details = await get_period_details(period_id)
                 
@@ -1517,13 +1582,29 @@ async def apply_review_changes(request: Request):
                     latest_upload_id = period_details["uploads"][0]["id"]
                     old_orders = await get_orders_by_upload(latest_upload_id)
                     
+                    # Get upload details for extra rows with calculations
+                    upload_details = await get_upload_details(latest_upload_id)
+                    
                     for old_order in old_orders:
-                        key = old_order.get("order_code", "") + "_" + old_order.get("worker", "")
+                        order_code = old_order.get("order_code", "")
+                        order_full = old_order.get("order_full", "")
+                        worker = old_order.get("worker", "")
+                        is_extra = old_order.get("is_extra_row", False)
+                        
+                        # For extra rows, use order_full as key if no order_code
+                        if is_extra and not order_code:
+                            key = (order_full[:50] if order_full else "EXTRA") + "_" + worker
+                        else:
+                            key = order_code + "_" + worker
+                        
                         if key in deleted_to_restore:
+                            # Get calculation data if available
+                            calc = old_order.get("calculation", {})
+                            
                             # Add this order back to combined records
                             restored_record = {
-                                "worker": old_order.get("worker", ""),
-                                "order": old_order.get("order_full", old_order.get("order_code", "")),
+                                "worker": worker,
+                                "order": order_full or order_code,
                                 "revenue_total": old_order.get("revenue_total", 0),
                                 "revenue_services": old_order.get("revenue_services", 0),
                                 "diagnostic": old_order.get("diagnostic", 0),
@@ -1533,11 +1614,19 @@ async def apply_review_changes(request: Request):
                                 "service_payment": old_order.get("service_payment", 0),
                                 "percent": old_order.get("percent", 0),
                                 "is_client_payment": old_order.get("is_client_payment", False),
-                                "is_restored": True  # Mark as restored
+                                "is_restored": True,  # Mark as restored
+                                "is_extra_row": is_extra,
+                                # Preserve calculation values for extra rows
+                                "fuel_payment": calc.get("fuel_payment", 0) if calc else 0,
+                                "transport": calc.get("transport", 0) if calc else 0,
+                                "total": calc.get("total", 0) if calc else 0,
                             }
                             modified_records.append(restored_record)
+                            print(f"✅ Restored: {key} (extra_row={is_extra})")
             except Exception as e:
                 print(f"Error restoring deleted orders: {e}")
+                import traceback
+                traceback.print_exc()
         
         # Process modified items where user wants to keep old values
         modified_to_revert = selections.get("modified", [])
