@@ -96,6 +96,25 @@ periods = Table(
     Column("name", String(50), nullable=False),  # "01-15.11.25"
     Column("month", String(7), nullable=False),   # "2025-11"
     Column("year", Integer, nullable=False),      # 2025
+    Column("status", String(20), default="draft"),  # draft, sent, paid
+    Column("sent_at", DateTime, nullable=True),     # When files were sent to workers
+    Column("paid_at", DateTime, nullable=True),     # When salary was paid
+    Column("created_at", DateTime, default=datetime.utcnow),
+)
+
+# Users table (пользователи из Bitrix24)
+users = Table(
+    "users",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("bitrix_id", Integer, unique=True, nullable=False),  # ID пользователя в Bitrix24
+    Column("name", String(200)),                                 # Имя из Bitrix24
+    Column("email", String(200)),
+    Column("role", String(20), default="employee"),              # admin, employee
+    Column("access_token", Text),                                # OAuth access token
+    Column("refresh_token", Text),                               # OAuth refresh token
+    Column("token_expires_at", DateTime),
+    Column("last_login", DateTime),
     Column("created_at", DateTime, default=datetime.utcnow),
 )
 
@@ -244,6 +263,23 @@ def create_tables():
                     field_name VARCHAR(50),
                     old_value FLOAT,
                     new_value FLOAT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )""",
+                # Period status columns
+                "ALTER TABLE periods ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'draft'",
+                "ALTER TABLE periods ADD COLUMN IF NOT EXISTS sent_at TIMESTAMP",
+                "ALTER TABLE periods ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP",
+                # Users table for Bitrix24 auth
+                """CREATE TABLE IF NOT EXISTS users (
+                    id SERIAL PRIMARY KEY,
+                    bitrix_id INTEGER UNIQUE NOT NULL,
+                    name VARCHAR(200),
+                    email VARCHAR(200),
+                    role VARCHAR(20) DEFAULT 'employee',
+                    access_token TEXT,
+                    refresh_token TEXT,
+                    token_expires_at TIMESTAMP,
+                    last_login TIMESTAMP,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )""",
             ]
@@ -658,6 +694,95 @@ async def get_manual_edits(upload_id: int) -> List[dict]:
     query = manual_edits.select().where(
         manual_edits.c.upload_id == upload_id
     ).order_by(manual_edits.c.created_at.desc())
-    
+
     results = await database.fetch_all(query)
     return [dict(r) for r in results]
+
+
+# ============== USER FUNCTIONS ==============
+
+async def get_user_by_bitrix_id(bitrix_id: int) -> Optional[dict]:
+    """Get user by Bitrix24 ID"""
+    query = users.select().where(users.c.bitrix_id == bitrix_id)
+    result = await database.fetch_one(query)
+    return dict(result) if result else None
+
+
+async def create_or_update_user(
+    bitrix_id: int,
+    name: str,
+    email: str = None,
+    role: str = "employee",
+    access_token: str = None,
+    refresh_token: str = None,
+    token_expires_at: datetime = None
+) -> dict:
+    """Create new user or update existing one"""
+    existing = await get_user_by_bitrix_id(bitrix_id)
+
+    if existing:
+        # Update existing user
+        from sqlalchemy import update
+        query = update(users).where(users.c.bitrix_id == bitrix_id).values(
+            name=name,
+            email=email or existing.get("email"),
+            access_token=access_token,
+            refresh_token=refresh_token,
+            token_expires_at=token_expires_at,
+            last_login=datetime.utcnow()
+        )
+        await database.execute(query)
+        return await get_user_by_bitrix_id(bitrix_id)
+    else:
+        # Create new user
+        query = users.insert().values(
+            bitrix_id=bitrix_id,
+            name=name,
+            email=email,
+            role=role,
+            access_token=access_token,
+            refresh_token=refresh_token,
+            token_expires_at=token_expires_at,
+            last_login=datetime.utcnow()
+        )
+        await database.execute(query)
+        return await get_user_by_bitrix_id(bitrix_id)
+
+
+async def update_user_role(bitrix_id: int, role: str) -> bool:
+    """Update user role (admin/employee)"""
+    from sqlalchemy import update
+    query = update(users).where(users.c.bitrix_id == bitrix_id).values(role=role)
+    result = await database.execute(query)
+    return result > 0
+
+
+async def get_all_users() -> List[dict]:
+    """Get all users"""
+    query = users.select().order_by(users.c.name)
+    results = await database.fetch_all(query)
+    return [dict(r) for r in results]
+
+
+# ============== PERIOD STATUS FUNCTIONS ==============
+
+async def update_period_status(period_id: int, status: str) -> bool:
+    """Update period status (draft/sent/paid)"""
+    from sqlalchemy import update
+
+    values = {"status": status}
+    if status == "sent":
+        values["sent_at"] = datetime.utcnow()
+    elif status == "paid":
+        values["paid_at"] = datetime.utcnow()
+
+    query = update(periods).where(periods.c.id == period_id).values(**values)
+    result = await database.execute(query)
+    return result > 0
+
+
+async def get_period_status(period_id: int) -> Optional[str]:
+    """Get period status"""
+    query = periods.select().where(periods.c.id == period_id)
+    result = await database.fetch_one(query)
+    return result["status"] if result else None

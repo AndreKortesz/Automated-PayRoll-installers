@@ -31,7 +31,17 @@ from database import (
     get_or_create_period, create_upload, save_order, save_calculation,
     save_worker_total, save_change, get_previous_upload, compare_uploads,
     get_orders_by_upload, get_all_periods, get_period_details,
-    get_upload_details, get_worker_orders, get_months_summary
+    get_upload_details, get_worker_orders, get_months_summary,
+    get_user_by_bitrix_id, create_or_update_user, update_period_status,
+    get_period_status
+)
+
+# Auth imports
+from auth import (
+    get_auth_url, exchange_code_for_token, get_bitrix_user,
+    determine_role, is_auth_configured, create_session, get_session,
+    delete_session, get_current_user, require_auth, require_admin,
+    SESSION_COOKIE, refresh_access_token
 )
 
 # Lifespan for database connection
@@ -1161,9 +1171,190 @@ def create_worker_report(data: List[dict], worker: str, period: str, config: dic
     return create_excel_report(worker_data, period, config, for_workers=for_workers)
 
 
+# ============== AUTH ROUTES ==============
+
+@app.get("/auth/login")
+async def auth_login(request: Request):
+    """Redirect to Bitrix24 OAuth2 login"""
+    if not is_auth_configured():
+        # If auth is not configured, redirect to main page (dev mode)
+        return RedirectResponse(url="/", status_code=302)
+
+    auth_url = get_auth_url()
+    return RedirectResponse(url=auth_url, status_code=302)
+
+
+@app.get("/auth/callback")
+@app.post("/auth/callback")
+async def auth_callback(request: Request):
+    """Handle Bitrix24 OAuth2 callback (supports both GET and POST)"""
+
+    # Get parameters from query string or form data
+    if request.method == "POST":
+        form_data = await request.form()
+        params = dict(form_data)
+    else:
+        params = dict(request.query_params)
+
+    print(f"🔐 Auth callback received: method={request.method}, params={list(params.keys())}")
+
+    # Check for error
+    error = params.get("error")
+    if error:
+        return templates.TemplateResponse("login.html", {
+            "request": request,
+            "error": f"Ошибка авторизации: {error}",
+            "auth_configured": is_auth_configured()
+        })
+
+    # Bitrix24 local app installation - redirect to OAuth
+    domain = params.get("DOMAIN") or params.get("domain")
+    app_sid = params.get("APP_SID")
+
+    if domain and not params.get("code"):
+        # This is the initial request from Bitrix24 - redirect to OAuth
+        from auth import BITRIX_CLIENT_ID, BITRIX_REDIRECT_URI
+
+        oauth_url = (
+            f"https://{domain}/oauth/authorize/"
+            f"?client_id={BITRIX_CLIENT_ID}"
+            f"&response_type=code"
+            f"&redirect_uri={BITRIX_REDIRECT_URI}"
+        )
+        print(f"🔐 Redirecting to OAuth: {oauth_url}")
+        return RedirectResponse(url=oauth_url, status_code=302)
+
+    # Standard OAuth callback with code
+    code = params.get("code")
+    if not code:
+        return templates.TemplateResponse("login.html", {
+            "request": request,
+            "error": "Код авторизации не получен",
+            "auth_configured": is_auth_configured()
+        })
+
+    # Exchange code for token
+    token_data = await exchange_code_for_token(code)
+    if not token_data:
+        return templates.TemplateResponse("login.html", {
+            "request": request,
+            "error": "Не удалось получить токен доступа"
+        })
+
+    access_token = token_data.get("access_token")
+    refresh_token = token_data.get("refresh_token")
+    domain = token_data.get("domain", os.getenv("BITRIX_DOMAIN", ""))
+    expires_in = token_data.get("expires_in", 3600)
+
+    # Get user info from Bitrix24
+    bitrix_user = await get_bitrix_user(access_token, domain)
+    if not bitrix_user:
+        return templates.TemplateResponse("login.html", {
+            "request": request,
+            "error": "Не удалось получить данные пользователя"
+        })
+
+    # Extract user data
+    bitrix_id = int(bitrix_user.get("ID", 0))
+    name = f"{bitrix_user.get('LAST_NAME', '')} {bitrix_user.get('NAME', '')}".strip()
+    email = bitrix_user.get("EMAIL", "")
+
+    # Determine role
+    role = determine_role(bitrix_id)
+
+    # Save/update user in database
+    from datetime import timedelta
+    token_expires = datetime.utcnow() + timedelta(seconds=expires_in)
+
+    user = await create_or_update_user(
+        bitrix_id=bitrix_id,
+        name=name,
+        email=email,
+        role=role,
+        access_token=access_token,
+        refresh_token=refresh_token,
+        token_expires_at=token_expires
+    )
+
+    # Create session
+    session_user = {
+        "id": user["id"],
+        "bitrix_id": bitrix_id,
+        "name": name,
+        "email": email,
+        "role": role
+    }
+    session_id = create_session(session_user)
+
+    # Redirect to main page with session cookie
+    response = RedirectResponse(url="/", status_code=302)
+    response.set_cookie(
+        key=SESSION_COOKIE,
+        value=session_id,
+        httponly=True,
+        max_age=86400,  # 24 hours
+        samesite="lax"
+    )
+
+    print(f"✅ User logged in: {name} (ID: {bitrix_id}, role: {role})")
+    return response
+
+
+@app.get("/auth/logout")
+async def auth_logout(request: Request):
+    """Logout user"""
+    session_id = request.cookies.get(SESSION_COOKIE)
+    if session_id:
+        delete_session(session_id)
+
+    response = RedirectResponse(url="/", status_code=302)
+    response.delete_cookie(SESSION_COOKIE)
+    return response
+
+
+@app.get("/api/me")
+async def get_me(request: Request):
+    """Get current user info"""
+    user = get_current_user(request)
+    if not user:
+        return JSONResponse({"authenticated": False})
+
+    return JSONResponse({
+        "authenticated": True,
+        "user": user
+    })
+
+
+@app.get("/login")
+async def login_page(request: Request):
+    """Show login page"""
+    user = get_current_user(request)
+    if user:
+        return RedirectResponse(url="/", status_code=302)
+
+    return templates.TemplateResponse("login.html", {
+        "request": request,
+        "auth_configured": is_auth_configured(),
+        "auth_url": get_auth_url() if is_auth_configured() else None
+    })
+
+
+# ============== MAIN ROUTES ==============
+
 @app.get("/")
 async def index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request, "config": DEFAULT_CONFIG})
+    user = get_current_user(request)
+
+    # If auth is configured and user is not logged in, redirect to login
+    if is_auth_configured() and not user:
+        return RedirectResponse(url="/login", status_code=302)
+
+    return templates.TemplateResponse("index.html", {
+        "request": request,
+        "config": DEFAULT_CONFIG,
+        "user": user,
+        "auth_configured": is_auth_configured()
+    })
 
 
 @app.post("/api/detect-file-type")
