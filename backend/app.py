@@ -1844,6 +1844,15 @@ async def apply_review_changes(request: Request):
                                 modified_records[i]["service_payment"] = old.get("service_payment", 0)
                                 modified_records[i]["percent"] = old.get("percent", 0)
                                 modified_records[i]["is_reverted"] = True
+
+                                # IMPORTANT: Also preserve calculation values (including manual edits)
+                                # This ensures "Вариант B" works - old version values are kept
+                                old_calc = old.get("calculation", {})
+                                if old_calc:
+                                    modified_records[i]["_old_calc_total"] = old_calc.get("total", 0)
+                                    modified_records[i]["_old_calc_fuel"] = old_calc.get("fuel_payment", 0)
+                                    modified_records[i]["_old_calc_transport"] = old_calc.get("transport", 0)
+                                    print(f"📋 Preserving old calc for {key}: total={old_calc.get('total', 0)}")
             except Exception as e:
                 print(f"Error reverting modified orders: {e}")
         
@@ -1881,6 +1890,15 @@ async def apply_review_changes(request: Request):
         calculated_data = []
         for row in modified_records:
             calc_row = await calculate_row(row, config, {})
+
+            # For reverted records, restore the old calculation values (including manual edits)
+            # This implements "Вариант B" - keeping old version values
+            if row.get("is_reverted") and "_old_calc_total" in row:
+                calc_row["total"] = row["_old_calc_total"]
+                calc_row["fuel_payment"] = row.get("_old_calc_fuel", 0)
+                calc_row["transport"] = row.get("_old_calc_transport", 0)
+                print(f"✅ Restored old calc values for {row.get('order', '')[:30]}: total={calc_row['total']}")
+
             calculated_data.append(calc_row)
         
         calculated_data.sort(key=lambda x: normalize_worker_name(x.get("worker", ""), name_map).replace(" (оплата клиентом)", ""))
