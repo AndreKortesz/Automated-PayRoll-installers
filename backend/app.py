@@ -1309,14 +1309,28 @@ async def upload_files(
                             # Build maps for comparison
                             old_map = {}
                             for o in old_orders:
+                                # Skip extra rows for normal comparison
+                                if o.get("is_extra_row", False):
+                                    continue
                                 key = (o.get("order_code", ""), o.get("worker", ""))
                                 old_map[key] = o
                             
+                            print(f"📊 Comparison: {len(old_map)} orders in DB")
+                            
                             new_map = {}
                             for _, row in combined.iterrows():
+                                # Skip worker total rows
+                                if row.get("is_worker_total", False):
+                                    continue
+                                    
                                 order_text = str(row.get("order", ""))
                                 order_code_match = re.search(r'(КАУТ|ИБУТ|ТДУТ)-\d+', order_text)
                                 order_code = order_code_match.group(0) if order_code_match else ""
+                                
+                                # Skip rows without order code (they are totals or headers)
+                                if not order_code:
+                                    continue
+                                    
                                 worker = normalize_worker_name(str(row.get("worker", ""))).replace(" (оплата клиентом)", "")
                                 
                                 # Extract address from order text
@@ -1360,6 +1374,8 @@ async def upload_files(
                                     "service_payment": service_payment,
                                     "percent": percent_val,
                                 }
+                            
+                            print(f"📊 Comparison: {len(new_map)} orders in new files")
                             
                             # Find added - include all details
                             for key, order in new_map.items():
@@ -1419,6 +1435,11 @@ async def upload_files(
                                 ("service_payment", "Оплата услуг"),
                                 ("percent", "Процент"),
                             ]
+                            
+                            # Debug: show some keys from both maps
+                            print(f"📊 Sample old_map keys: {list(old_map.keys())[:5]}")
+                            print(f"📊 Sample new_map keys: {list(new_map.keys())[:5]}")
+                            
                             for key in new_map:
                                 if key[0] and key in old_map:  # Both exist
                                     old_order = old_map[key]
@@ -1444,12 +1465,15 @@ async def upload_files(
                                                 })
                                     
                                     if field_changes:
+                                        print(f"📊 Modified found: {key} - {field_changes}")
                                         changes_summary["modified"].append({
                                             "order_code": new_order["order_code"],
                                             "worker": new_order["worker"],
                                             "address": new_order["address"],
                                             "changes": field_changes
                                         })
+                            
+                            print(f"📊 Comparison result: {len(changes_summary['added'])} added, {len(changes_summary['deleted'])} deleted, {len(changes_summary['modified'])} modified")
                             
                             # Add extra rows (manual additions) from previous version to deleted list
                             # These are rows that were manually added and won't be in new 1C files
@@ -2937,7 +2961,10 @@ async def update_calculation(calc_id: int, request: Request):
         upload_id = calc_row["upload_id"]
         order_code = order_row["order_code"] if order_row else ""
         worker = calc_row["worker"]
-        address = order_row["address"] if order_row else ""
+        # For extra_rows, address is stored in order_full
+        address = order_row["address"] if order_row and order_row["address"] else ""
+        if not address and order_row and order_row.get("order_full"):
+            address = order_row["order_full"][:200]  # Use order_full as address for extra rows
         
         for edit in edits_to_save:
             await save_manual_edit(
