@@ -1745,7 +1745,7 @@ async def apply_review_changes(request: Request):
         # Save to database
         period = session["period"]
         period_id = await get_or_create_period(period)
-        upload_id = await create_upload(period_id)
+        upload_id = await create_upload(period_id, config)
         
         # First pass: save all orders and collect totals
         worker_totals = {}
@@ -1882,7 +1882,7 @@ async def process_first_upload(request: Request):
         # Save to database
         period = session["period"]
         period_id = await get_or_create_period(period)
-        upload_id = await create_upload(period_id)
+        upload_id = await create_upload(period_id, config)
         
         # First pass: save all orders and collect totals
         worker_totals = {}
