@@ -35,15 +35,21 @@ def get_auth_url() -> str:
     )
 
 
-async def exchange_code_for_token(code: str) -> Optional[dict]:
+async def exchange_code_for_token(code: str, server_domain: str = None) -> Optional[dict]:
     """Exchange authorization code for access token"""
     if not BITRIX_CLIENT_ID or not BITRIX_CLIENT_SECRET:
         return None
 
+    # Use provided server_domain or default to oauth.bitrix.info
+    oauth_server = server_domain or "oauth.bitrix.info"
+    token_url = f"https://{oauth_server}/oauth/token/"
+
+    print(f"🔐 Exchanging code at: {token_url}")
+
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                "https://oauth.bitrix.info/oauth/token/",
+                token_url,
                 params={
                     "grant_type": "authorization_code",
                     "client_id": BITRIX_CLIENT_ID,
