@@ -765,15 +765,25 @@
                     const worker = edit.worker.replace(' (оплата клиентом)', '');
                     const oldVal = Math.round(edit.old_value || 0).toLocaleString('ru-RU');
                     const newVal = Math.round(edit.new_value || 0).toLocaleString('ru-RU');
-                    
-                    let addressHtml = edit.address ? `<div class="edit-address">📍 ${edit.address}</div>` : '';
+
+                    // For extra rows without order_code, use address as title (e.g., "Отпускные")
+                    let headerTitle = edit.order_code || '';
+                    let addressHtml = '';
+                    if (!headerTitle && edit.address) {
+                        // Use address as header for extra rows (Отпускные, Переплата, etc.)
+                        headerTitle = edit.address;
+                    } else if (edit.address) {
+                        // Show address below header for normal orders
+                        addressHtml = `<div class="edit-address">📍 ${edit.address}</div>`;
+                    }
+
                     let timeHtml = edit.created_at ? `<div class="edit-time">${new Date(edit.created_at).toLocaleString('ru-RU')}</div>` : '';
 
                     editsHtml += `
                         <div class="manual-edit-item">
                             <span class="edit-icon">✏️</span>
                             <div class="edit-content">
-                                <div class="edit-header">${edit.order_code || ''} - ${worker}</div>
+                                <div class="edit-header">${headerTitle} - ${worker}</div>
                                 ${addressHtml}
                                 <div class="edit-change ${fieldClass}">${fieldLabel}: ${oldVal} → ${newVal} ₽</div>
                                 ${timeHtml}
