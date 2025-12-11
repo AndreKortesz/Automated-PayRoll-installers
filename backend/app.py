@@ -1899,6 +1899,17 @@ async def apply_review_changes(request: Request):
                 calc_row["transport"] = row.get("_old_calc_transport", 0)
                 print(f"✅ Restored old calc values for {row.get('order', '')[:30]}: total={calc_row['total']}")
 
+            # For restored records (deleted items brought back), preserve their saved total/fuel/transport
+            # This is critical for extra rows like "Переплата" which have no service_payment
+            if row.get("is_restored"):
+                if row.get("total", 0) != 0:
+                    calc_row["total"] = row["total"]
+                if row.get("fuel_payment", 0) != 0:
+                    calc_row["fuel_payment"] = row["fuel_payment"]
+                if row.get("transport", 0) != 0:
+                    calc_row["transport"] = row["transport"]
+                print(f"✅ Preserved restored row values for {row.get('order', '')[:40]}: total={calc_row['total']}")
+
             calculated_data.append(calc_row)
         
         calculated_data.sort(key=lambda x: normalize_worker_name(x.get("worker", ""), name_map).replace(" (оплата клиентом)", ""))
