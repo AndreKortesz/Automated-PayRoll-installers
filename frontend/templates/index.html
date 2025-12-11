@@ -1163,8 +1163,18 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    // Redirect to period page
-                    window.location.href = `/period/${data.period_id}`;
+                    // Check if we need to review changes first
+                    if (data.redirect_to_review && data.has_changes) {
+                        // Redirect to review page
+                        window.location.href = `/review?session_id=${data.session_id}`;
+                    } else if (data.period_id) {
+                        // No changes to review, go directly to period
+                        window.location.href = `/period/${data.period_id}`;
+                    } else {
+                        // First upload for this period - need to calculate first
+                        // Call calculate endpoint directly
+                        await processFirstUpload(data.session_id);
+                    }
                 } else {
                     throw new Error(data.detail || 'Ошибка обработки');
                 }
@@ -1174,6 +1184,29 @@
                 loadingIndicator.classList.add('hidden');
             }
         });
+
+        // Process first upload (no previous version)
+        async function processFirstUpload(sessionId) {
+            try {
+                const response = await fetch('/api/process-first-upload', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionId })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    window.location.href = `/period/${data.period_id}`;
+                } else {
+                    throw new Error(data.error || 'Ошибка обработки');
+                }
+            } catch (error) {
+                alert('❌ Ошибка: ' + error.message);
+                uploadForm.style.display = 'block';
+                loadingIndicator.classList.add('hidden');
+            }
+        }
 
         // ===== LOAD PERIODS =====
         async function loadPeriods() {
