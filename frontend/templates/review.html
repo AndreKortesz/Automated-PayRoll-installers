@@ -873,8 +873,8 @@
 
             // Deleted section
             if (deleted.length > 0) {
-                html += renderSection('deleted', 'Удалённые заказы', deleted, 'red', '➖',
-                    'Эти заказы были в предыдущей версии, но отсутствуют в новых файлах. Отметьте те, которые нужно восстановить.');
+                html += renderSection('deleted', 'Удалённые / Ручные корректировки', deleted, 'red', '➖',
+                    'Эти заказы и ручные корректировки были в предыдущей версии, но отсутствуют в новых файлах. Отметьте те, которые нужно восстановить.');
             }
 
             // Modified section
@@ -915,9 +915,11 @@
             const key = item.order_code + '_' + item.worker;
             const isChecked = selections[type][key];
             const selectedClass = isChecked ? 'selected' : '';
+            const isExtraRow = item.type === 'extra_row';
 
             let detailsHtml = '';
             let actionLabel = '';
+            let extraBadge = isExtraRow ? '<span style="background: #E8F5E9; color: #2E7D32; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-left: 8px;">Ручная корректировка</span>' : '';
 
             if (type === 'added') {
                 actionLabel = isChecked ? 
@@ -956,6 +958,9 @@
                 }
             }
 
+            // For extra rows, show the full order text as address if no address
+            const displayAddress = item.address || (isExtraRow ? item.order_code : '');
+
             return `
                 <div class="change-item ${selectedClass}" id="item-${type}-${idx}">
                     <div class="change-checkbox">
@@ -965,11 +970,12 @@
                     <div class="change-icon ${type}">${type === 'added' ? '➕' : type === 'deleted' ? '➖' : '✏️'}</div>
                     <div class="change-content">
                         <div class="change-header">
-                            <span class="change-order">${item.order_code}</span>
+                            <span class="change-order">${isExtraRow ? '📝 ' : ''}${item.order_code}</span>
                             <span class="change-worker">👷 ${item.worker}</span>
+                            ${extraBadge}
                             ${actionLabel}
                         </div>
-                        ${item.address ? `<div class="change-address">📍 ${item.address}</div>` : ''}
+                        ${displayAddress && displayAddress !== item.order_code ? `<div class="change-address">📍 ${displayAddress}</div>` : ''}
                         <div class="change-details">${detailsHtml}</div>
                     </div>
                 </div>
