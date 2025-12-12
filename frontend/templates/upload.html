@@ -649,12 +649,13 @@
             let totalRevenue = 0, totalPayment = 0, totalFuel = 0, totalTransport = 0, totalFinal = 0;
 
             ordersData.forEach(order => {
-                const calc = order.calculation || {};
+                // fuel_payment, transport, total now come directly from order (from JOIN)
+                const calcId = order.calculation_id;
                 totalRevenue += order.revenue_services || 0;
                 totalPayment += order.service_payment || 0;
-                totalFuel += pendingChanges[calc.id]?.fuel_payment ?? calc.fuel_payment ?? 0;
-                totalTransport += pendingChanges[calc.id]?.transport ?? calc.transport ?? 0;
-                totalFinal += pendingChanges[calc.id]?.total ?? calc.total ?? 0;
+                totalFuel += pendingChanges[calcId]?.fuel_payment ?? order.fuel_payment ?? 0;
+                totalTransport += pendingChanges[calcId]?.transport ?? order.transport ?? 0;
+                totalFinal += pendingChanges[calcId]?.total ?? order.total ?? 0;
             });
 
             // Summary HTML (numbers are safe, no user input)
@@ -714,15 +715,15 @@
             `;
 
             ordersData.forEach((order, idx) => {
-                const calc = order.calculation || {};
-                const calcId = calc.id;
+                // fuel_payment, transport, total now come directly from order (from JOIN)
+                const calcId = order.calculation_id;
                 const orderId = order.id;
                 const isNewRow = order.is_extra_row || order._isNew;
 
-                // Get values (pending or original)
-                const fuelVal = pendingChanges[calcId]?.fuel_payment ?? calc.fuel_payment ?? 0;
-                const transportVal = pendingChanges[calcId]?.transport ?? calc.transport ?? 0;
-                const totalVal = pendingChanges[calcId]?.total ?? calc.total ?? 0;
+                // Get values (pending or original) - now from order directly
+                const fuelVal = pendingChanges[calcId]?.fuel_payment ?? order.fuel_payment ?? 0;
+                const transportVal = pendingChanges[calcId]?.transport ?? order.transport ?? 0;
+                const totalVal = pendingChanges[calcId]?.total ?? order.total ?? 0;
 
                 // Badges (static content, safe)
                 let badges = [];
