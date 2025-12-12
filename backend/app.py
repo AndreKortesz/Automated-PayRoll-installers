@@ -239,8 +239,15 @@ async def auth_callback(request: Request):
 
         access_token = token_data.get("access_token")
         refresh_token = token_data.get("refresh_token")
-        domain = token_data.get("domain", domain)
+        # IMPORTANT: Use domain from callback params, NOT from token_data
+        # token_data may contain server_domain (oauth.bitrix24.tech) instead of actual domain
+        token_domain = token_data.get("domain")
+        if token_domain and "bitrix24.ru" in token_domain:
+            domain = token_domain
+        # else keep domain from query params (svyaz.bitrix24.ru)
         expires_in = token_data.get("expires_in", 3600)
+        
+    print(f"🔐 Using domain for user info: {domain}")
 
     # Get user info from Bitrix24
     bitrix_user = await get_bitrix_user(access_token, domain)
