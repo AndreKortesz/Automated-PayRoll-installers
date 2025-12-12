@@ -201,9 +201,12 @@
                 const data = await response.json();
                 if (!data.success) throw new Error(data.error || 'Failed to load');
 
-                Security.setText(document.getElementById('pageTitle'), data.data.period.name);
+                // API returns { success: true, data: { name, uploads, ... } }
+                const periodData = data.data;
+                
+                Security.setText(document.getElementById('pageTitle'), periodData.name);
                 Security.setText(document.getElementById('pageSubtitle'), 'Период расчёта зарплаты');
-                uploadsData = data.data.uploads;
+                uploadsData = periodData.uploads || [];
 
                 if (uploadsData.length > 0) {
                     currentUploadId = uploadsData[0].id;
