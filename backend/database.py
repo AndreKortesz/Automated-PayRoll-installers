@@ -782,7 +782,7 @@ async def save_calculation(upload_id: int, order_id: int, calc_data: dict) -> in
         return None
     
     # Only include fields that exist in calculations table
-    allowed_fields = {'fuel_payment', 'transport', 'diagnostic_50', 'total'}
+    allowed_fields = {'worker', 'fuel_payment', 'transport', 'diagnostic_50', 'total'}
     filtered_data = {k: v for k, v in calc_data.items() if k in allowed_fields}
     
     query = calculations.insert().values(
