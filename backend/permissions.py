@@ -313,8 +313,11 @@ async def get_user_permissions(request: Request, period_id: int = None) -> dict:
                 PeriodStatus.PAID: "Оплачено",
             }.get(status, status)
             permissions["is_latest"] = is_latest
-            permissions["sent_at"] = period.get("sent_at")
-            permissions["paid_at"] = period.get("paid_at")
+            # Convert datetime to string for JSON serialization
+            sent_at = period.get("sent_at")
+            paid_at = period.get("paid_at")
+            permissions["sent_at"] = str(sent_at) if sent_at else None
+            permissions["paid_at"] = str(paid_at) if paid_at else None
             
             # Employee permissions for latest non-paid period
             if not is_admin:

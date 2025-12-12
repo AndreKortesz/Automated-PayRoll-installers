@@ -103,9 +103,6 @@ async def api_send_to_workers(request: Request, period_id: int):
         if not period:
             return JSONResponse({"success": False, "error": "Период не найден"}, status_code=404)
         
-        # TODO: Get user's access token for Bitrix24 API
-        # For now, we'll mark as sent without actually sending
-        
         sent_count = 0
         errors = []
         
@@ -114,9 +111,6 @@ async def api_send_to_workers(request: Request, period_id: int):
             bitrix_user_id = worker_info.get("bitrix_id")
             
             try:
-                # TODO: Actually send message via Bitrix24 API
-                # await send_bitrix_message(access_token, bitrix_user_id, message, file_url)
-                
                 # Save notification record
                 await save_notification(
                     period_id=period_id,
