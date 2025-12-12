@@ -777,27 +777,33 @@ async def upload_files(
 
                                     # IMPORTANT: Also compare calculations.total with service_payment
                                     # This detects manual edits made in UI
-                                    calc = old_order.get("calculation", {})
-                                    if calc:
-                                        old_total = safe_float_db(calc.get("total", 0))
-                                        new_service_payment = float(new_order.get("service_payment", 0) or 0)
+                                    # Note: fuel_payment, transport, total come directly from old_order (from JOIN)
+                                    old_total = safe_float_db(old_order.get("total", 0))
+                                    old_fuel = safe_float_db(old_order.get("fuel_payment", 0))
+                                    old_transport = safe_float_db(old_order.get("transport", 0))
+                                    new_service_payment = float(new_order.get("service_payment", 0) or 0)
 
-                                        # If total in DB differs from service_payment in file by more than just fuel/transport
-                                        # it means there were manual edits
-                                        if abs(old_total - new_service_payment) > 0.01:
-                                            # Check if this is just fuel+transport difference or actual manual edit
-                                            fuel = safe_float_db(calc.get("fuel_payment", 0))
-                                            transport = safe_float_db(calc.get("transport", 0))
-                                            expected_total = new_service_payment + fuel + transport
+                                    # If total in DB differs from service_payment in file
+                                    if abs(old_total - new_service_payment) > 0.01:
+                                        # Calculate expected total (service_payment + fuel + transport)
+                                        expected_total = new_service_payment + old_fuel + old_transport
 
-                                            # If old_total differs from expected_total, there was a manual edit
-                                            if abs(old_total - expected_total) > 0.01:
-                                                field_changes.append({
-                                                    "field": "Итого (ручное изменение)",
-                                                    "old": f"{old_total:,.0f}".replace(",", " "),
-                                                    "new": f"{new_service_payment:,.0f}".replace(",", " ") + " (из файла)"
-                                                })
-                                                print(f"📊 Manual edit detected: {key} - total in DB={old_total}, service_payment in file={new_service_payment}, expected={expected_total}")
+                                        # If old_total differs from expected_total, there was a manual edit to total
+                                        if abs(old_total - expected_total) > 0.01:
+                                            field_changes.append({
+                                                "field": "Итого (ручное изменение)",
+                                                "old": f"{old_total:,.0f}".replace(",", " "),
+                                                "new": f"{new_service_payment:,.0f}".replace(",", " ") + " (из файла)"
+                                            })
+                                            print(f"📊 Manual edit detected: {key} - total in DB={old_total}, service_payment in file={new_service_payment}, expected={expected_total}")
+                                        elif old_fuel > 0 or old_transport > 0:
+                                            # Fuel/transport were added - warn that they might be lost
+                                            field_changes.append({
+                                                "field": "Бензин/Транспорт (будут сохранены)",
+                                                "old": f"Бензин: {old_fuel:,.0f}, Транспорт: {old_transport:,.0f}".replace(",", " "),
+                                                "new": "Будут перенесены из предыдущей версии"
+                                            })
+                                            print(f"📊 Fuel/transport found: {key} - fuel={old_fuel}, transport={old_transport}")
 
                                     if field_changes:
                                         print(f"📊 Modified found: {key} - {field_changes}")

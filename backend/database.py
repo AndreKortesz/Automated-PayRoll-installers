@@ -820,12 +820,19 @@ async def compare_uploads(old_upload_id: int, new_upload_id: int) -> dict:
 
 
 async def get_orders_by_upload(upload_id: int) -> List[dict]:
-    """Get all orders for an upload"""
+    """Get all orders for an upload with calculations data"""
     if not database or not database.is_connected:
         return []
     
-    query = orders.select().where(orders.c.upload_id == upload_id)
-    rows = await database.fetch_all(query)
+    # JOIN with calculations to get fuel_payment, transport, total
+    query = """
+        SELECT o.*, c.fuel_payment, c.transport, c.diagnostic_50, c.total, c.id as calculation_id
+        FROM orders o
+        LEFT JOIN calculations c ON o.id = c.order_id
+        WHERE o.upload_id = :upload_id
+        ORDER BY o.worker, o.is_client_payment, o.id
+    """
+    rows = await database.fetch_all(query, {"upload_id": upload_id})
     return [dict(row._mapping) for row in rows]
 
 
