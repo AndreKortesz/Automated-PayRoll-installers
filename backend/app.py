@@ -1912,11 +1912,25 @@ async def api_get_period(period_id: int):
         if not details:
             raise HTTPException(status_code=404, detail="Period not found")
         
+        # Convert datetime fields to strings
+        def serialize_datetime(obj):
+            if isinstance(obj, dict):
+                return {k: serialize_datetime(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [serialize_datetime(item) for item in obj]
+            elif hasattr(obj, 'isoformat'):  # datetime object
+                return obj.isoformat()
+            return obj
+        
+        serialized = serialize_datetime(details)
+        
         return JSONResponse({
             "success": True,
-            "data": details
+            "data": serialized
         })
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return JSONResponse({"success": False, "error": str(e)})
 
 
@@ -1928,11 +1942,25 @@ async def api_get_upload(upload_id: int):
         if not details:
             raise HTTPException(status_code=404, detail="Upload not found")
         
+        # Convert datetime fields to strings
+        def serialize_datetime(obj):
+            if isinstance(obj, dict):
+                return {k: serialize_datetime(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [serialize_datetime(item) for item in obj]
+            elif hasattr(obj, 'isoformat'):  # datetime object
+                return obj.isoformat()
+            return obj
+        
+        serialized = serialize_datetime(details)
+        
         return JSONResponse({
             "success": True,
-            "data": details
+            "data": serialized
         })
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return JSONResponse({"success": False, "error": str(e)})
 
 
@@ -2260,10 +2288,10 @@ async def download_period_archive(period_id: int, archive_type: str):
             worker_orders_client = await get_worker_orders(latest_upload["id"], f"{wt['worker']} (оплата клиентом)")
             all_orders.extend(worker_orders_client)
         
-        # Reconstruct data structure from current DB values (calculations table!)
+        # Reconstruct data structure from current DB values (calculations joined with orders!)
         calculated_data = []
         for order in all_orders:
-            calc = order.get("calculation", {})
+            # Note: fuel_payment, transport, etc. are already in order from JOIN
             row = {
                 "worker": order["worker"],
                 "order": order.get("order_full", "") or order.get("address", ""),
@@ -2280,11 +2308,11 @@ async def download_period_archive(period_id: int, archive_type: str):
                 "is_client_payment": order.get("is_client_payment", False),
                 "is_over_10k": order.get("is_over_10k", False),
                 "is_extra_row": order.get("is_extra_row", False),
-                # CRITICAL: Take values from calculations table (can be edited!)
-                "fuel_payment": calc.get("fuel_payment", 0),
-                "transport": calc.get("transport", 0),
-                "diagnostic_50": calc.get("diagnostic_50", 0),
-                "total": calc.get("total", 0),
+                # Values from calculations table (already in order from JOIN)
+                "fuel_payment": order.get("fuel_payment", 0) or 0,
+                "transport": order.get("transport", 0) or 0,
+                "diagnostic_50": order.get("diagnostic_50", 0) or 0,
+                "total": order.get("total", 0) or 0,
             }
             calculated_data.append(row)
         
