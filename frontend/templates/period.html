@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <title>Детали периода | Mos-GSM</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto+Condensed:wght@300;400;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="/static/security.js"></script>
+    <style>
+        .page-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px; flex-wrap: wrap; gap: 20px; }
+        .page-title-section h1 { font-family: 'Bebas Neue', sans-serif; font-size: 48px; color: var(--black); line-height: 1; }
+        .page-subtitle { font-size: 16px; color: var(--gray-dark); margin-top: 8px; }
+        .page-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+        
+        /* Status badge */
+        .status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 20px; font-family: 'Roboto Condensed', sans-serif; font-weight: 700; font-size: 14px; text-transform: uppercase; }
+        .status-badge.draft { background: #E3F2FD; color: #1565C0; }
+        .status-badge.sent { background: #FFF3E0; color: #EF6C00; }
+        .status-badge.paid { background: #E8F5E9; color: #2E7D32; }
+        .status-badge.locked { background: #FFEBEE; color: #C62828; }
+        
+        /* Action buttons */
+        .action-buttons { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 16px; margin-bottom: 24px; }
+        .btn-send { background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%); color: white; }
+        .btn-send:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(255, 152, 0, 0.4); }
+        .btn-accountant { background: linear-gradient(135deg, #4CAF50 0%, #388E3C 100%); color: white; }
+        .btn-accountant:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4); }
+        .btn-unlock { background: linear-gradient(135deg, #9E9E9E 0%, #616161 100%); color: white; }
+        .btn-unlock:hover { transform: translateY(-2px); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
+        
+        /* Permission notice */
+        .permission-notice { background: #FFF3E0; border-left: 4px solid #FF9800; padding: 12px 16px; border-radius: 0 8px 8px 0; margin-bottom: 20px; font-size: 14px; color: #E65100; }
+        .permission-notice.error { background: #FFEBEE; border-color: #F44336; color: #C62828; }
+        
+        .version-tabs { display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }
+        .version-tab { font-family: 'Roboto Condensed', sans-serif; font-weight: 500; font-size: 14px; padding: 12px 20px; border-radius: 24px; background: var(--white); border: 2px solid var(--gray); cursor: pointer; transition: all 0.2s; }
+        .version-tab:hover { border-color: var(--yellow); }
+        .version-tab.active { background: var(--yellow); border-color: var(--yellow); }
+        .version-tab .date { font-size: 11px; opacity: 0.7; margin-top: 2px; }
+        .download-section { background: linear-gradient(135deg, var(--gray-light) 0%, #E8E8E8 100%); border-radius: var(--radius-md); padding: 24px; margin-bottom: 24px; }
+        .download-title { font-family: 'Roboto Condensed', sans-serif; font-weight: 700; font-size: 16px; color: var(--black); margin-bottom: 16px; text-transform: uppercase; }
+        .download-buttons { display: flex; gap: 16px; flex-wrap: wrap; }
+        .btn-download { background: linear-gradient(135deg, var(--green-light) 0%, var(--green) 100%); color: var(--white); box-shadow: 0 6px 20px rgba(76, 175, 80, 0.3); }
+        .btn-download:hover { transform: translateY(-2px); }
+        .workers-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
+        .worker-card { background: var(--gray-light); border-radius: var(--radius-md); padding: 24px; cursor: pointer; transition: all 0.3s ease; border: 2px solid transparent; }
+        .worker-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-medium); border-color: var(--yellow); }
+        .worker-name { font-family: 'Roboto Condensed', sans-serif; font-weight: 700; font-size: 18px; color: var(--black); margin-bottom: 16px; }
+        .worker-amounts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+        .worker-amount { padding: 14px; border-radius: var(--radius-sm); text-align: center; }
+        .worker-amount.company { background: #E8F5E9; }
+        .worker-amount.client { background: #FFF3E0; }
+        .worker-amount-value { font-family: 'Bebas Neue', sans-serif; font-size: 24px; line-height: 1; }
+        .worker-amount.company .worker-amount-value { color: var(--green); }
+        .worker-amount.client .worker-amount-value { color: var(--orange); }
+        .worker-amount-label { font-size: 11px; color: var(--gray-dark); margin-top: 4px; text-transform: uppercase; }
+        .worker-total-row { display: flex; justify-content: space-between; align-items: center; padding-top: 16px; border-top: 2px solid var(--gray); }
+        .worker-total-label { font-size: 14px; color: var(--gray-dark); }
+        .worker-total-value { font-family: 'Bebas Neue', sans-serif; font-size: 28px; color: var(--black); }
+        .grand-totals { margin-top: 32px; padding: 24px; background: linear-gradient(135deg, var(--black) 0%, var(--gray-dark) 100%); border-radius: var(--radius-md); }
+        .grand-totals-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+        .grand-total-item { text-align: center; }
+        .grand-total-value { font-family: 'Bebas Neue', sans-serif; font-size: 36px; color: var(--white); line-height: 1; }
+        .grand-total-item.company .grand-total-value { color: #81C784; }
+        .grand-total-item.client .grand-total-value { color: #FFB74D; }
+        .grand-total-label { font-size: 13px; color: rgba(255,255,255,0.7); margin-top: 8px; }
+        .changes-list { display: flex; flex-direction: column; gap: 12px; }
+        .change-item { padding: 16px; border-radius: var(--radius-sm); display: flex; align-items: flex-start; gap: 12px; }
+        .change-item.added { background: #E8F5E9; border-left: 4px solid var(--green); }
+        .change-item.deleted { background: #FFEBEE; border-left: 4px solid var(--red); }
+        .change-item.modified { background: #FFF8E1; border-left: 4px solid var(--yellow); }
+        .change-icon { font-size: 20px; }
+        .change-text { flex: 1; }
+        .change-header { font-weight: 600; color: var(--black); }
+        .change-address { font-size: 12px; color: var(--gray-dark); margin-top: 4px; }
+        .change-field { font-size: 13px; color: var(--gray-dark); margin-top: 6px; }
+        .change-details { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+        .detail-tag { background: rgba(0,0,0,0.08); padding: 4px 8px; border-radius: 4px; font-size: 11px; }
+        .manual-edit-item { background: #E3F2FD; border-left: 4px solid var(--blue); padding: 16px; border-radius: var(--radius-sm); display: flex; align-items: flex-start; gap: 12px; }
+        .edit-content { flex: 1; }
+        .edit-header { font-weight: 600; color: var(--black); }
+        .edit-address { font-size: 12px; color: var(--gray-dark); margin-top: 4px; }
+        .edit-change { display: inline-block; margin-top: 8px; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 500; }
+        .edit-change.fuel { background: #FFF8E1; color: #F57F17; }
+        .edit-change.transport { background: #E8F5E9; color: var(--green); }
+        .edit-change.total { background: #E3F2FD; color: var(--blue); }
+        .edit-time { font-size: 11px; color: var(--gray-dark); margin-top: 6px; }
+        .no-changes { background: #E8F5E9; color: var(--green); padding: 20px; border-radius: var(--radius-sm); text-align: center; font-weight: 500; }
+        
+        /* Modal */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
+        .modal-overlay.active { display: flex; }
+        .modal { background: white; border-radius: 16px; padding: 32px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto; }
+        .modal-title { font-family: 'Bebas Neue', sans-serif; font-size: 28px; margin-bottom: 16px; }
+        .modal-content { margin-bottom: 24px; }
+        .modal-actions { display: flex; gap: 12px; justify-content: flex-end; }
+        .worker-checkbox { display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--gray-light); border-radius: 8px; margin-bottom: 8px; cursor: pointer; }
+        .worker-checkbox:hover { background: var(--gray); }
+        .worker-checkbox input { width: 20px; height: 20px; }
+        .worker-checkbox-info { flex: 1; }
+        .worker-checkbox-name { font-weight: 600; }
+        .worker-checkbox-amount { font-size: 13px; color: var(--gray-dark); }
+        
+        @media (max-width: 1024px) { .grand-totals-grid { grid-template-columns: 1fr; gap: 16px; } }
+        @media (max-width: 768px) { .page-title-section h1 { font-size: 36px; } .workers-grid { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <a href="/" class="logo">
+            <div class="logo-icon"><div class="logo-bar"></div><div class="logo-bar"></div><div class="logo-bar"></div><div class="logo-bar"></div><div class="logo-bar"></div></div>
+            <span class="logo-text">Mos-GSM</span>
+        </a>
+        <nav class="nav">
+            <a href="/" class="nav-link">Главная</a>
+            <a href="/history" class="nav-link active">История</a>
+            <a href="/comparison" class="nav-link">Сравнение</a>
+        </nav>
+    </header>
+
+    <main class="main">
+        <div class="page-header">
+            <div class="page-title-section">
+                <h1 id="pageTitle">Загрузка...</h1>
+                <p class="page-subtitle" id="pageSubtitle"></p>
+                <div id="statusBadge"></div>
+            </div>
+            <div class="page-actions">
+                <a href="/history" class="btn btn-secondary">← История</a>
+                <a href="/" class="btn btn-primary">+ Новый расчёт</a>
+            </div>
+        </div>
+        
+        <!-- Permission notice -->
+        <div id="permissionNotice" class="permission-notice" style="display: none;"></div>
+        
+        <!-- Action buttons -->
+        <div id="actionButtons" class="action-buttons" style="display: none;"></div>
+        
+        <div id="content">
+            <div class="card"><div class="card-body"><div class="loading"><div class="spinner"></div><p>Загрузка данных...</p></div></div></div>
+        </div>
+    </main>
+    
+    <!-- Send to Workers Modal -->
+    <div id="sendWorkersModal" class="modal-overlay">
+        <div class="modal">
+            <h2 class="modal-title">📤 Отправить монтажникам</h2>
+            <div class="modal-content">
+                <p style="margin-bottom: 16px; color: var(--gray-dark);">Выберите монтажников для отправки отчётов в Bitrix24 чат:</p>
+                <div id="workersCheckboxList"></div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeModal('sendWorkersModal')">Отмена</button>
+                <button class="btn btn-send" onclick="confirmSendToWorkers()">📤 Отправить</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Send to Accountant Modal -->
+    <div id="sendAccountantModal" class="modal-overlay">
+        <div class="modal">
+            <h2 class="modal-title">💰 Отправить бухгалтеру</h2>
+            <div class="modal-content">
+                <p style="margin-bottom: 16px; color: var(--gray-dark);">После отправки редактирование будет заблокировано.</p>
+                <div id="paymentSummary"></div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeModal('sendAccountantModal')">Отмена</button>
+                <button class="btn btn-accountant" onclick="confirmSendToAccountant()">💰 Отправить и заблокировать</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const periodId = parseInt('{{ period_id }}', 10);
+        let currentUploadId = null;
+        let uploadsData = [];
+        let permissions = {};
+        let workerTotalsData = [];
+
+        async function loadPeriod() {
+            try {
+                // Load permissions first
+                const permResponse = await Security.fetch(`/api/period/${periodId}/permissions`);
+                const permData = await permResponse.json();
+                if (permData.success) {
+                    permissions = permData.permissions;
+                    renderPermissionNotice();
+                    renderActionButtons();
+                    renderStatusBadge();
+                }
+                
+                // Load period data
+                const response = await Security.fetch(`/api/period/${periodId}`);
+                const data = await response.json();
+                if (!data.success) throw new Error(data.error || 'Failed to load');
+
+                // API returns { success: true, data: { name, uploads, ... } }
+                const periodData = data.data;
+                
+                Security.setText(document.getElementById('pageTitle'), periodData.name);
+                Security.setText(document.getElementById('pageSubtitle'), 'Период расчёта зарплаты');
+                uploadsData = periodData.uploads || [];
+
+                if (uploadsData.length > 0) {
+                    currentUploadId = uploadsData[0].id;
+                    renderContent();
+                } else {
+                    document.getElementById('content').innerHTML = '<div class="card"><div class="card-body"><p>Нет загрузок</p></div></div>';
+                }
+            } catch (error) {
+                document.getElementById('content').innerHTML = `<div class="card"><div class="card-body"><p>❌ ${escapeHtml(error.message)}</p></div></div>`;
+            }
+        }
+        
+        function renderStatusBadge() {
+            const container = document.getElementById('statusBadge');
+            if (!permissions.period_status) {
+                container.innerHTML = '';
+                return;
+            }
+            
+            const statusClasses = {
+                'draft': 'draft',
+                'sent': 'sent',
+                'paid': 'paid'
+            };
+            const statusIcons = {
+                'draft': '📝',
+                'sent': '📤',
+                'paid': '✅'
+            };
+            
+            const status = permissions.period_status;
+            const label = permissions.period_status_label || status;
+            const cls = statusClasses[status] || 'draft';
+            const icon = statusIcons[status] || '📋';
+            
+            container.innerHTML = `<span class="status-badge ${cls}" style="margin-top: 12px;">${icon} ${escapeHtml(label)}</span>`;
+        }
+        
+        function renderPermissionNotice() {
+            const container = document.getElementById('permissionNotice');
+            
+            if (!permissions.authenticated) {
+                container.style.display = 'block';
+                container.className = 'permission-notice error';
+                container.innerHTML = '⚠️ Вы не авторизованы. <a href="/auth/login">Войти</a>';
+                return;
+            }
+            
+            if (permissions.period_status === 'paid' && !permissions.is_admin) {
+                container.style.display = 'block';
+                container.className = 'permission-notice error';
+                container.innerHTML = '🔒 Период оплачен. Редактирование заблокировано. Для изменений обратитесь к администратору.';
+                return;
+            }
+            
+            if (!permissions.is_latest && !permissions.is_admin) {
+                container.style.display = 'block';
+                container.className = 'permission-notice';
+                container.innerHTML = '⚠️ Это не последний период. Редактирование доступно только для текущего периода.';
+                return;
+            }
+            
+            container.style.display = 'none';
+        }
+        
+        function renderActionButtons() {
+            const container = document.getElementById('actionButtons');
+            let html = '';
+            
+            // Send to workers button
+            if (permissions.can_send_to_workers && permissions.period_status !== 'paid') {
+                html += `<button class="btn btn-send" onclick="openSendWorkersModal()">📤 Отправить монтажникам</button>`;
+            }
+            
+            // Send to accountant button
+            if (permissions.can_send_to_accountant && permissions.period_status !== 'paid') {
+                html += `<button class="btn btn-accountant" onclick="openSendAccountantModal()">💰 Отправить бухгалтеру</button>`;
+            }
+            
+            // Unlock button (admin only for paid periods)
+            if (permissions.can_unlock && permissions.period_status === 'paid') {
+                html += `<button class="btn btn-unlock" onclick="unlockPeriod()">🔓 Разблокировать</button>`;
+            }
+            
+            container.innerHTML = html;
+            container.style.display = html ? 'flex' : 'none';
+        }
+
+        async function renderContent() {
+            let tabsHtml = '<div class="version-tabs">';
+            uploadsData.forEach(upload => {
+                const isActive = upload.id === currentUploadId ? 'active' : '';
+                const date = upload.created_at ? new Date(upload.created_at).toLocaleString('ru-RU') : '';
+                tabsHtml += `<div class="version-tab ${isActive}" onclick="selectUpload(${upload.id})">Версия ${upload.version}<div class="date">${escapeHtml(date)}</div></div>`;
+            });
+            tabsHtml += '</div>';
+
+            const response = await Security.fetch(`/api/upload/${currentUploadId}`);
+            const data = await response.json();
+            if (!data.success) { document.getElementById('content').innerHTML = tabsHtml + '<div class="card"><div class="card-body"><p>Ошибка</p></div></div>'; return; }
+
+            const upload = data.data;
+            workerTotalsData = upload.worker_totals || [];
+            const changes = upload.changes || [];
+            const manualEdits = upload.manual_edits || [];
+
+            const grandTotal = workerTotalsData.reduce((s, w) => s + (w.total_amount || 0), 0);
+            const grandCompany = workerTotalsData.reduce((s, w) => s + (w.company_amount || 0), 0);
+            const grandClient = workerTotalsData.reduce((s, w) => s + (w.client_amount || 0), 0);
+            const totalOrders = workerTotalsData.reduce((s, w) => s + (w.orders_count || 0), 0);
+
+            let statsHtml = `<div class="stats-bar" style="grid-template-columns: repeat(4, 1fr);">
+                <div class="stats-card"><div class="stats-icon yellow"><svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4z"/></svg></div><div class="stats-content"><div class="stats-value">${workerTotalsData.length}</div><div class="stats-label">Монтажников</div></div></div>
+                <div class="stats-card"><div class="stats-icon green"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/></svg></div><div class="stats-content"><div class="stats-value">${formatCurrency(grandCompany)}</div><div class="stats-label">Компания</div></div></div>
+                <div class="stats-card"><div class="stats-icon orange"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/></svg></div><div class="stats-content"><div class="stats-value">${formatCurrency(grandClient)}</div><div class="stats-label">Клиент</div></div></div>
+                <div class="stats-card"><div class="stats-icon dark"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/></svg></div><div class="stats-content"><div class="stats-value">${formatCurrency(grandTotal)}</div><div class="stats-label">Итого (${totalOrders})</div></div></div>
+            </div>`;
+
+            let downloadHtml = `<div class="download-section"><div class="download-title">📥 Скачать отчёты</div><div class="download-buttons">
+                <a href="/api/period/${periodId}/download/full" class="btn btn-download">📥 Полный отчёт</a>
+                <a href="/api/period/${periodId}/download/workers" class="btn btn-secondary">👷 Для монтажников</a>
+            </div></div>`;
+
+            let workersHtml = '<div class="workers-grid">';
+            workerTotalsData.forEach(wt => {
+                const companyAmt = wt.company_amount || 0;
+                const clientAmt = wt.client_amount || 0;
+                const totalAmt = wt.total_amount || 0;
+                workersHtml += `<div class="worker-card" onclick="viewWorker('${escapeAttr(encodeURIComponent(wt.worker))}')">
+                    <div class="worker-name">👷 ${escapeHtml(wt.worker)}</div>
+                    <div class="worker-amounts">
+                        <div class="worker-amount company"><div class="worker-amount-value">${Math.round(companyAmt).toLocaleString('ru-RU')}</div><div class="worker-amount-label">Компания</div></div>
+                        <div class="worker-amount client"><div class="worker-amount-value">${Math.round(clientAmt).toLocaleString('ru-RU')}</div><div class="worker-amount-label">Клиент</div></div>
+                    </div>
+                    <div class="worker-total-row"><span class="worker-total-label">Итого:</span><span class="worker-total-value">${Math.round(totalAmt).toLocaleString('ru-RU')} ₽</span></div>
+                </div>`;
+            });
+            workersHtml += '</div>';
+
+            workersHtml += `<div class="grand-totals"><div class="grand-totals-grid">
+                <div class="grand-total-item company"><div class="grand-total-value">${Math.round(grandCompany).toLocaleString('ru-RU')} ₽</div><div class="grand-total-label">🏢 Компания</div></div>
+                <div class="grand-total-item client"><div class="grand-total-value">${Math.round(grandClient).toLocaleString('ru-RU')} ₽</div><div class="grand-total-label">👤 Клиент</div></div>
+                <div class="grand-total-item total"><div class="grand-total-value">${Math.round(grandTotal).toLocaleString('ru-RU')} ₽</div><div class="grand-total-label">💰 Итого</div></div>
+            </div></div>`;
+
+            let changesHtml = '';
+            if (changes.length > 0) {
+                changesHtml = '<div class="card" style="margin-top:24px"><div class="card-header"><h3 class="card-title">🔄 Изменения</h3></div><div class="card-body"><div class="changes-list">';
+                changes.forEach(change => {
+                    const icons = { added: '➕', deleted: '➖', modified: '✏️' };
+                    changesHtml += `<div class="change-item ${change.change_type}">
+                        <span class="change-icon">${icons[change.change_type] || '•'}</span>
+                        <div class="change-text">
+                            <div class="change-header">${escapeHtml(change.order_code)} - ${escapeHtml(change.worker)}</div>
+                            ${change.address ? `<div class="change-address">📍 ${escapeHtml(change.address)}</div>` : ''}
+                        </div>
+                    </div>`;
+                });
+                changesHtml += '</div></div></div>';
+            }
+
+            let editsHtml = '';
+            if (manualEdits.length > 0) {
+                editsHtml = '<div class="card" style="margin-top:24px"><div class="card-header"><h3 class="card-title">✏️ Ручные корректировки</h3></div><div class="card-body"><div class="changes-list">';
+                manualEdits.forEach(edit => {
+                    const fieldLabels = { fuel_payment: 'Бензин', transport: 'Транспортные', total: 'Итого' };
+                    const fieldClasses = { fuel_payment: 'fuel', transport: 'transport', total: 'total' };
+                    editsHtml += `<div class="manual-edit-item">
+                        <span style="font-size:20px">✏️</span>
+                        <div class="edit-content">
+                            <div class="edit-header">${escapeHtml(edit.order_code || edit.address)} - ${escapeHtml(edit.worker)}</div>
+                            <div class="edit-change ${fieldClasses[edit.field_name] || ''}">${escapeHtml(fieldLabels[edit.field_name] || edit.field_name)}: ${Math.round(edit.old_value || 0).toLocaleString('ru-RU')} → ${Math.round(edit.new_value || 0).toLocaleString('ru-RU')} ₽</div>
+                        </div>
+                    </div>`;
+                });
+                editsHtml += '</div></div></div>';
+            }
+
+            document.getElementById('content').innerHTML = `${tabsHtml}${statsHtml}<div class="card"><div class="card-header"><h3 class="card-title">👥 Монтажники</h3></div><div class="card-body">${downloadHtml}${workersHtml}</div></div>${changesHtml}${editsHtml}`;
+        }
+        
+        // Modal functions
+        function openModal(modalId) {
+            document.getElementById(modalId).classList.add('active');
+        }
+        
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+        }
+        
+        function openSendWorkersModal() {
+            // Populate workers list
+            let html = '';
+            workerTotalsData.forEach((wt, index) => {
+                const totalAmt = wt.total_amount || 0;
+                html += `<label class="worker-checkbox">
+                    <input type="checkbox" checked data-worker="${escapeAttr(wt.worker)}" data-amount="${totalAmt}">
+                    <div class="worker-checkbox-info">
+                        <div class="worker-checkbox-name">${escapeHtml(wt.worker)}</div>
+                        <div class="worker-checkbox-amount">${Math.round(totalAmt).toLocaleString('ru-RU')} ₽</div>
+                    </div>
+                </label>`;
+            });
+            document.getElementById('workersCheckboxList').innerHTML = html;
+            openModal('sendWorkersModal');
+        }
+        
+        async function confirmSendToWorkers() {
+            const checkboxes = document.querySelectorAll('#workersCheckboxList input:checked');
+            const workers = [];
+            checkboxes.forEach(cb => {
+                workers.push({
+                    name: cb.dataset.worker,
+                    bitrix_id: null // TODO: map worker name to Bitrix ID
+                });
+            });
+            
+            if (workers.length === 0) {
+                alert('Выберите хотя бы одного монтажника');
+                return;
+            }
+            
+            try {
+                const response = await Security.fetch(`/api/period/${periodId}/send-to-workers`, {
+                    method: 'POST',
+                    body: JSON.stringify({ worker_ids: workers })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert(`✅ Отправлено ${data.sent_count} монтажникам`);
+                    closeModal('sendWorkersModal');
+                    // Reload to update status
+                    loadPeriod();
+                } else {
+                    alert('❌ Ошибка: ' + data.error);
+                }
+            } catch (error) {
+                alert('❌ Ошибка: ' + error.message);
+            }
+        }
+        
+        function openSendAccountantModal() {
+            // Build payment summary
+            let html = '<div style="max-height: 300px; overflow-y: auto;">';
+            let total = 0;
+            workerTotalsData.forEach(wt => {
+                const amt = wt.total_amount || 0;
+                total += amt;
+                html += `<div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee;">
+                    <span>${escapeHtml(wt.worker)}</span>
+                    <strong>${Math.round(amt).toLocaleString('ru-RU')} ₽</strong>
+                </div>`;
+            });
+            html += `</div>
+                <div style="display: flex; justify-content: space-between; padding: 16px 0; margin-top: 8px; border-top: 2px solid var(--black); font-size: 18px;">
+                    <strong>ИТОГО:</strong>
+                    <strong>${Math.round(total).toLocaleString('ru-RU')} ₽</strong>
+                </div>`;
+            document.getElementById('paymentSummary').innerHTML = html;
+            openModal('sendAccountantModal');
+        }
+        
+        async function confirmSendToAccountant() {
+            if (!confirm('⚠️ После отправки бухгалтеру редактирование будет заблокировано. Продолжить?')) {
+                return;
+            }
+            
+            const paymentDetails = workerTotalsData.map(wt => ({
+                worker: wt.worker,
+                amount: wt.total_amount || 0,
+                bank: 'Т-Банк' // TODO: get from worker settings
+            }));
+            
+            try {
+                const response = await Security.fetch(`/api/period/${periodId}/send-to-accountant`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        accountant_bitrix_id: null, // TODO: get from settings
+                        payment_details: paymentDetails
+                    })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('✅ Отправлено бухгалтеру. Период заблокирован.');
+                    closeModal('sendAccountantModal');
+                    loadPeriod();
+                } else {
+                    alert('❌ Ошибка: ' + data.error);
+                }
+            } catch (error) {
+                alert('❌ Ошибка: ' + error.message);
+            }
+        }
+        
+        async function unlockPeriod() {
+            if (!confirm('🔓 Разблокировать период для редактирования?')) {
+                return;
+            }
+            
+            try {
+                const response = await Security.fetch(`/api/period/${periodId}/unlock`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('✅ Период разблокирован');
+                    loadPeriod();
+                } else {
+                    alert('❌ Ошибка: ' + data.error);
+                }
+            } catch (error) {
+                alert('❌ Ошибка: ' + error.message);
+            }
+        }
+
+        function selectUpload(uploadId) { currentUploadId = uploadId; renderContent(); }
+        function viewWorker(workerEncoded) { window.location.href = `/upload/${currentUploadId}?worker=${workerEncoded}`; }
+        function formatCurrency(value) { if (value >= 1000000) return (value / 1000000).toFixed(1) + 'М'; if (value >= 1000) return Math.round(value / 1000) + 'К'; return Math.round(value).toString(); }
+
+        loadPeriod();
+    </script>
+</body>
+</html>
