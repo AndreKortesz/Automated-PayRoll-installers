@@ -46,7 +46,7 @@ from database import (
     get_orders_by_upload, get_all_periods, get_period_details,
     get_upload_details, get_worker_orders, get_months_summary,
     get_user_by_bitrix_id, create_or_update_user, update_period_status,
-    get_period_status
+    get_period_status, is_latest_period, PeriodStatus, log_action
 )
 
 # ============================================================================
@@ -57,6 +57,16 @@ from auth import (
     determine_role, is_auth_configured, create_session, get_session,
     delete_session, get_current_user, require_auth, require_admin,
     SESSION_COOKIE, refresh_access_token
+)
+
+# ============================================================================
+# PERMISSIONS IMPORTS
+# ============================================================================
+from permissions import (
+    check_edit_permission, check_upload_permission,
+    check_delete_row_permission, check_delete_period_permission,
+    check_send_permission, check_send_to_accountant_permission,
+    get_user_permissions, log_user_action, get_client_ip
 )
 
 # ============================================================================
@@ -119,6 +129,12 @@ app = FastAPI(
     description="Расчёт зарплаты монтажников",
     lifespan=lifespan
 )
+
+# ============================================================================
+# API ROUTERS
+# ============================================================================
+from api_status import router as status_router
+app.include_router(status_router)
 
 # ============================================================================
 # CSRF MIDDLEWARE (Optional)
