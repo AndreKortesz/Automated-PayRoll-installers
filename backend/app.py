@@ -815,25 +815,22 @@ async def upload_files(
                                     new_fuel = float(new_order.get("fuel_payment", 0) or 0)
                                     new_transport = float(new_order.get("transport", 0) or 0)
 
-                                    # Compare totals - if different, there was a manual edit
-                                    if abs(old_total - new_total) > 0.01:
+                                    # Calculate what total SHOULD be with old fuel/transport
+                                    # This isolates manual edits from fuel calculation fluctuations
+                                    new_service_payment = float(new_order.get("service_payment", 0) or 0)
+                                    expected_total_with_old_fuel = new_service_payment + old_fuel + old_transport
+                                    
+                                    # Compare old_total with expected - if different, there was a REAL manual edit
+                                    # (not just fuel API fluctuation)
+                                    if abs(old_total - expected_total_with_old_fuel) > 0.01:
                                         field_changes.append({
                                             "field": "Итого (ручное изменение)",
                                             "old": f"{old_total:,.0f}".replace(",", " "),
-                                            "new": f"{new_total:,.0f}".replace(",", " ") + " (пересчитано)"
+                                            "new": f"{expected_total_with_old_fuel:,.0f}".replace(",", " ") + " (пересчитано)"
                                         })
-                                        print(f"📊 Total differs: {key} - old={old_total}, new={new_total}")
+                                        print(f"📊 Manual edit detected: {key} - old_total={old_total}, expected={expected_total_with_old_fuel}")
                                     
-                                    # Also check if fuel differs significantly (e.g. address changed)
-                                    if abs(old_fuel - new_fuel) > 50:  # More than 50 rub difference
-                                        field_changes.append({
-                                            "field": "Бензин",
-                                            "old": f"{old_fuel:,.0f}".replace(",", " "),
-                                            "new": f"{new_fuel:,.0f}".replace(",", " ")
-                                        })
-                                        print(f"📊 Fuel differs: {key} - old={old_fuel}, new={new_fuel}")
-                                    
-                                    # Check if transport differs
+                                    # Check if transport differs (this is a real change, not API fluctuation)
                                     if abs(old_transport - new_transport) > 0.01:
                                         field_changes.append({
                                             "field": "Транспортные",
@@ -841,6 +838,15 @@ async def upload_files(
                                             "new": f"{new_transport:,.0f}".replace(",", " ")
                                         })
                                         print(f"📊 Transport differs: {key} - old={old_transport}, new={new_transport}")
+                                    
+                                    # Check if fuel differs SIGNIFICANTLY (more than API fluctuation)
+                                    if abs(old_fuel - new_fuel) > 250:
+                                        field_changes.append({
+                                            "field": "Бензин",
+                                            "old": f"{old_fuel:,.0f}".replace(",", " "),
+                                            "new": f"{new_fuel:,.0f}".replace(",", " ")
+                                        })
+                                        print(f"📊 Fuel differs significantly: {key} - old={old_fuel}, new={new_fuel}")
 
                                     if field_changes:
                                         print(f"📊 Modified found: {key} - {field_changes}")
