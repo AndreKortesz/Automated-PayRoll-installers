@@ -634,6 +634,35 @@ async def upload_files(
                             
                             print(f"📊 Comparison: {len(new_map)} orders in new files")
                             
+                            # Calculate fuel and transport for new orders BEFORE comparison
+                            # This ensures we compare apples to apples
+                            config = DEFAULT_CONFIG.copy()
+                            company_car_workers = config.get("company_car_workers", [])
+                            company_car_normalized = [normalize_worker_name(w) for w in company_car_workers]
+                            
+                            for key, order in new_map.items():
+                                # Calculate fuel
+                                fuel_payment = 0
+                                if order["specialist_fee"] == 0 and order["address"]:
+                                    fuel_payment = await calculate_fuel_cost(order["address"], config, 1)
+                                order["fuel_payment"] = fuel_payment
+                                
+                                # Calculate transport
+                                transport = 0
+                                worker_normalized = normalize_worker_name(order["worker"])
+                                is_on_company_car = worker_normalized in company_car_normalized
+                                percent_min = config.get("transport_percent_min", 20)
+                                percent_max = config.get("transport_percent_max", 40)
+                                if order["revenue_services"] > config["transport_min_revenue"] and percent_min <= order["percent"] <= percent_max:
+                                    if not is_on_company_car:
+                                        transport = config["transport_amount"]
+                                order["transport"] = transport
+                                
+                                # Calculate total
+                                order["total"] = order["service_payment"] + fuel_payment + transport
+                            
+                            print(f"📊 Calculated fuel/transport for {len(new_map)} new orders")
+                            
                             # Find added - include all details
                             for key, order in new_map.items():
                                 if key[0] and key not in old_map:  # Has order_code and not in old
@@ -775,35 +804,43 @@ async def upload_files(
                                                     "new": f"{new_val:,.0f}".replace(",", " ")
                                                 })
 
-                                    # IMPORTANT: Also compare calculations.total with service_payment
+                                    # IMPORTANT: Compare calculated totals (new has fuel/transport already calculated)
                                     # This detects manual edits made in UI
-                                    # Note: fuel_payment, transport, total come directly from old_order (from JOIN)
                                     old_total = safe_float_db(old_order.get("total", 0))
                                     old_fuel = safe_float_db(old_order.get("fuel_payment", 0))
                                     old_transport = safe_float_db(old_order.get("transport", 0))
-                                    new_service_payment = float(new_order.get("service_payment", 0) or 0)
+                                    
+                                    # new_order now has calculated fuel/transport/total
+                                    new_total = float(new_order.get("total", 0) or 0)
+                                    new_fuel = float(new_order.get("fuel_payment", 0) or 0)
+                                    new_transport = float(new_order.get("transport", 0) or 0)
 
-                                    # If total in DB differs from service_payment in file
-                                    if abs(old_total - new_service_payment) > 0.01:
-                                        # Calculate expected total (service_payment + fuel + transport)
-                                        expected_total = new_service_payment + old_fuel + old_transport
-
-                                        # If old_total differs from expected_total, there was a manual edit to total
-                                        if abs(old_total - expected_total) > 0.01:
-                                            field_changes.append({
-                                                "field": "Итого (ручное изменение)",
-                                                "old": f"{old_total:,.0f}".replace(",", " "),
-                                                "new": f"{new_service_payment:,.0f}".replace(",", " ") + " (из файла)"
-                                            })
-                                            print(f"📊 Manual edit detected: {key} - total in DB={old_total}, service_payment in file={new_service_payment}, expected={expected_total}")
-                                        elif old_fuel > 0 or old_transport > 0:
-                                            # Fuel/transport were added - warn that they might be lost
-                                            field_changes.append({
-                                                "field": "Бензин/Транспорт (будут сохранены)",
-                                                "old": f"Бензин: {old_fuel:,.0f}, Транспорт: {old_transport:,.0f}".replace(",", " "),
-                                                "new": "Будут перенесены из предыдущей версии"
-                                            })
-                                            print(f"📊 Fuel/transport found: {key} - fuel={old_fuel}, transport={old_transport}")
+                                    # Compare totals - if different, there was a manual edit
+                                    if abs(old_total - new_total) > 0.01:
+                                        field_changes.append({
+                                            "field": "Итого (ручное изменение)",
+                                            "old": f"{old_total:,.0f}".replace(",", " "),
+                                            "new": f"{new_total:,.0f}".replace(",", " ") + " (пересчитано)"
+                                        })
+                                        print(f"📊 Total differs: {key} - old={old_total}, new={new_total}")
+                                    
+                                    # Also check if fuel differs significantly (e.g. address changed)
+                                    if abs(old_fuel - new_fuel) > 50:  # More than 50 rub difference
+                                        field_changes.append({
+                                            "field": "Бензин",
+                                            "old": f"{old_fuel:,.0f}".replace(",", " "),
+                                            "new": f"{new_fuel:,.0f}".replace(",", " ")
+                                        })
+                                        print(f"📊 Fuel differs: {key} - old={old_fuel}, new={new_fuel}")
+                                    
+                                    # Check if transport differs
+                                    if abs(old_transport - new_transport) > 0.01:
+                                        field_changes.append({
+                                            "field": "Транспортные",
+                                            "old": f"{old_transport:,.0f}".replace(",", " "),
+                                            "new": f"{new_transport:,.0f}".replace(",", " ")
+                                        })
+                                        print(f"📊 Transport differs: {key} - old={old_transport}, new={new_transport}")
 
                                     if field_changes:
                                         print(f"📊 Modified found: {key} - {field_changes}")

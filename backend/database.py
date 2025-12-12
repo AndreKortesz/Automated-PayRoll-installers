@@ -753,9 +753,19 @@ async def save_order(upload_id: int, order_data: dict) -> int:
     if not database or not database.is_connected:
         return None
     
+    # Only include fields that exist in orders table
+    allowed_fields = {
+        'worker', 'order_code', 'order_full', 'address',
+        'revenue_total', 'revenue_services', 'diagnostic', 'diagnostic_payment',
+        'specialist_fee', 'additional_expenses', 'service_payment', 'percent',
+        'is_client_payment', 'is_over_10k', 'is_extra_row'
+    }
+    
+    filtered_data = {k: v for k, v in order_data.items() if k in allowed_fields}
+    
     query = orders.insert().values(
         upload_id=upload_id,
-        **order_data
+        **filtered_data
     )
     return await database.execute(query)
 
@@ -765,10 +775,14 @@ async def save_calculation(upload_id: int, order_id: int, calc_data: dict) -> in
     if not database or not database.is_connected:
         return None
     
+    # Only include fields that exist in calculations table
+    allowed_fields = {'fuel_payment', 'transport', 'diagnostic_50', 'total'}
+    filtered_data = {k: v for k, v in calc_data.items() if k in allowed_fields}
+    
     query = calculations.insert().values(
         upload_id=upload_id,
         order_id=order_id,
-        **calc_data
+        **filtered_data
     )
     return await database.execute(query)
 
