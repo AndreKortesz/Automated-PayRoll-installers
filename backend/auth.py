@@ -15,8 +15,8 @@ BITRIX_CLIENT_SECRET = os.getenv("BITRIX_CLIENT_SECRET", "")
 BITRIX_REDIRECT_URI = os.getenv("BITRIX_REDIRECT_URI", "")
 
 # Admin user IDs (Bitrix24 user IDs that have admin access)
-# Set this in environment as comma-separated IDs: "1,2,3"
-ADMIN_USER_IDS = [int(x) for x in os.getenv("BITRIX_ADMIN_IDS", "1").split(",") if x.strip()]
+# Set this in environment as comma-separated IDs: "1,9,311"
+ADMIN_USER_IDS = [int(x) for x in os.getenv("BITRIX_ADMIN_IDS", "9").split(",") if x.strip()]
 
 # Session cookie name
 SESSION_COOKIE = "mos_gsm_session"
@@ -38,19 +38,24 @@ def get_auth_url() -> str:
 async def exchange_code_for_token(code: str, server_domain: str = None) -> Optional[dict]:
     """Exchange authorization code for access token"""
     if not BITRIX_CLIENT_ID or not BITRIX_CLIENT_SECRET:
+        print("❌ Missing BITRIX_CLIENT_ID or BITRIX_CLIENT_SECRET")
         return None
 
-    # Use provided server_domain or default to oauth.bitrix.info
+    # IMPORTANT: Use the server_domain from callback, or default to oauth.bitrix.info
+    # Bitrix24 can use different OAuth servers: oauth.bitrix.info, oauth.bitrix24.tech, etc.
     oauth_server = server_domain or "oauth.bitrix.info"
     token_url = f"https://{oauth_server}/oauth/token/"
 
     print(f"🔐 Exchanging code at: {token_url}")
+    print(f"🔐 Using redirect_uri: {BITRIX_REDIRECT_URI}")
 
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(
+            # IMPORTANT: Use POST method, not GET!
+            # Bitrix24 OAuth requires POST for token exchange
+            response = await client.post(
                 token_url,
-                params={
+                data={
                     "grant_type": "authorization_code",
                     "client_id": BITRIX_CLIENT_ID,
                     "client_secret": BITRIX_CLIENT_SECRET,
@@ -60,11 +65,37 @@ async def exchange_code_for_token(code: str, server_domain: str = None) -> Optio
                 timeout=30
             )
 
+            print(f"🔐 Token response status: {response.status_code}")
+            
             if response.status_code == 200:
-                return response.json()
+                data = response.json()
+                print(f"✅ Token exchange successful")
+                return data
             else:
                 print(f"❌ Token exchange failed: {response.status_code} - {response.text}")
-                return None
+                
+                # Try alternative: GET method (some Bitrix versions use GET)
+                print(f"🔄 Trying GET method...")
+                response = await client.get(
+                    token_url,
+                    params={
+                        "grant_type": "authorization_code",
+                        "client_id": BITRIX_CLIENT_ID,
+                        "client_secret": BITRIX_CLIENT_SECRET,
+                        "redirect_uri": BITRIX_REDIRECT_URI,
+                        "code": code
+                    },
+                    timeout=30
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    print(f"✅ Token exchange successful (GET)")
+                    return data
+                else:
+                    print(f"❌ GET also failed: {response.status_code} - {response.text}")
+                    return None
+                    
     except Exception as e:
         print(f"❌ Token exchange error: {e}")
         return None
@@ -77,9 +108,9 @@ async def refresh_access_token(refresh_token: str) -> Optional[dict]:
 
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(
+            response = await client.post(
                 "https://oauth.bitrix.info/oauth/token/",
-                params={
+                data={
                     "grant_type": "refresh_token",
                     "client_id": BITRIX_CLIENT_ID,
                     "client_secret": BITRIX_CLIENT_SECRET,
@@ -132,7 +163,9 @@ def is_auth_configured() -> bool:
     return bool(BITRIX_DOMAIN and BITRIX_CLIENT_ID and BITRIX_CLIENT_SECRET)
 
 
-# Simple in-memory session storage (for production, use Redis or database)
+# Simple in-memory session storage
+# WARNING: Sessions will be lost on server restart
+# For production with multiple instances, use Redis or database
 sessions = {}
 
 
