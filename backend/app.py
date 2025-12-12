@@ -2283,7 +2283,7 @@ async def download_period_archive(period_id: int, archive_type: str):
             calc_total = sum(r.get("total", 0) for r in worker_data)
             print(f"   {wt['worker']}: {len(worker_data)} orders, calc_total={calc_total}")
         
-        period_name = period_details["period"]["name"]
+        period_name = period_details.get("name", f"period_{period_id}")
         for_workers = (archive_type == "workers")
         
         # Generate FULL archive with all worker files (like step 4)
