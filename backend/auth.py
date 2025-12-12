@@ -70,6 +70,8 @@ async def exchange_code_for_token(code: str, server_domain: str = None) -> Optio
             if response.status_code == 200:
                 data = response.json()
                 print(f"✅ Token exchange successful")
+                print(f"🔐 Token data keys: {list(data.keys())}")
+                print(f"🔐 Domain from token: {data.get('domain', 'NOT FOUND')}")
                 return data
             else:
                 print(f"❌ Token exchange failed: {response.status_code} - {response.text}")
@@ -91,6 +93,8 @@ async def exchange_code_for_token(code: str, server_domain: str = None) -> Optio
                 if response.status_code == 200:
                     data = response.json()
                     print(f"✅ Token exchange successful (GET)")
+                    print(f"🔐 Token data keys: {list(data.keys())}")
+                    print(f"🔐 Domain from token: {data.get('domain', 'NOT FOUND')}")
                     return data
                 else:
                     print(f"❌ GET also failed: {response.status_code} - {response.text}")
