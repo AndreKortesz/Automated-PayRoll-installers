@@ -763,6 +763,12 @@ async def save_order(upload_id: int, order_data: dict) -> int:
     
     filtered_data = {k: v for k, v in order_data.items() if k in allowed_fields}
     
+    # Convert percent to string if it's a number (DB expects string like "30%")
+    if 'percent' in filtered_data and filtered_data['percent'] is not None:
+        percent_val = filtered_data['percent']
+        if isinstance(percent_val, (int, float)):
+            filtered_data['percent'] = f"{percent_val}%"
+    
     query = orders.insert().values(
         upload_id=upload_id,
         **filtered_data
