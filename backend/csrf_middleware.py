@@ -1,9 +1,6 @@
 """
 CSRF Protection Middleware for FastAPI
 Mos-GSM Salary Service
-
-SECURITY NOTE: Set CSRF_SECRET_KEY environment variable in production!
-Without it, a random key is generated on each restart, invalidating all tokens.
 """
 
 import os
@@ -13,22 +10,17 @@ import time
 from typing import Optional, Callable
 from functools import wraps
 
-from fastapi import Request, HTTPException
-from fastapi.responses import JSONResponse, Response
+from fastapi import Request, Response, HTTPException, Depends
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 
-# ============================================================================
-# CONFIGURATION
-# ============================================================================
-# CRITICAL: In production, set CSRF_SECRET_KEY environment variable!
-# Generate with: python -c "import secrets; print(secrets.token_hex(32))"
-CSRF_SECRET_KEY = os.getenv("CSRF_SECRET_KEY")
+# Configuration
+# CRITICAL: In production, set CSRF_SECRET_KEY environment variable
+CSRF_SECRET_KEY = os.getenv("CSRF_SECRET_KEY", None)
 if not CSRF_SECRET_KEY:
     CSRF_SECRET_KEY = secrets.token_hex(32)
-    print("⚠️  WARNING: CSRF_SECRET_KEY not set in environment.")
-    print("   Using random key - CSRF tokens will be invalidated on restart!")
-    print("   Set CSRF_SECRET_KEY env variable for production.")
+    print("⚠️ WARNING: CSRF_SECRET_KEY not set in environment. Using random key (sessions will reset on restart).")
 
 CSRF_TOKEN_LENGTH = 64
 CSRF_COOKIE_NAME = "csrf_token"
@@ -37,22 +29,17 @@ CSRF_FORM_FIELD = "csrf_token"
 CSRF_COOKIE_MAX_AGE = 3600 * 24  # 24 hours
 CSRF_SAFE_METHODS = {"GET", "HEAD", "OPTIONS", "TRACE"}
 
-# Paths exempt from CSRF validation (public APIs, webhooks, health checks)
+# Exempt paths (public APIs, webhooks, etc.)
 CSRF_EXEMPT_PATHS = {
     "/api/health",
-    "/api/detect-file-type",  # File type detection is read-only
-    "/auth/callback",  # OAuth callback from Bitrix24
+    "/api/detect-file-type",  # File detection is safe (read-only)
 }
 
-
-# ============================================================================
-# TOKEN GENERATION & VALIDATION
-# ============================================================================
 
 def generate_csrf_token(session_id: str = None) -> str:
     """
     Generate a new CSRF token.
-    Format: timestamp:random:signature
+    Token = timestamp:random:signature
     """
     timestamp = str(int(time.time()))
     random_part = secrets.token_hex(16)
@@ -92,16 +79,25 @@ def validate_csrf_token(token: str, max_age: int = CSRF_COOKIE_MAX_AGE) -> bool:
             f"{data}:{CSRF_SECRET_KEY}".encode()
         ).hexdigest()[:16]
         
-        # Use constant-time comparison to prevent timing attacks
         return secrets.compare_digest(signature, expected_signature)
     
     except (ValueError, TypeError):
         return False
 
 
-# ============================================================================
-# MIDDLEWARE
-# ============================================================================
+def get_csrf_token_from_request(request: Request) -> Optional[str]:
+    """
+    Extract CSRF token from request (header or form field).
+    """
+    # Try header first
+    token = request.headers.get(CSRF_HEADER_NAME)
+    if token:
+        return token
+    
+    # Try form field (will be populated for form submissions)
+    # Note: This requires the request body to be parsed already
+    return None
+
 
 class CSRFMiddleware(BaseHTTPMiddleware):
     """
@@ -110,10 +106,6 @@ class CSRFMiddleware(BaseHTTPMiddleware):
     - Sets CSRF cookie on all responses
     - Validates CSRF token on state-changing requests (POST, PUT, DELETE, PATCH)
     - Skips validation for safe methods and exempt paths
-    
-    Usage:
-        from csrf_middleware import CSRFMiddleware
-        app.add_middleware(CSRFMiddleware)
     """
     
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
@@ -135,36 +127,41 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         needs_validation = (
             method not in CSRF_SAFE_METHODS and
             path not in CSRF_EXEMPT_PATHS and
-            not path.startswith("/static/")
+            not path.startswith("/static/") and
+            not path.startswith("/auth/")  # OAuth callbacks
         )
         
         if needs_validation:
-            # Get token from request header
+            # Get token from request
             request_token = request.headers.get(CSRF_HEADER_NAME)
             
             # For form submissions, try to get from form data
             if not request_token:
                 content_type = request.headers.get("content-type", "")
-                if "application/x-www-form-urlencoded" in content_type:
+                if "multipart/form-data" in content_type:
+                    # For file uploads, token should be in header
+                    pass
+                elif "application/x-www-form-urlencoded" in content_type:
+                    # Parse form data
                     try:
                         form = await request.form()
                         request_token = form.get(CSRF_FORM_FIELD)
-                    except Exception:
+                    except:
                         pass
             
             # Validate token
             if not request_token or not validate_csrf_token(request_token):
-                # Return JSON error for API requests
+                # For API requests, return JSON error
                 if path.startswith("/api/") or request.headers.get("accept") == "application/json":
                     return JSONResponse(
                         status_code=403,
                         content={
                             "success": False,
                             "error": "CSRF validation failed",
-                            "detail": "Invalid or missing CSRF token. Please refresh the page."
+                            "detail": "Invalid or missing CSRF token"
                         }
                     )
-                # Return HTML error for browser requests
+                # For regular requests, return HTML error
                 return Response(
                     content="CSRF validation failed. Please refresh the page and try again.",
                     status_code=403,
@@ -179,22 +176,18 @@ class CSRFMiddleware(BaseHTTPMiddleware):
             key=CSRF_COOKIE_NAME,
             value=csrf_token,
             max_age=CSRF_COOKIE_MAX_AGE,
-            httponly=False,  # Must be readable by JavaScript for AJAX requests
+            httponly=False,  # Must be readable by JavaScript
             samesite="strict",
-            secure=request.url.scheme == "https"
+            secure=request.url.scheme == "https"  # Secure only on HTTPS
         )
         
         return response
 
 
-# ============================================================================
-# HELPERS FOR TEMPLATES AND DECORATORS
-# ============================================================================
-
 def get_csrf_token(request: Request) -> str:
     """
-    Get CSRF token from request state.
-    Usage in route: token = get_csrf_token(request)
+    Dependency to get CSRF token for templates.
+    Usage: @app.get("/page", dependencies=[Depends(get_csrf_token)])
     """
     return getattr(request.state, 'csrf_token', generate_csrf_token())
 
@@ -202,13 +195,7 @@ def get_csrf_token(request: Request) -> str:
 def csrf_protect(func: Callable) -> Callable:
     """
     Decorator for explicit CSRF protection on specific endpoints.
-    Use when middleware is disabled but you want protection on certain routes.
-    
-    Usage:
-        @app.post("/sensitive-action")
-        @csrf_protect
-        async def sensitive_action(request: Request):
-            ...
+    Use when you want to ensure CSRF check even if middleware is disabled.
     """
     @wraps(func)
     async def wrapper(request: Request, *args, **kwargs):
@@ -222,20 +209,11 @@ def csrf_protect(func: Callable) -> Callable:
     return wrapper
 
 
+# Template context processor
 def csrf_context(request: Request) -> dict:
     """
     Returns context dict with CSRF token for Jinja2 templates.
-    
-    Usage in route:
-        return templates.TemplateResponse("page.html", {
-            "request": request,
-            **csrf_context(request)
-        })
-    
-    Usage in template:
-        {{ csrf_input | safe }}
-        or
-        <meta name="csrf-token" content="{{ csrf_token }}">
+    Usage in template: {{ csrf_token }}
     """
     token = getattr(request.state, 'csrf_token', generate_csrf_token())
     return {
