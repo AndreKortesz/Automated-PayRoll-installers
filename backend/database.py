@@ -830,11 +830,16 @@ async def get_orders_by_upload(upload_id: int) -> List[dict]:
 
 
 async def get_all_periods() -> List[dict]:
-    """Get all periods ordered by date"""
+    """Get all periods ordered by date (newest first)"""
     if not database or not database.is_connected:
         return []
     
-    query = periods.select().order_by(periods.c.created_at.desc())
+    # Sort by year DESC, then by month DESC, then by name DESC (to get 16-30 before 01-15)
+    query = periods.select().order_by(
+        periods.c.year.desc(),
+        periods.c.month.desc(),
+        periods.c.name.desc()
+    )
     rows = await database.fetch_all(query)
     return [dict(row._mapping) for row in rows]
 

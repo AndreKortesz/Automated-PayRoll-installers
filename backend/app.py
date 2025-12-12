@@ -2011,12 +2011,11 @@ async def api_worker_report(upload_id: int, worker: str):
         if not upload_details:
             raise HTTPException(status_code=404, detail="Upload not found")
         
-        # Get period info
-        upload = upload_details.get("upload", {})
-        period_id = upload.get("period_id")
+        # Get period info - upload_details contains period_id directly
+        period_id = upload_details.get("period_id")
         
         period_details = await get_period_details(period_id)
-        period_name = period_details.get("period", {}).get("name", "") if period_details else ""
+        period_name = period_details.get("name", "") if period_details else ""
         
         # Get ALL orders for this upload (needed for proper report generation)
         worker_totals_list = upload_details.get("worker_totals", [])
@@ -2031,7 +2030,7 @@ async def api_worker_report(upload_id: int, worker: str):
         # Build calculated_data structure (same as archive generation)
         calculated_data = []
         for order in all_orders:
-            calc = order.get("calculation", {})
+            # Values from calculations table (already in order from JOIN)
             row = {
                 "worker": order["worker"],
                 "order": order.get("order_full", "") or order.get("address", ""),
@@ -2048,10 +2047,11 @@ async def api_worker_report(upload_id: int, worker: str):
                 "is_client_payment": order.get("is_client_payment", False),
                 "is_over_10k": order.get("is_over_10k", False),
                 "is_extra_row": order.get("is_extra_row", False),
-                "fuel_payment": calc.get("fuel_payment", 0),
-                "transport": calc.get("transport", 0),
-                "diagnostic_50": calc.get("diagnostic_50", 0),
-                "total": calc.get("total", 0),
+                # Values from calculations table (already in order from JOIN)
+                "fuel_payment": order.get("fuel_payment", 0) or 0,
+                "transport": order.get("transport", 0) or 0,
+                "diagnostic_50": order.get("diagnostic_50", 0) or 0,
+                "total": order.get("total", 0) or 0,
             }
             calculated_data.append(row)
         
