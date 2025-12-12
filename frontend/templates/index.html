@@ -3,831 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token }}">
     <title>Mos-GSM | Расчёт зарплаты</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto+Condensed:wght@300;400;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --yellow: #F3C04D;
-            --yellow-light: #f8d77e;
-            --yellow-dark: #d4a63d;
-            --black: #1A1A1A;
-            --gray-dark: #4D4D4D;
-            --gray: #D9D9D9;
-            --gray-light: #F5F5F5;
-            --white: #FFFFFF;
-            --green: #2E7D32;
-            --green-light: #4CAF50;
-            --orange: #F57C00;
-            --red: #D32F2F;
-            --shadow-soft: 0 8px 32px rgba(26, 26, 26, 0.08);
-            --shadow-medium: 0 12px 48px rgba(26, 26, 26, 0.12);
-            --shadow-strong: 0 20px 60px rgba(26, 26, 26, 0.15);
-            --radius-sm: 12px;
-            --radius-md: 20px;
-            --radius-lg: 28px;
-        }
-
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-
-        body {
-            font-family: 'Roboto', sans-serif;
-            background: var(--gray-light);
-            color: var(--black);
-            min-height: 100vh;
-        }
-
-        /* ===== HEADER ===== */
-        .header {
-            background: var(--white);
-            padding: 16px 32px;
-            display: flex;
-            justify-content: flex-start;
-            align-items: center;
-            gap: 40px;
-            box-shadow: var(--shadow-soft);
-            position: sticky;
-            top: 0;
-            z-index: 100;
-        }
-
-        .logo {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            text-decoration: none;
-        }
-
-        .logo-icon {
-            display: flex;
-            align-items: flex-end;
-            gap: 3px;
-            height: 32px;
-        }
-
-        .logo-bar {
-            width: 6px;
-            background: var(--yellow);
-            border-radius: 3px;
-            transition: height 0.3s ease;
-        }
-
-        .logo-bar:nth-child(1) { height: 8px; }
-        .logo-bar:nth-child(2) { height: 14px; }
-        .logo-bar:nth-child(3) { height: 20px; }
-        .logo-bar:nth-child(4) { height: 26px; }
-        .logo-bar:nth-child(5) { height: 32px; }
-
-        .logo:hover .logo-bar:nth-child(1) { height: 14px; }
-        .logo:hover .logo-bar:nth-child(2) { height: 20px; }
-        .logo:hover .logo-bar:nth-child(3) { height: 26px; }
-        .logo:hover .logo-bar:nth-child(4) { height: 20px; }
-        .logo:hover .logo-bar:nth-child(5) { height: 14px; }
-
-        .logo-text {
-            font-family: 'Roboto', sans-serif;
-            font-weight: 700;
-            font-size: 24px;
-            color: var(--black);
-        }
-
-        .nav {
-            display: flex;
-            gap: 8px;
-        }
-
-        .nav-link {
-            font-family: 'Roboto Condensed', sans-serif;
-            font-weight: 500;
-            font-size: 15px;
-            color: var(--gray-dark);
-            text-decoration: none;
-            padding: 10px 20px;
-            border-radius: var(--radius-sm);
-            transition: all 0.2s ease;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .nav-link:hover {
-            background: var(--gray-light);
-            color: var(--black);
-        }
-
-        .nav-link.active {
-            background: var(--yellow);
-            color: var(--black);
-        }
-
-        /* ===== USER INFO ===== */
-        .user-info {
-            margin-left: auto;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 8px 16px;
-            background: var(--gray-light);
-            border-radius: var(--radius-sm);
-        }
-
-        .user-name {
-            font-weight: 500;
-            color: var(--black);
-        }
-
-        .user-role {
-            font-size: 12px;
-            padding: 4px 8px;
-            border-radius: 6px;
-            font-weight: 500;
-        }
-
-        .role-admin {
-            background: linear-gradient(135deg, #FFD700, #FFA500);
-            color: #000;
-        }
-
-        .role-employee {
-            background: var(--gray);
-            color: var(--gray-dark);
-        }
-
-        .logout-btn {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            color: var(--gray-dark);
-            transition: all 0.2s ease;
-        }
-
-        .logout-btn:hover {
-            background: var(--red);
-            color: white;
-        }
-
-        /* ===== MAIN ===== */
-        .main {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 40px 32px;
-        }
-
-        /* ===== STATS BAR ===== */
-        .stats-bar {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 24px;
-            margin-bottom: 40px;
-        }
-
-        .stats-card {
-            background: var(--white);
-            border-radius: var(--radius-md);
-            padding: 24px;
-            box-shadow: var(--shadow-soft);
-            display: flex;
-            align-items: center;
-            gap: 20px;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-
-        .stats-card:hover {
-            transform: translateY(-2px);
-            box-shadow: var(--shadow-medium);
-        }
-
-        .stats-icon {
-            width: 64px;
-            height: 64px;
-            border-radius: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
-
-        .stats-icon.yellow {
-            background: linear-gradient(135deg, var(--yellow) 0%, var(--yellow-dark) 100%);
-            box-shadow: 0 8px 24px rgba(243, 192, 77, 0.3);
-        }
-
-        .stats-icon.green {
-            background: linear-gradient(135deg, #4CAF50 0%, #388E3C 100%);
-            box-shadow: 0 8px 24px rgba(76, 175, 80, 0.3);
-        }
-
-        .stats-icon.orange {
-            background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%);
-            box-shadow: 0 8px 24px rgba(255, 152, 0, 0.3);
-        }
-
-        .stats-icon.dark {
-            background: linear-gradient(135deg, var(--gray-dark) 0%, var(--black) 100%);
-            box-shadow: 0 8px 24px rgba(26, 26, 26, 0.3);
-        }
-
-        .stats-icon svg {
-            width: 28px;
-            height: 28px;
-            fill: var(--white);
-        }
-
-        .stats-content {
-            flex: 1;
-        }
-
-        .stats-value {
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 32px;
-            color: var(--black);
-            line-height: 1;
-        }
-
-        .stats-label {
-            font-size: 13px;
-            color: var(--gray-dark);
-            margin-top: 4px;
-        }
-
-        /* ===== HERO SECTION ===== */
-        .hero {
-            display: grid;
-            grid-template-columns: 1fr 1.2fr;
-            gap: 40px;
-            margin-bottom: 60px;
-        }
-
-        .hero-content {
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-        }
-
-        .hero-title {
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 52px;
-            line-height: 1.1;
-            color: var(--black);
-            margin-bottom: 20px;
-        }
-
-        .hero-subtitle {
-            font-family: 'Roboto Condensed', sans-serif;
-            font-size: 18px;
-            color: var(--gray-dark);
-            margin-bottom: 32px;
-            line-height: 1.6;
-        }
-
-        .hero-actions {
-            display: flex;
-            gap: 16px;
-            flex-wrap: wrap;
-        }
-
-        /* ===== UPLOAD CARD ===== */
-        .upload-card {
-            background: var(--white);
-            border-radius: var(--radius-lg);
-            padding: 32px;
-            box-shadow: var(--shadow-strong);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .upload-card::before {
-            content: '';
-            position: absolute;
-            top: -50px;
-            right: -50px;
-            width: 200px;
-            height: 200px;
-            background: linear-gradient(135deg, var(--yellow) 0%, var(--yellow-light) 100%);
-            border-radius: 50%;
-            opacity: 0.2;
-        }
-
-        .upload-card-title {
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 28px;
-            color: var(--black);
-            margin-bottom: 8px;
-            position: relative;
-        }
-
-        .upload-card-subtitle {
-            font-size: 14px;
-            color: var(--gray-dark);
-            margin-bottom: 24px;
-            position: relative;
-        }
-
-        .form-group {
-            margin-bottom: 20px;
-            position: relative;
-        }
-
-        .form-label {
-            font-family: 'Roboto Condensed', sans-serif;
-            font-weight: 700;
-            font-size: 13px;
-            color: var(--black);
-            display: block;
-            margin-bottom: 8px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .form-input {
-            width: 100%;
-            padding: 14px 16px;
-            border: 2px solid var(--gray);
-            border-radius: var(--radius-sm);
-            font-family: 'Roboto', sans-serif;
-            font-size: 15px;
-            transition: all 0.2s;
-            background: var(--white);
-        }
-
-        .form-input:focus {
-            outline: none;
-            border-color: var(--yellow);
-            box-shadow: 0 0 0 4px rgba(243, 192, 77, 0.2);
-        }
-
-        .upload-zone {
-            border: 3px dashed var(--gray);
-            border-radius: var(--radius-md);
-            padding: 32px 24px;
-            text-align: center;
-            transition: all 0.3s ease;
-            cursor: pointer;
-            background: var(--gray-light);
-            position: relative;
-        }
-
-        .upload-zone:hover,
-        .upload-zone.dragover {
-            border-color: var(--yellow);
-            background: rgba(243, 192, 77, 0.1);
-        }
-
-        .upload-zone.has-files {
-            border-color: var(--green);
-            background: rgba(76, 175, 80, 0.05);
-        }
-
-        .upload-icon {
-            width: 64px;
-            height: 64px;
-            margin: 0 auto 16px;
-            background: linear-gradient(135deg, var(--yellow) 0%, var(--yellow-dark) 100%);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 8px 24px rgba(243, 192, 77, 0.4);
-        }
-
-        .upload-icon svg {
-            width: 28px;
-            height: 28px;
-            fill: var(--white);
-        }
-
-        .upload-title {
-            font-family: 'Roboto Condensed', sans-serif;
-            font-weight: 700;
-            font-size: 16px;
-            color: var(--black);
-            margin-bottom: 6px;
-            text-transform: uppercase;
-        }
-
-        .upload-hint {
-            font-size: 13px;
-            color: var(--gray-dark);
-        }
-
-        .upload-files {
-            margin-top: 16px;
-        }
-
-        .file-item {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 12px 16px;
-            background: var(--white);
-            border-radius: var(--radius-sm);
-            margin-bottom: 8px;
-            border: 1px solid var(--gray);
-        }
-
-        .file-icon {
-            width: 40px;
-            height: 40px;
-            background: linear-gradient(135deg, #4CAF50 0%, #388E3C 100%);
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
-
-        .file-icon svg {
-            width: 20px;
-            height: 20px;
-            fill: white;
-        }
-
-        .file-info {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .file-name {
-            font-weight: 500;
-            font-size: 14px;
-            color: var(--black);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .file-meta {
-            font-size: 12px;
-            color: var(--gray-dark);
-        }
-
-        .file-badge {
-            font-size: 11px;
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-weight: 500;
-            flex-shrink: 0;
-        }
-
-        .file-badge.under { background: #E3F2FD; color: #1565C0; }
-        .file-badge.over { background: #FFF3E0; color: #EF6C00; }
-        .file-badge.unknown { background: var(--gray-light); color: var(--gray-dark); }
-
-        .file-remove {
-            background: none;
-            border: none;
-            cursor: pointer;
-            padding: 8px;
-            border-radius: 50%;
-            transition: background 0.2s;
-            flex-shrink: 0;
-        }
-
-        .file-remove:hover {
-            background: #FFEBEE;
-        }
-
-        /* ===== BUTTONS ===== */
-        .btn {
-            font-family: 'Roboto Condensed', sans-serif;
-            font-weight: 700;
-            font-size: 15px;
-            padding: 14px 28px;
-            border-radius: var(--radius-sm);
-            border: none;
-            cursor: pointer;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            gap: 10px;
-            transition: all 0.2s ease;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none !important;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, var(--yellow) 0%, var(--yellow-dark) 100%);
-            color: var(--black);
-            box-shadow: 0 8px 24px rgba(243, 192, 77, 0.4);
-        }
-
-        .btn-primary:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 12px 32px rgba(243, 192, 77, 0.5);
-        }
-
-        .btn-secondary {
-            background: var(--white);
-            color: var(--black);
-            border: 2px solid var(--gray);
-        }
-
-        .btn-secondary:hover:not(:disabled) {
-            border-color: var(--yellow);
-            background: rgba(243, 192, 77, 0.1);
-        }
-
-        .btn-success {
-            background: linear-gradient(135deg, #4CAF50 0%, #388E3C 100%);
-            color: var(--white);
-            box-shadow: 0 8px 24px rgba(76, 175, 80, 0.4);
-        }
-
-        .btn-success:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 12px 32px rgba(76, 175, 80, 0.5);
-        }
-
-        .btn-block {
-            width: 100%;
-            justify-content: center;
-        }
-
-        /* ===== SECTIONS ===== */
-        .section {
-            margin-bottom: 60px;
-        }
-
-        .section-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 24px;
-        }
-
-        .section-title {
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 36px;
-            color: var(--black);
-        }
-
-        /* ===== PERIODS GRID ===== */
-        .periods-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-            gap: 24px;
-        }
-
-        .period-card {
-            background: var(--white);
-            border-radius: var(--radius-md);
-            padding: 28px;
-            box-shadow: var(--shadow-soft);
-            transition: all 0.3s ease;
-            cursor: pointer;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .period-card:hover {
-            transform: translateY(-4px);
-            box-shadow: var(--shadow-medium);
-        }
-
-        .period-card::after {
-            content: '';
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: linear-gradient(90deg, var(--yellow) 0%, var(--yellow-dark) 100%);
-            transform: scaleX(0);
-            transition: transform 0.3s ease;
-        }
-
-        .period-card:hover::after {
-            transform: scaleX(1);
-        }
-
-        .period-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 20px;
-        }
-
-        .period-name {
-            font-family: 'Roboto Condensed', sans-serif;
-            font-weight: 700;
-            font-size: 20px;
-            color: var(--black);
-        }
-
-        .period-date {
-            font-size: 13px;
-            color: var(--gray-dark);
-            margin-top: 4px;
-        }
-
-        .period-badge {
-            background: var(--yellow);
-            color: var(--black);
-            font-family: 'Roboto Condensed', sans-serif;
-            font-weight: 700;
-            font-size: 11px;
-            padding: 6px 12px;
-            border-radius: 20px;
-            text-transform: uppercase;
-        }
-
-        .period-stats {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 12px;
-        }
-
-        .stat {
-            text-align: center;
-            padding: 14px 8px;
-            background: var(--gray-light);
-            border-radius: var(--radius-sm);
-        }
-
-        .stat-value {
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 24px;
-            color: var(--black);
-            line-height: 1;
-        }
-
-        .stat-label {
-            font-size: 10px;
-            color: var(--gray-dark);
-            text-transform: uppercase;
-            margin-top: 4px;
-            letter-spacing: 0.5px;
-        }
-
-        .stat-value.company { color: var(--green); }
-        .stat-value.client { color: var(--orange); }
-
-        /* ===== EMPTY STATE ===== */
-        .empty-state {
-            text-align: center;
-            padding: 80px 40px;
-            background: var(--white);
-            border-radius: var(--radius-lg);
-            box-shadow: var(--shadow-soft);
-        }
-
-        .empty-icon {
-            width: 120px;
-            height: 120px;
-            margin: 0 auto 24px;
-            background: linear-gradient(135deg, var(--gray-light) 0%, var(--gray) 100%);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .empty-icon svg {
-            width: 48px;
-            height: 48px;
-            fill: var(--gray-dark);
-        }
-
-        .empty-title {
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 32px;
-            color: var(--black);
-            margin-bottom: 12px;
-        }
-
-        .empty-text {
-            font-size: 16px;
-            color: var(--gray-dark);
-            margin-bottom: 32px;
-        }
-
-        /* ===== LOADING ===== */
-        .loading {
-            text-align: center;
-            padding: 60px;
-        }
-
-        .loading.hidden { display: none; }
-
-        .spinner {
-            width: 48px;
-            height: 48px;
-            border: 4px solid var(--gray);
-            border-top-color: var(--yellow);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 20px;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        /* ===== STEP INDICATOR ===== */
-        .steps {
-            display: flex;
-            justify-content: center;
-            gap: 8px;
-            margin-bottom: 32px;
-        }
-
-        .step-dot {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background: var(--gray);
-            transition: all 0.3s;
-        }
-
-        .step-dot.active {
-            background: var(--yellow);
-            transform: scale(1.2);
-        }
-
-        .step-dot.completed {
-            background: var(--green);
-        }
-
-        /* ===== RESPONSIVE ===== */
-        @media (max-width: 1024px) {
-            .hero { grid-template-columns: 1fr; }
-            .stats-bar { grid-template-columns: repeat(2, 1fr); }
-        }
-
-        @media (max-width: 768px) {
-            .header { padding: 12px 16px; }
-            .main { padding: 24px 16px; }
-            .hero-title { font-size: 40px; }
-            .stats-bar { grid-template-columns: 1fr; }
-            .periods-grid { grid-template-columns: 1fr; }
-            .nav { display: none; }
-        }
-
-        /* ===== ANIMATIONS ===== */
-        @keyframes fadeInUp {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .animate-in {
-            animation: fadeInUp 0.5s ease forwards;
-        }
-
-        .delay-1 { animation-delay: 0.1s; opacity: 0; }
-        .delay-2 { animation-delay: 0.2s; opacity: 0; }
-        .delay-3 { animation-delay: 0.3s; opacity: 0; }
-        .delay-4 { animation-delay: 0.4s; opacity: 0; }
-
-        /* ===== AUTO-DETECT INFO ===== */
-        .auto-detect-info {
-            background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%);
-            border-radius: var(--radius-sm);
-            padding: 16px;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: flex-start;
-            gap: 12px;
-        }
-
-        .auto-detect-info svg {
-            width: 24px;
-            height: 24px;
-            fill: #1565C0;
-            flex-shrink: 0;
-            margin-top: 2px;
-        }
-
-        .auto-detect-info p {
-            font-size: 13px;
-            color: #0D47A1;
-            line-height: 1.5;
-        }
-
-        .detected-period {
-            background: linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%);
-            border-radius: var(--radius-sm);
-            padding: 14px 16px;
-            margin-top: 16px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 14px;
-            color: #1B5E20;
-        }
-
-        .detected-period strong {
-            color: var(--green);
-        }
-    </style>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="/static/security.js"></script>
 </head>
 <body>
     <!-- Header -->
@@ -851,7 +33,7 @@
         <div class="user-info">
             <span class="user-name">
                 {% if user.role == 'admin' %}👑{% else %}👤{% endif %}
-                {{ user.name }}
+                {{ user.name | e }}
             </span>
             <span class="user-role {% if user.role == 'admin' %}role-admin{% else %}role-employee{% endif %}">
                 {{ 'Администратор' if user.role == 'admin' else 'Сотрудник' }}
@@ -933,6 +115,9 @@
                 <p class="upload-card-subtitle">Загрузите файлы из 1С для расчёта зарплаты</p>
 
                 <form id="uploadForm">
+                    <!-- CSRF Token -->
+                    {{ csrf_input | safe }}
+                    
                     <div class="auto-detect-info">
                         <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
                         <p>
@@ -1000,8 +185,9 @@
     <script>
         // ===== STATE =====
         let uploadedFiles = [];
-        let fileTypes = {}; // {filename: 'under'|'over'|'unknown'}
-        let detectedPeriod = null; // Period name from file
+        let fileTypes = {}; // {fileId: 'under'|'over'|'unknown'}
+        let detectedPeriod = null;
+        let fileIdCounter = 0; // Unique ID for each file to avoid race conditions
 
         // ===== DOM ELEMENTS =====
         const uploadZone = document.getElementById('uploadZone');
@@ -1056,28 +242,31 @@
                 f.name.endsWith('.xlsx') || f.name.endsWith('.xls')
             );
 
-            // Add new files (max 2)
             for (const file of newFiles) {
                 if (uploadedFiles.length >= 2) break;
-                if (!uploadedFiles.find(f => f.name === file.name)) {
-                    uploadedFiles.push(file);
-                    // Auto-detect file type
-                    await detectFileType(file);
-                }
+                
+                // Generate unique ID for this file (fixes race condition)
+                const fileId = ++fileIdCounter;
+                file._uniqueId = fileId;
+                
+                uploadedFiles.push(file);
+                fileTypes[fileId] = 'detecting';
+                
+                // Render immediately with "detecting" status
+                renderFiles();
+                
+                // Auto-detect file type
+                await detectFileType(file, fileId);
             }
 
-            renderFiles();
             updateSubmitButton();
         }
 
-        async function detectFileType(file) {
-            // We'll detect on the server side, but for now mark as detecting
-            fileTypes[file.name] = 'detecting';
-            
-            // Read file and check first value
+        async function detectFileType(file, fileId) {
             try {
                 const formData = new FormData();
                 formData.append('file', file);
+                Security.csrf.addToFormData(formData);
                 
                 const response = await fetch('/api/detect-file-type', {
                     method: 'POST',
@@ -1086,28 +275,29 @@
                 
                 if (response.ok) {
                     const data = await response.json();
-                    fileTypes[file.name] = data.type; // 'under' or 'over'
-                    // Save period name if detected
+                    fileTypes[fileId] = data.type; // 'under' or 'over'
                     if (data.period && !detectedPeriod) {
                         detectedPeriod = data.period;
                     }
                 } else {
-                    fileTypes[file.name] = 'unknown';
+                    fileTypes[fileId] = 'unknown';
                 }
             } catch (error) {
                 console.error('Error detecting file type:', error);
-                fileTypes[file.name] = 'unknown';
+                fileTypes[fileId] = 'unknown';
             }
             
             renderFiles();
             updateSubmitButton();
         }
 
-        function removeFile(index) {
-            const file = uploadedFiles[index];
-            delete fileTypes[file.name];
-            uploadedFiles.splice(index, 1);
-            // Reset period if all files removed
+        function removeFile(fileId) {
+            const index = uploadedFiles.findIndex(f => f._uniqueId === fileId);
+            if (index !== -1) {
+                uploadedFiles.splice(index, 1);
+                delete fileTypes[fileId];
+            }
+            
             if (uploadedFiles.length === 0) {
                 detectedPeriod = null;
             }
@@ -1125,17 +315,22 @@
 
             uploadZone.classList.add('has-files');
 
-            // Show detected period if available
+            // Show detected period if available (XSS-safe)
             const periodEl = document.getElementById('detectedPeriod');
             if (detectedPeriod) {
-                document.getElementById('periodText').textContent = detectedPeriod;
+                Security.setText(document.getElementById('periodText'), detectedPeriod);
                 periodEl.style.display = 'flex';
             } else {
                 periodEl.style.display = 'none';
             }
 
-            uploadFiles.innerHTML = uploadedFiles.map((file, index) => {
-                const type = fileTypes[file.name] || 'unknown';
+            // Build file list HTML safely
+            const container = document.createElement('div');
+            
+            uploadedFiles.forEach((file) => {
+                const fileId = file._uniqueId;
+                const type = fileTypes[fileId] || 'unknown';
+                
                 let badgeClass = 'unknown';
                 let badgeText = 'Определение...';
                 
@@ -1149,36 +344,62 @@
                     badgeText = '⏳ Определение...';
                 }
 
-                return `
-                    <div class="file-item">
-                        <div class="file-icon">
-                            <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>
-                        </div>
-                        <div class="file-info">
-                            <div class="file-name">${file.name}</div>
-                            <div class="file-meta">${(file.size / 1024).toFixed(1)} KB</div>
-                        </div>
-                        <span class="file-badge ${badgeClass}">${badgeText}</span>
-                        <button type="button" class="file-remove" onclick="removeFile(${index})">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="#D32F2F"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-                        </button>
-                    </div>
-                `;
-            }).join('');
+                const fileItem = document.createElement('div');
+                fileItem.className = 'file-item';
+                
+                // File icon
+                const iconDiv = document.createElement('div');
+                iconDiv.className = 'file-icon';
+                iconDiv.innerHTML = '<svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>';
+                
+                // File info (XSS-safe using textContent)
+                const infoDiv = document.createElement('div');
+                infoDiv.className = 'file-info';
+                
+                const nameDiv = document.createElement('div');
+                nameDiv.className = 'file-name';
+                nameDiv.textContent = file.name; // XSS-safe
+                
+                const metaDiv = document.createElement('div');
+                metaDiv.className = 'file-meta';
+                metaDiv.textContent = (file.size / 1024).toFixed(1) + ' KB';
+                
+                infoDiv.appendChild(nameDiv);
+                infoDiv.appendChild(metaDiv);
+                
+                // Badge
+                const badge = document.createElement('span');
+                badge.className = `file-badge ${badgeClass}`;
+                badge.textContent = badgeText;
+                
+                // Remove button
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.className = 'file-remove';
+                removeBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="#D32F2F"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>';
+                removeBtn.onclick = () => removeFile(fileId);
+                
+                fileItem.appendChild(iconDiv);
+                fileItem.appendChild(infoDiv);
+                fileItem.appendChild(badge);
+                fileItem.appendChild(removeBtn);
+                
+                container.appendChild(fileItem);
+            });
+            
+            uploadFiles.innerHTML = '';
+            uploadFiles.appendChild(container);
         }
 
         function updateSubmitButton() {
             const hasValidFiles = uploadedFiles.length === 2;
-            const hasTypes = Object.values(fileTypes).filter(t => t === 'under' || t === 'over').length === 2;
-            const hasBothTypes = hasTypes && 
-                Object.values(fileTypes).includes('under') && 
-                Object.values(fileTypes).includes('over');
+            const types = uploadedFiles.map(f => fileTypes[f._uniqueId]);
+            const hasTypes = types.filter(t => t === 'under' || t === 'over').length === 2;
+            const hasBothTypes = hasTypes && types.includes('under') && types.includes('over');
             
             submitBtn.disabled = !hasValidFiles || !hasBothTypes;
             
-            if (hasValidFiles && !hasBothTypes && !Object.values(fileTypes).includes('detecting')) {
-                // Show warning if both files are same type
-                const types = Object.values(fileTypes);
+            if (hasValidFiles && !hasBothTypes && !types.includes('detecting')) {
                 if (types[0] === types[1] && types[0] !== 'unknown') {
                     alert('⚠️ Оба файла содержат заказы одного типа. Нужны файлы с заказами до 10 000₽ и свыше 10 000₽');
                 }
@@ -1194,11 +415,10 @@
                 return;
             }
 
-            // Determine which file is which
             let fileUnder, fileOver;
             for (const file of uploadedFiles) {
-                if (fileTypes[file.name] === 'under') fileUnder = file;
-                else if (fileTypes[file.name] === 'over') fileOver = file;
+                if (fileTypes[file._uniqueId] === 'under') fileUnder = file;
+                else if (fileTypes[file._uniqueId] === 'over') fileOver = file;
             }
 
             if (!fileUnder || !fileOver) {
@@ -1206,10 +426,8 @@
                 return;
             }
 
-            // Use detected period or generate from date
             const periodName = detectedPeriod || `Период от ${new Date().toLocaleDateString('ru-RU')}`;
 
-            // Show loading
             uploadForm.style.display = 'none';
             loadingIndicator.classList.remove('hidden');
 
@@ -1217,6 +435,7 @@
             formData.append('file_under_10k', fileUnder);
             formData.append('file_over_10k', fileOver);
             formData.append('period_name', periodName);
+            Security.csrf.addToFormData(formData);
 
             try {
                 const response = await fetch('/upload', {
@@ -1227,16 +446,11 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    // Check if we need to review changes first
                     if (data.redirect_to_review && data.has_changes) {
-                        // Redirect to review page
-                        window.location.href = `/review?session_id=${data.session_id}`;
+                        Security.safeRedirect(`/review?session_id=${data.session_id}`);
                     } else if (data.period_id) {
-                        // No changes to review, go directly to period
-                        window.location.href = `/period/${data.period_id}`;
+                        Security.safeRedirect(`/period/${data.period_id}`);
                     } else {
-                        // First upload for this period - need to calculate first
-                        // Call calculate endpoint directly
                         await processFirstUpload(data.session_id);
                     }
                 } else {
@@ -1249,21 +463,14 @@
             }
         });
 
-        // Process first upload (no previous version)
         async function processFirstUpload(sessionId) {
             try {
-                const response = await fetch('/api/process-first-upload', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ session_id: sessionId })
-                });
+                const response = await Security.fetchJson('/api/process-first-upload', { session_id: sessionId }, 'POST');
                 
-                const data = await response.json();
-                
-                if (data.success) {
-                    window.location.href = `/period/${data.period_id}`;
+                if (response.success && Security.isValidId(response.period_id)) {
+                    Security.safeRedirect(`/period/${response.period_id}`);
                 } else {
-                    throw new Error(data.error || 'Ошибка обработки');
+                    throw new Error(response.error || 'Ошибка обработки');
                 }
             } catch (error) {
                 alert('❌ Ошибка: ' + error.message);
@@ -1284,7 +491,6 @@
                     throw new Error(data.error || 'Failed to load');
                 }
 
-                // Calculate totals
                 let totalPeriods = 0;
                 let totalCompany = 0;
                 let totalClient = 0;
@@ -1302,7 +508,7 @@
                     }
                 }
 
-                // Update stats
+                // Update stats (numbers are safe)
                 document.getElementById('totalPeriods').textContent = totalPeriods || '-';
                 document.getElementById('totalCompany').textContent = totalCompany ? formatCurrency(totalCompany) : '-';
                 document.getElementById('totalClient').textContent = totalClient ? formatCurrency(totalClient) : '-';
@@ -1313,42 +519,69 @@
                     return;
                 }
 
-                // Show recent periods (last 6)
+                // Render periods (XSS-safe)
                 const recentPeriods = allPeriods.slice(0, 6);
                 const grid = document.getElementById('periodsGrid');
-                
-                grid.innerHTML = recentPeriods.map(period => {
+                grid.innerHTML = '';
+
+                recentPeriods.forEach(period => {
                     const company = period.company_amount || 0;
                     const client = period.client_amount || 0;
                     const total = period.total_amount || (company + client);
                     const createdDate = period.created_at ? new Date(period.created_at).toLocaleDateString('ru-RU') : '';
 
-                    return `
-                        <div class="period-card" onclick="window.location.href='/period/${period.id}'">
-                            <div class="period-header">
-                                <div>
-                                    <div class="period-name">📅 ${period.name}</div>
-                                    <div class="period-date">${createdDate}</div>
-                                </div>
-                                <div class="period-badge">v${period.latest_version || 1}</div>
-                            </div>
-                            <div class="period-stats">
-                                <div class="stat">
-                                    <div class="stat-value company">${formatCurrencyShort(company)}</div>
-                                    <div class="stat-label">Компания</div>
-                                </div>
-                                <div class="stat">
-                                    <div class="stat-value client">${formatCurrencyShort(client)}</div>
-                                    <div class="stat-label">Клиент</div>
-                                </div>
-                                <div class="stat">
-                                    <div class="stat-value">${formatCurrencyShort(total)}</div>
-                                    <div class="stat-label">Итого</div>
-                                </div>
-                            </div>
+                    const card = document.createElement('div');
+                    card.className = 'period-card';
+                    card.onclick = () => {
+                        if (Security.isValidId(period.id)) {
+                            window.location.href = `/period/${period.id}`;
+                        }
+                    };
+
+                    // Build card content safely
+                    const header = document.createElement('div');
+                    header.className = 'period-header';
+                    
+                    const info = document.createElement('div');
+                    const nameDiv = document.createElement('div');
+                    nameDiv.className = 'period-name';
+                    nameDiv.textContent = '📅 ' + (period.name || 'Без названия'); // XSS-safe
+                    
+                    const dateDiv = document.createElement('div');
+                    dateDiv.className = 'period-date';
+                    dateDiv.textContent = createdDate;
+                    
+                    info.appendChild(nameDiv);
+                    info.appendChild(dateDiv);
+                    
+                    const badge = document.createElement('div');
+                    badge.className = 'period-badge';
+                    badge.textContent = 'v' + (period.latest_version || 1);
+                    
+                    header.appendChild(info);
+                    header.appendChild(badge);
+                    
+                    const stats = document.createElement('div');
+                    stats.className = 'period-stats';
+                    stats.innerHTML = `
+                        <div class="stat">
+                            <div class="stat-value company">${escapeHtml(formatCurrencyShort(company))}</div>
+                            <div class="stat-label">Компания</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-value client">${escapeHtml(formatCurrencyShort(client))}</div>
+                            <div class="stat-label">Клиент</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-value">${escapeHtml(formatCurrencyShort(total))}</div>
+                            <div class="stat-label">Итого</div>
                         </div>
                     `;
-                }).join('');
+                    
+                    card.appendChild(header);
+                    card.appendChild(stats);
+                    grid.appendChild(card);
+                });
 
                 grid.style.display = 'grid';
 

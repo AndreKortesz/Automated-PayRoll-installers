@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token }}">
     <title>Детали монтажника | Mos-GSM</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -449,6 +450,7 @@
             cursor: pointer;
             color: var(--black);
             opacity: 0.7;
+            margin-left: auto;
         }
 
         .modal-close:hover { opacity: 1; }
@@ -478,8 +480,7 @@
 
         .amounts-row {
             display: flex;
-            justify-content: flex-start;
-            gap: 40px;
+            justify-content: space-between;
             padding: 8px 0;
             border-bottom: 1px solid var(--gray);
         }
@@ -513,14 +514,6 @@
             margin-top: 4px;
         }
 
-        .service-item {
-            display: flex;
-            justify-content: flex-start;
-            gap: 40px;
-            padding: 10px 0;
-            border-bottom: 1px solid var(--gray);
-        }
-
         .integration-notice {
             background: #E3F2FD;
             border-radius: var(--radius-sm);
@@ -552,6 +545,8 @@
             .card-body { padding: 16px; }
         }
     </style>
+    <!-- Security utilities -->
+    <script src="/static/security.js"></script>
 </head>
 <body>
     <!-- Header -->
@@ -580,7 +575,7 @@
                 <button class="btn btn-secondary" onclick="history.back()">
                     ← Назад
                 </button>
-                <a href="/api/worker-report/{{ upload_id }}/{{ worker_name }}" class="btn btn-secondary" id="downloadBtn">
+                <a href="#" class="btn btn-secondary" id="downloadBtn">
                     📥 Скачать отчёт
                 </a>
                 <button class="btn btn-success" id="saveBtn" disabled onclick="saveChanges()">
@@ -606,7 +601,7 @@
         <div class="modal-content" onclick="event.stopPropagation()">
             <div class="modal-header">
                 <h2 id="modalOrderNumber">Заказ</h2>
-                <button class="modal-close" onclick="closeOrderModal()">&times;</button>
+                <button class="modal-close" onclick="closeOrderModal()" aria-label="Закрыть">&times;</button>
             </div>
             <div class="modal-body" id="modalBody">
                 <div class="modal-loading">
@@ -618,8 +613,9 @@
     </div>
 
     <script>
-        const uploadId = {{ upload_id }};
-        const workerName = decodeURIComponent("{{ worker_name }}");
+        // Get data from server-rendered template (safely)
+        const uploadId = parseInt('{{ upload_id }}', 10);
+        const workerName = decodeURIComponent("{{ worker_name | e }}");
         
         let ordersData = [];
         let pendingChanges = {};
@@ -627,21 +623,23 @@
 
         async function loadWorkerData() {
             try {
-                const response = await fetch(`/api/upload/${uploadId}/worker/${encodeURIComponent(workerName)}`);
+                const response = await Security.fetch(`/api/upload/${uploadId}/worker/${encodeURIComponent(workerName)}`);
                 const data = await response.json();
 
                 if (!data.success) throw new Error(data.error || 'Failed to load');
 
                 ordersData = data.data.orders;
-                document.getElementById('pageTitle').textContent = `👷 ${workerName}`;
                 
-                // Update download link
+                // Safely set page title using textContent (XSS-safe)
+                Security.setText(document.getElementById('pageTitle'), `👷 ${workerName}`);
+                
+                // Update download link safely
                 document.getElementById('downloadBtn').href = `/api/worker-report/${uploadId}/${encodeURIComponent(workerName)}`;
 
                 renderTable();
             } catch (error) {
                 document.getElementById('content').innerHTML = `
-                    <div class="card"><div class="card-body"><p>❌ Ошибка: ${error.message}</p></div></div>
+                    <div class="card"><div class="card-body"><p>❌ Ошибка: ${escapeHtml(error.message)}</p></div></div>
                 `;
             }
         }
@@ -659,7 +657,7 @@
                 totalFinal += pendingChanges[calc.id]?.total ?? calc.total ?? 0;
             });
 
-            // Summary HTML
+            // Summary HTML (numbers are safe, no user input)
             const summaryHtml = `
                 <div class="summary-grid">
                     <div class="summary-item">
@@ -726,10 +724,10 @@
                 const transportVal = pendingChanges[calcId]?.transport ?? calc.transport ?? 0;
                 const totalVal = pendingChanges[calcId]?.total ?? calc.total ?? 0;
 
-                // Badges
+                // Badges (static content, safe)
                 let badges = [];
                 if (order.is_client_payment) badges.push('<span class="badge badge-client">Клиент</span>');
-                if (order.is_over_10k) badges.push('<span class="badge badge-over10k">>10К</span>');
+                if (order.is_over_10k) badges.push('<span class="badge badge-over10k">&gt;10К</span>');
                 if (isNewRow) badges.push('<span class="badge badge-extra">Доп</span>');
 
                 // Modified classes
@@ -737,29 +735,36 @@
                 const transportModified = pendingChanges[calcId]?.transport !== undefined ? 'cell-modified' : '';
                 const totalModified = pendingChanges[calcId]?.total !== undefined ? 'cell-modified' : '';
 
-                // Order code cell
+                // Order code cell - ESCAPED for XSS protection
                 let orderCodeCell;
                 if (isNewRow) {
                     const orderCodeVal = pendingOrderChanges[orderId]?.order_code ?? order.order_code ?? '';
                     const orderCodeModified = pendingOrderChanges[orderId]?.order_code !== undefined ? 'cell-modified' : '';
-                    orderCodeCell = `<td class="order-code editable-text ${orderCodeModified}" onclick="editOrderField(${idx}, 'order_code', ${orderId})" id="cell-ordercode-${idx}">${orderCodeVal || '<em style="color:#999">Код</em>'}</td>`;
+                    // ✅ XSS FIX: escape user data
+                    orderCodeCell = `<td class="order-code editable-text ${orderCodeModified}" onclick="editOrderField(${idx}, 'order_code', ${orderId})" id="cell-ordercode-${idx}">${escapeHtml(orderCodeVal) || '<em style="color:#999">Код</em>'}</td>`;
                 } else {
                     const orderCode = order.order_code || '-';
-                    if (orderCode !== '-' && orderCode.match(/^[А-Яа-яA-Za-z]+-\d+$/)) {
-                        orderCodeCell = `<td class="order-code"><span class="order-link" onclick="showOrderInfo('${orderCode}')" title="Информация из 1С">${orderCode}</span></td>`;
+                    // Validate order code format before making it clickable
+                    if (orderCode !== '-' && /^[А-Яа-яA-Za-z]+-\d+$/.test(orderCode)) {
+                        // ✅ XSS FIX: escape and use data attribute
+                        orderCodeCell = `<td class="order-code"><span class="order-link" data-order="${escapeAttr(orderCode)}" onclick="showOrderInfo(this.dataset.order)" title="Информация из 1С">${escapeHtml(orderCode)}</span></td>`;
                     } else {
-                        orderCodeCell = `<td class="order-code">${orderCode}</td>`;
+                        // ✅ XSS FIX: escape
+                        orderCodeCell = `<td class="order-code">${escapeHtml(orderCode)}</td>`;
                     }
                 }
 
-                // Address cell
+                // Address cell - ESCAPED for XSS protection
                 let addressCell;
                 if (isNewRow) {
                     const addressVal = pendingOrderChanges[orderId]?.address ?? order.address ?? '';
                     const addressModified = pendingOrderChanges[orderId]?.address !== undefined ? 'cell-modified' : '';
-                    addressCell = `<td class="address editable-text ${addressModified}" onclick="editOrderField(${idx}, 'address', ${orderId})" id="cell-address-${idx}">${addressVal || '<em style="color:#999">Адрес</em>'}</td>`;
+                    // ✅ XSS FIX: escape user data
+                    addressCell = `<td class="address editable-text ${addressModified}" onclick="editOrderField(${idx}, 'address', ${orderId})" id="cell-address-${idx}">${escapeHtml(addressVal) || '<em style="color:#999">Адрес</em>'}</td>`;
                 } else {
-                    addressCell = `<td class="address" title="${order.address || ''}">${order.address || order.order_full || '-'}</td>`;
+                    // ✅ XSS FIX: escape both display text and title attribute
+                    const addressDisplay = order.address || order.order_full || '-';
+                    addressCell = `<td class="address" title="${escapeAttr(order.address || '')}">${escapeHtml(addressDisplay)}</td>`;
                 }
 
                 const rowClass = order._isNew ? 'new-row' : '';
@@ -770,7 +775,7 @@
                         ${addressCell}
                         <td class="number">${formatNumber(order.revenue_services)}</td>
                         <td class="number">${formatNumber(order.service_payment)}</td>
-                        <td>${order.percent || '-'}</td>
+                        <td>${escapeHtml(order.percent || '-')}</td>
                         <td class="number editable ${fuelModified}" onclick="editCell(${idx}, 'fuel_payment', ${calcId})" id="cell-fuel-${idx}">${formatNumber(fuelVal)}</td>
                         <td class="number editable ${transportModified}" onclick="editCell(${idx}, 'transport', ${calcId})" id="cell-transport-${idx}">${formatNumber(transportVal)}</td>
                         <td class="number editable ${totalModified}" onclick="editCell(${idx}, 'total', ${calcId})" id="cell-total-${idx}"><strong>${formatNumber(totalVal)}</strong></td>
@@ -780,7 +785,7 @@
                 `;
             });
 
-            // Total row
+            // Total row (calculated values, safe)
             tableHtml += `
                 <tr class="total-row">
                     <td colspan="2"><strong>ИТОГО</strong></td>
@@ -829,9 +834,17 @@
                            field === 'transport' ? `cell-transport-${idx}` : `cell-total-${idx}`;
             const cell = document.getElementById(cellId);
 
-            cell.innerHTML = `<input type="number" value="${currentVal}" onblur="saveCell(${idx}, '${field}', ${calcId}, this)" onkeypress="if(event.key==='Enter')this.blur()">`;
-            cell.querySelector('input').focus();
-            cell.querySelector('input').select();
+            // Create input element safely (not using innerHTML with user data)
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.value = currentVal;
+            input.onblur = function() { saveCell(idx, field, calcId, this); };
+            input.onkeypress = function(e) { if (e.key === 'Enter') this.blur(); };
+            
+            cell.innerHTML = '';
+            cell.appendChild(input);
+            input.focus();
+            input.select();
         }
 
         function saveCell(idx, field, calcId, input) {
@@ -860,9 +873,18 @@
             const cellId = field === 'order_code' ? `cell-ordercode-${idx}` : `cell-address-${idx}`;
             const cell = document.getElementById(cellId);
 
-            cell.innerHTML = `<input type="text" value="${currentVal}" onblur="saveOrderField(${idx}, '${field}', ${orderId}, this)" onkeypress="if(event.key==='Enter')this.blur()" placeholder="${field === 'order_code' ? 'Код' : 'Адрес'}">`;
-            cell.querySelector('input').focus();
-            cell.querySelector('input').select();
+            // Create input element safely
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = currentVal;
+            input.placeholder = field === 'order_code' ? 'Код' : 'Адрес';
+            input.onblur = function() { saveOrderField(idx, field, orderId, this); };
+            input.onkeypress = function(e) { if (e.key === 'Enter') this.blur(); };
+            
+            cell.innerHTML = '';
+            cell.appendChild(input);
+            input.focus();
+            input.select();
         }
 
         function saveOrderField(idx, field, orderId, input) {
@@ -885,7 +907,7 @@
 
         async function addNewRow() {
             try {
-                const response = await fetch(`/api/upload/${uploadId}/worker/${encodeURIComponent(workerName)}/add-row`, {
+                const response = await Security.fetch(`/api/upload/${uploadId}/worker/${encodeURIComponent(workerName)}/add-row`, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ order_code: '', address: '', fuel_payment: 0, transport: 0, total: 0 })
@@ -916,10 +938,11 @@
 
         async function deleteOrder(orderId, idx) {
             const order = ordersData[idx];
-            if (!confirm(`Удалить ${order.order_code || order.address || 'строку'}?`)) return;
+            const confirmText = order.order_code || order.address || 'строку';
+            if (!confirm(`Удалить ${confirmText}?`)) return;
 
             try {
-                const response = await fetch(`/api/order/${orderId}`, { method: 'DELETE' });
+                const response = await Security.fetch(`/api/order/${orderId}`, { method: 'DELETE' });
                 const data = await response.json();
 
                 if (data.success) {
@@ -942,7 +965,7 @@
                 const promises = [];
 
                 for (const [calcId, changes] of Object.entries(pendingChanges)) {
-                    promises.push(fetch(`/api/calculation/${calcId}/update`, {
+                    promises.push(Security.fetch(`/api/calculation/${calcId}/update`, {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify(changes)
@@ -950,7 +973,7 @@
                 }
 
                 for (const [orderId, changes] of Object.entries(pendingOrderChanges)) {
-                    promises.push(fetch(`/api/order/${orderId}/update`, {
+                    promises.push(Security.fetch(`/api/order/${orderId}/update`, {
                         method: 'PUT',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify(changes)
@@ -981,30 +1004,40 @@
             return Math.round(val).toLocaleString('ru-RU');
         }
 
-        // 1C Modal
+        // 1C Modal - with XSS protection
         function showOrderInfo(orderCode) {
+            // Validate order code format
+            if (!/^[А-Яа-яA-Za-z]+-\d+$/.test(orderCode)) {
+                alert('Некорректный код заказа');
+                return;
+            }
+
             const modal = document.getElementById('orderModal');
             const modalBody = document.getElementById('modalBody');
-            document.getElementById('modalOrderNumber').textContent = `Заказ ${orderCode}`;
+            
+            // ✅ XSS FIX: use textContent
+            Security.setText(document.getElementById('modalOrderNumber'), `Заказ ${orderCode}`);
             modal.classList.add('show');
 
             modalBody.innerHTML = `<div class="modal-loading"><div class="spinner"></div><p>Загрузка из 1С...</p></div>`;
 
-            fetch(`/api/1c/order/${encodeURIComponent(orderCode)}`)
+            Security.fetch(`/api/1c/order/${encodeURIComponent(orderCode)}`)
                 .then(r => r.json())
                 .then(data => {
                     if (data.success) {
                         renderOrderInfo(data.order);
                     } else {
+                        // ✅ XSS FIX: escape error message
                         modalBody.innerHTML = `
-                            <div class="modal-error">❌ ${data.error || 'Не удалось загрузить'}</div>
+                            <div class="modal-error">❌ ${escapeHtml(data.error || 'Не удалось загрузить')}</div>
                             <div class="integration-notice"><strong>ℹ️ Интеграция с 1С</strong><br>Необходимо настроить HTTP-сервис в 1С.</div>
                         `;
                     }
                 })
                 .catch(err => {
+                    // ✅ XSS FIX: escape error message
                     modalBody.innerHTML = `
-                        <div class="modal-error">❌ ${err.message}</div>
+                        <div class="modal-error">❌ ${escapeHtml(err.message)}</div>
                         <div class="integration-notice"><strong>ℹ️ Интеграция с 1С</strong><br>Необходимо настроить HTTP-сервис в 1С.</div>
                     `;
                 });
@@ -1017,11 +1050,12 @@
             if (order.amounts.debt <= 0) { statusClass = 'status-paid'; statusText = '✅ Оплачено'; }
             else if (order.amounts.paid > 0) { statusClass = 'status-partial'; statusText = '⚠️ Частично'; }
 
+            // ✅ XSS FIX: escape all order data
             let paymentsHtml = order.payments?.length > 0 
                 ? order.payments.map(p => `
                     <div class="payment-item">
-                        <div><strong>${new Date(p.date).toLocaleDateString('ru-RU')}</strong> — ${p.document || 'Оплата'}</div>
-                        <div class="payment-amount">+${p.amount.toLocaleString('ru-RU')} ₽</div>
+                        <div><strong>${escapeHtml(new Date(p.date).toLocaleDateString('ru-RU'))}</strong> — ${escapeHtml(p.document || 'Оплата')}</div>
+                        <div class="payment-amount">+${escapeHtml(p.amount.toLocaleString('ru-RU'))} ₽</div>
                     </div>
                 `).join('')
                 : '<p style="color:#999">Оплат нет</p>';
@@ -1029,18 +1063,18 @@
             modalBody.innerHTML = `
                 <div class="order-info-grid">
                     <div class="order-info-label">Дата:</div>
-                    <div class="order-info-value">${new Date(order.date).toLocaleDateString('ru-RU')}</div>
+                    <div class="order-info-value">${escapeHtml(new Date(order.date).toLocaleDateString('ru-RU'))}</div>
                     <div class="order-info-label">Клиент:</div>
-                    <div class="order-info-value">${order.client?.name || '-'}</div>
+                    <div class="order-info-value">${escapeHtml(order.client?.name || '-')}</div>
                     <div class="order-info-label">ИНН:</div>
-                    <div class="order-info-value">${order.client?.inn || '-'}</div>
+                    <div class="order-info-value">${escapeHtml(order.client?.inn || '-')}</div>
                     <div class="order-info-label">Статус:</div>
-                    <div class="order-info-value">${order.status || '-'}</div>
+                    <div class="order-info-value">${escapeHtml(order.status || '-')}</div>
                 </div>
                 <div class="amounts-summary">
-                    <div class="amounts-row"><span>Сумма:</span><span>${order.amounts.total.toLocaleString('ru-RU')} ₽</span></div>
-                    <div class="amounts-row"><span>Оплачено:</span><span>${order.amounts.paid.toLocaleString('ru-RU')} ₽</span></div>
-                    <div class="amounts-row total"><span>Долг:</span><span>${order.amounts.debt.toLocaleString('ru-RU')} ₽</span></div>
+                    <div class="amounts-row"><span>Сумма:</span><span>${escapeHtml(order.amounts.total.toLocaleString('ru-RU'))} ₽</span></div>
+                    <div class="amounts-row"><span>Оплачено:</span><span>${escapeHtml(order.amounts.paid.toLocaleString('ru-RU'))} ₽</span></div>
+                    <div class="amounts-row total"><span>Долг:</span><span>${escapeHtml(order.amounts.debt.toLocaleString('ru-RU'))} ₽</span></div>
                 </div>
                 <div class="order-status ${statusClass}">${statusText}</div>
                 <h3 style="margin:20px 0 12px">💰 Оплаты</h3>
