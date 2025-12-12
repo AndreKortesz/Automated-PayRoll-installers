@@ -1862,8 +1862,20 @@ async def api_get_periods():
                         client_amount += wt.get("client_amount", 0) or 0
                     total_amount = company_amount + client_amount
             
+            # Convert datetime fields to strings for JSON serialization
+            created_at = p.get("created_at")
+            sent_at = p.get("sent_at")
+            paid_at = p.get("paid_at")
+            
             enriched_periods.append({
-                **p,
+                "id": p.get("id"),
+                "name": p.get("name"),
+                "month": p.get("month"),
+                "year": p.get("year"),
+                "status": p.get("status", "draft"),
+                "created_at": str(created_at) if created_at else None,
+                "sent_at": str(sent_at) if sent_at else None,
+                "paid_at": str(paid_at) if paid_at else None,
                 "total_amount": total_amount,
                 "company_amount": company_amount,
                 "client_amount": client_amount,
