@@ -131,20 +131,52 @@ async def refresh_access_token(refresh_token: str) -> Optional[dict]:
 
 async def get_bitrix_user(access_token: str, domain: str) -> Optional[dict]:
     """Get current user info from Bitrix24"""
+    # Clean domain (remove protocol if present)
+    if domain.startswith("http://"):
+        domain = domain[7:]
+    elif domain.startswith("https://"):
+        domain = domain[8:]
+    domain = domain.rstrip("/")
+    
+    url = f"https://{domain}/rest/user.current"
+    print(f"🔐 Getting user info from: {url}")
+    
     try:
         async with httpx.AsyncClient() as client:
+            # Try POST method first (more reliable)
+            response = await client.post(
+                url,
+                data={"auth": access_token},
+                timeout=30
+            )
+            
+            print(f"🔐 User info response: {response.status_code}")
+            
+            if response.status_code == 200:
+                data = response.json()
+                print(f"🔐 User data: {data}")
+                if "result" in data:
+                    return data["result"]
+                # Some endpoints return data directly
+                if "ID" in data:
+                    return data
+
+            # Try GET method as fallback
+            print(f"🔄 Trying GET method for user info...")
             response = await client.get(
-                f"https://{domain}/rest/user.current.json",
+                url,
                 params={"auth": access_token},
                 timeout=30
             )
-
+            
             if response.status_code == 200:
                 data = response.json()
                 if "result" in data:
                     return data["result"]
+                if "ID" in data:
+                    return data
 
-            print(f"❌ Get user failed: {response.status_code}")
+            print(f"❌ Get user failed: {response.status_code} - {response.text[:200]}")
             return None
     except Exception as e:
         print(f"❌ Get user error: {e}")
