@@ -802,13 +802,14 @@ async def save_worker_total(upload_id: int, worker: str,
     if not database or not database.is_connected:
         return None
     
+    # Map parameter names to actual DB column names
     query = worker_totals.insert().values(
         upload_id=upload_id,
         worker=worker,
-        total=total,
+        total_amount=total,  # DB column is total_amount, not total
         orders_count=orders_count,
-        fuel=fuel,
-        transport=transport,
+        fuel_total=fuel,  # DB column is fuel_total, not fuel
+        transport_total=transport,  # DB column is transport_total, not transport
         company_amount=company_amount,
         client_amount=client_amount,
         company_orders_count=company_orders_count,
@@ -828,7 +829,7 @@ async def save_change(upload_id: int, order_code: str = None, worker: str = None
         'order_code': order_code,
         'worker': worker,
         'change_type': change_type,
-        'field': field,
+        'field_name': field,  # DB column is field_name, not field
         'old_value': old_value,
         'new_value': new_value
     }
