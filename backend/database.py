@@ -843,18 +843,26 @@ async def save_change(upload_id: int, order_code: str = None, worker: str = None
     return await database.execute(query)
 
 
-async def get_previous_upload(period_id: int) -> Optional[dict]:
-    """Get the latest upload for a period"""
+async def get_previous_upload(period_id: int, exclude_upload_id: int = None) -> Optional[int]:
+    """Get the previous upload ID for a period, optionally excluding a specific upload"""
     if not database or not database.is_connected:
         return None
     
-    query = uploads.select().where(
-        uploads.c.period_id == period_id
-    ).order_by(uploads.c.version.desc()).limit(1)
+    if exclude_upload_id:
+        # Get the upload before the specified one
+        query = uploads.select().where(
+            (uploads.c.period_id == period_id) & 
+            (uploads.c.id < exclude_upload_id)
+        ).order_by(uploads.c.id.desc()).limit(1)
+    else:
+        # Get the latest upload for the period
+        query = uploads.select().where(
+            uploads.c.period_id == period_id
+        ).order_by(uploads.c.version.desc()).limit(1)
     
     row = await database.fetch_one(query)
     if row:
-        return dict(row._mapping)
+        return row._mapping.get('id')
     return None
 
 
