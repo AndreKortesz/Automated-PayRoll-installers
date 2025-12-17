@@ -438,7 +438,8 @@ async def detect_file_type(file: UploadFile = File(...)):
 async def upload_files(
     request: Request,
     file_under_10k: UploadFile = File(...),
-    file_over_10k: UploadFile = File(...)
+    file_over_10k: UploadFile = File(...),
+    file_yandex_fuel: UploadFile = File(None)  # Optional third file for Yandex Fuel
 ):
     """Upload and parse Excel files"""
     try:
@@ -450,6 +451,27 @@ async def upload_files(
         
         period_df = pd.read_excel(BytesIO(content_under), header=None)
         period = extract_period(period_df)
+        
+        # Parse Yandex Fuel file if provided (required for second half periods)
+        yandex_fuel_data = {}
+        from services.yandex_fuel_parser import parse_yandex_fuel_file, is_second_half_period
+        
+        is_second_half = is_second_half_period(period)
+        
+        if file_yandex_fuel and file_yandex_fuel.filename:
+            content_yandex = await file_yandex_fuel.read()
+            if content_yandex:
+                if is_second_half:
+                    yandex_fuel_data = parse_yandex_fuel_file(content_yandex, name_map)
+                    print(f"⛽ Яндекс Заправки загружены: {len(yandex_fuel_data)} монтажников")
+                else:
+                    print(f"⚠️ Яндекс Заправки: период {period} - первая половина месяца, файл игнорируется")
+        elif is_second_half:
+            # Yandex Fuel file is required for second half periods
+            return JSONResponse(
+                {"success": False, "detail": "Для второй половины месяца необходимо загрузить файл Яндекс Заправок"},
+                status_code=400
+            )
         
         workers = list(set([w.replace(" (оплата клиентом)", "") 
                            for w in combined["worker"].unique() if w and not pd.isna(w)]))
@@ -492,7 +514,8 @@ async def upload_files(
             "combined": combined.to_dict("records"),
             "period": period,
             "workers": workers,
-            "name_map": name_map  # Save for later use
+            "name_map": name_map,  # Save for later use
+            "yandex_fuel": yandex_fuel_data  # Yandex Fuel deductions per worker
         }
         
         # ===== CHECK FOR CHANGES FROM PREVIOUS UPLOAD =====
@@ -1466,6 +1489,10 @@ async def preview_calculation(
         full_config = {**DEFAULT_CONFIG, **config}
         name_map = session.get("name_map", {})
         
+        # Add Yandex Fuel data to config for report generation
+        yandex_fuel = session.get("yandex_fuel", {})
+        full_config["yandex_fuel"] = yandex_fuel
+        
         calculated_data = []
         for row in session["combined"]:
             calc_row = await calculate_row(row, full_config, days_map)
@@ -1612,6 +1639,10 @@ async def calculate_salaries(
             
             full_config = {**DEFAULT_CONFIG, **config}
             name_map = session.get("name_map", {})
+            
+            # Add Yandex Fuel data to config
+            yandex_fuel = session.get("yandex_fuel", {})
+            full_config["yandex_fuel"] = yandex_fuel
             
             calculated_data = []
             for idx, row in enumerate(session["combined"]):
