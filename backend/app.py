@@ -725,8 +725,8 @@ async def upload_files(
                             
                             # Log extra rows (they will be added to deleted later with full details)
                             for extra_order in extra_rows_from_prev:
-                                calc = extra_order.get("calculation", {})
-                                calc_total = calc.get("total", 0) if calc else 0
+                                # total comes directly from JOIN query now
+                                calc_total = extra_order.get("total", 0) or 0
                                 order_text = extra_order.get("order", "") or extra_order.get("order_full", "")
                                 print(f"📋 Found extra row: {order_text[:30]}_{extra_order.get('worker', '')} total={calc_total}")
                             
@@ -868,9 +868,8 @@ async def upload_files(
                                 
                                 print(f"📋 Extra row from DB: order_full='{extra.get('order_full', '')}', order='{extra.get('order', '')}', order_code='{extra.get('order_code', '')}' -> order_text='{order_text}'")
                                 
-                                # Get calculation data for this extra row
-                                calc = extra.get("calculation", {})
-                                total = calc.get("total", 0) if calc else 0
+                                # Get total directly from extra (from JOIN query)
+                                total = extra.get("total", 0) or 0
                                 
                                 changes_summary["extra_rows"].append({
                                     "id": extra.get("id"),
@@ -1022,11 +1021,12 @@ async def apply_review_changes(request: Request):
                                 key = order_code + "_" + worker
                             
                             if key in deleted_to_restore:
-                                # Get calculation data if available
-                                calc = old_order.get("calculation", {})
-                                calc_total = calc.get("total", 0) if calc else 0
+                                # Get calculation data directly from old_order (from JOIN query)
+                                calc_total = old_order.get("total", 0) or 0
+                                calc_fuel = old_order.get("fuel_payment", 0) or 0
+                                calc_transport = old_order.get("transport", 0) or 0
                                 
-                                print(f"📋 Restoring {key}: calc={calc}, total={calc_total}")
+                                print(f"📋 Restoring {key}: total={calc_total}, fuel={calc_fuel}, transport={calc_transport}")
                                 
                                 # Add this order back to combined records
                                 restored_record = {
@@ -1046,8 +1046,8 @@ async def apply_review_changes(request: Request):
                                     "is_restored": True,  # Mark as restored
                                     "is_extra_row": is_extra,
                                     # Preserve calculation values for extra rows
-                                    "fuel_payment": calc.get("fuel_payment", 0) if calc else 0,
-                                    "transport": calc.get("transport", 0) if calc else 0,
+                                    "fuel_payment": calc_fuel,
+                                    "transport": calc_transport,
                                     "total": calc_total,
                                 }
                                 modified_records.append(restored_record)
@@ -1107,12 +1107,15 @@ async def apply_review_changes(request: Request):
 
                                 # IMPORTANT: Also preserve calculation values (including manual edits)
                                 # This ensures "Вариант B" works - old version values are kept
-                                old_calc = old.get("calculation", {})
-                                if old_calc:
-                                    modified_records[i]["_old_calc_total"] = old_calc.get("total", 0)
-                                    modified_records[i]["_old_calc_fuel"] = old_calc.get("fuel_payment", 0)
-                                    modified_records[i]["_old_calc_transport"] = old_calc.get("transport", 0)
-                                    print(f"📋 Preserving old calc for {key}: total={old_calc.get('total', 0)}")
+                                # Data comes directly from JOIN query now
+                                old_total = old.get("total", 0) or 0
+                                old_fuel = old.get("fuel_payment", 0) or 0
+                                old_transport = old.get("transport", 0) or 0
+                                if old_total or old_fuel or old_transport:
+                                    modified_records[i]["_old_calc_total"] = old_total
+                                    modified_records[i]["_old_calc_fuel"] = old_fuel
+                                    modified_records[i]["_old_calc_transport"] = old_transport
+                                    print(f"📋 Preserving old calc for {key}: total={old_total}")
             except Exception as e:
                 print(f"Error reverting modified orders: {e}")
         
