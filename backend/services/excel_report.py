@@ -293,7 +293,12 @@ def create_excel_report(data: List[dict], period: str, config: dict, for_workers
         client_diag50_sum_for_main = sum(to_int(r.get("diagnostic_50", 0)) or 0 for r in client_rows if not r.get("is_worker_total")) if client_rows else 0
         
         # Get Yandex Fuel deduction for this worker (from config)
-        yandex_fuel_deduction = config.get("yandex_fuel", {}).get(worker, 0)
+        yandex_fuel_dict = config.get("yandex_fuel", {})
+        yandex_fuel_deduction = yandex_fuel_dict.get(worker, 0)
+        
+        # Debug: if we have yandex_fuel data but didn't find this worker
+        if yandex_fuel_dict and not yandex_fuel_deduction:
+            print(f"⚠️ Yandex fuel: worker '{worker}' not found in keys: {list(yandex_fuel_dict.keys())[:5]}")
         
         if regular_end >= regular_start:
             if client_name_row:
