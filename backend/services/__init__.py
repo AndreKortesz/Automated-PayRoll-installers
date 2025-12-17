@@ -26,6 +26,12 @@ from .excel_report import (
     create_worker_report,
 )
 
+from .yandex_fuel_parser import (
+    parse_yandex_fuel_file,
+    detect_yandex_fuel_file,
+    is_second_half_period,
+)
+
 __all__ = [
     # Geocoding
     'geocode_address',
@@ -43,4 +49,8 @@ __all__ = [
     # Excel report
     'create_excel_report',
     'create_worker_report',
+    # Yandex Fuel
+    'parse_yandex_fuel_file',
+    'detect_yandex_fuel_file',
+    'is_second_half_period',
 ]
