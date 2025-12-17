@@ -753,6 +753,10 @@ async def save_order(upload_id: int, order_data: dict) -> int:
     if not database or not database.is_connected:
         return None
     
+    # Map 'order' to 'order_full' (different names in app vs DB)
+    if 'order' in order_data and 'order_full' not in order_data:
+        order_data['order_full'] = order_data.pop('order')
+    
     # Only include fields that exist in orders table
     allowed_fields = {
         'worker', 'order_code', 'order_full', 'address',
