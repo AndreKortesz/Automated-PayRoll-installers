@@ -1275,19 +1275,21 @@ async def apply_review_changes(request: Request):
         # Compare with previous upload and save changes
         prev_upload_id = await get_previous_upload(period_id, upload_id)
         if prev_upload_id:
-            changes_list = await compare_uploads(prev_upload_id, upload_id)
-            for change in changes_list:
-                if change["type"] == "added":
-                    await save_change(upload_id, change["order_code"], change["worker"], "added")
-                elif change["type"] == "deleted":
-                    await save_change(upload_id, change["order_code"], change["worker"], "deleted")
-                else:
-                    for field_change in change.get("changes", []):
-                        await save_change(
-                            upload_id, change["order_code"], change["worker"], 
-                            "modified", field_change["field"],
-                            str(field_change["old"]), str(field_change["new"])
-                        )
+            changes_dict = await compare_uploads(prev_upload_id, upload_id)
+            # Process added orders
+            for change in changes_dict.get("added", []):
+                await save_change(upload_id, change.get("order_code"), change.get("worker"), "added")
+            # Process deleted orders
+            for change in changes_dict.get("deleted", []):
+                await save_change(upload_id, change.get("order_code"), change.get("worker"), "deleted")
+            # Process modified orders
+            for change in changes_dict.get("modified", []):
+                for field_change in change.get("changes", []):
+                    await save_change(
+                        upload_id, change.get("order_code"), change.get("worker"), 
+                        "modified", field_change.get("field"),
+                        str(field_change.get("old", "")), str(field_change.get("new", ""))
+                    )
         
         # Cleanup session
         del session_data[session_id]
@@ -1809,23 +1811,25 @@ async def calculate_salaries(
                 
                 # 6. Compare with previous upload if exists
                 if prev_upload_id:
-                    changes_list = await compare_uploads(prev_upload_id, upload_id)
-                    for change in changes_list:
-                        if change["type"] == "added":
-                            await save_change(upload_id, change["order_code"], change["worker"], "added")
-                        elif change["type"] == "deleted":
-                            await save_change(upload_id, change["order_code"], change["worker"], "deleted")
-                        elif change["type"] == "modified":
-                            for field_change in change.get("changes", []):
-                                await save_change(
-                                    upload_id, 
-                                    change["order_code"], 
-                                    change["worker"], 
-                                    "modified",
-                                    field_change["field"],
-                                    str(field_change["old"]),
-                                    str(field_change["new"])
-                                )
+                    changes_dict = await compare_uploads(prev_upload_id, upload_id)
+                    # Process added orders
+                    for change in changes_dict.get("added", []):
+                        await save_change(upload_id, change.get("order_code"), change.get("worker"), "added")
+                    # Process deleted orders
+                    for change in changes_dict.get("deleted", []):
+                        await save_change(upload_id, change.get("order_code"), change.get("worker"), "deleted")
+                    # Process modified orders
+                    for change in changes_dict.get("modified", []):
+                        for field_change in change.get("changes", []):
+                            await save_change(
+                                upload_id, 
+                                change.get("order_code"), 
+                                change.get("worker"), 
+                                "modified",
+                                field_change.get("field"),
+                                str(field_change.get("old", "")),
+                                str(field_change.get("new", ""))
+                            )
                 
                 print(f"✅ Saved to database: period={period}, upload_id={upload_id}")
         except Exception as db_error:
