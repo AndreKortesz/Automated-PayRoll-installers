@@ -900,6 +900,7 @@ async def upload_files(
                             
                             # Add extra rows (manual additions) from previous version to deleted list
                             # These are rows that were manually added and won't be in new 1C files
+                            print(f"📋 DEBUG: extra_rows_from_prev has {len(extra_rows_from_prev)} items before loop")
                             changes_summary["extra_rows"] = []  # Store for later restoration
                             for extra in extra_rows_from_prev:
                                 order_text = extra.get("order_full", "") or extra.get("order", "") or extra.get("order_code", "")
