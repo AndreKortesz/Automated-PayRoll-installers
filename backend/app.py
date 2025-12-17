@@ -1187,6 +1187,11 @@ async def apply_review_changes(request: Request):
         # Now proceed with calculation (similar to /calculate endpoint)
         # Use default config and calculate
         config = DEFAULT_CONFIG.copy()
+        
+        # Add Yandex Fuel data to config
+        yandex_fuel = session.get("yandex_fuel", {})
+        config["yandex_fuel"] = yandex_fuel
+        
         name_map = session.get("name_map", {})
         
         calculated_data = []
@@ -1637,6 +1642,10 @@ async def calculate_salaries(
         if "calculated_data" in session:
             all_calculated = session["calculated_data"]
             full_config = session.get("config", DEFAULT_CONFIG)
+            
+            # Ensure yandex_fuel is in config (might be missing if preview was skipped)
+            if "yandex_fuel" not in full_config:
+                full_config = {**full_config, "yandex_fuel": session.get("yandex_fuel", {})}
             
             # Filter out deleted rows
             calculated_data = []
