@@ -793,7 +793,11 @@ async def save_calculation(upload_id: int, order_id: int, calc_data: dict) -> in
     return await database.execute(query)
 
 
-async def save_worker_total(upload_id: int, worker: str, totals: dict) -> int:
+async def save_worker_total(upload_id: int, worker: str, 
+                           total: float = 0, orders_count: int = 0,
+                           fuel: float = 0, transport: float = 0,
+                           company_amount: float = 0, client_amount: float = 0,
+                           company_orders_count: int = 0, client_orders_count: int = 0) -> int:
     """Save worker totals"""
     if not database or not database.is_connected:
         return None
@@ -801,19 +805,39 @@ async def save_worker_total(upload_id: int, worker: str, totals: dict) -> int:
     query = worker_totals.insert().values(
         upload_id=upload_id,
         worker=worker,
-        **totals
+        total=total,
+        orders_count=orders_count,
+        fuel=fuel,
+        transport=transport,
+        company_amount=company_amount,
+        client_amount=client_amount,
+        company_orders_count=company_orders_count,
+        client_orders_count=client_orders_count
     )
     return await database.execute(query)
 
 
-async def save_change(upload_id: int, change_data: dict) -> int:
+async def save_change(upload_id: int, order_code: str = None, worker: str = None, 
+                      change_type: str = None, field: str = None,
+                      old_value: str = None, new_value: str = None) -> int:
     """Save change record"""
     if not database or not database.is_connected:
         return None
     
+    data = {
+        'order_code': order_code,
+        'worker': worker,
+        'change_type': change_type,
+        'field': field,
+        'old_value': old_value,
+        'new_value': new_value
+    }
+    # Remove None values
+    data = {k: v for k, v in data.items() if v is not None}
+    
     query = changes.insert().values(
         upload_id=upload_id,
-        **change_data
+        **data
     )
     return await database.execute(query)
 
