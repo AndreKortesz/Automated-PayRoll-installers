@@ -2413,18 +2413,24 @@ async def download_period_archive(period_id: int, archive_type: str):
         period_name = period_details.get("name", f"period_{period_id}")
         for_workers = (archive_type == "workers")
         
+        # Load config from DB (includes yandex_fuel if saved)
+        saved_config = latest_upload.get("config_json", {}) or {}
+        if isinstance(saved_config, str):
+            saved_config = json.loads(saved_config)
+        report_config = {**DEFAULT_CONFIG, **saved_config}
+        
         # Generate FULL archive with all worker files (like step 4)
         zip_buffer = BytesIO()
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
             # Main report
-            main_report = create_excel_report(calculated_data, period_name, DEFAULT_CONFIG, for_workers=for_workers)
+            main_report = create_excel_report(calculated_data, period_name, report_config, for_workers=for_workers)
             main_filename = f"Для_монтажников_{period_name.replace('.', '_')}.xlsx" if for_workers else f"Общий_отчет_{period_name.replace('.', '_')}.xlsx"
             zf.writestr(main_filename, main_report)
             
             # Individual worker reports
             for worker in workers:
                 worker_surname = worker.split()[0] if worker else "Unknown"
-                worker_report = create_worker_report(calculated_data, worker, period_name, DEFAULT_CONFIG, for_workers=for_workers)
+                worker_report = create_worker_report(calculated_data, worker, period_name, report_config, for_workers=for_workers)
                 zf.writestr(f"{worker_surname}_{period_name.replace('.', '_')}.xlsx", worker_report)
         
         zip_buffer.seek(0)
