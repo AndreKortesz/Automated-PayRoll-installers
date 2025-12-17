@@ -568,8 +568,24 @@ async def upload_files(
                         if prev_upload_details:
                             # Get extra rows (is_extra_row=True)
                             for o in old_orders:
-                                if o.get("is_extra_row", False):
+                                is_extra = o.get("is_extra_row", False)
+                                if is_extra:
                                     extra_rows_from_prev.append(o)
+                                    print(f"📋 Found extra_row: {o.get('order_code', '')} - {o.get('worker', '')}")
+                            
+                            print(f"📋 Total extra_rows found: {len(extra_rows_from_prev)} out of {len(old_orders)} orders")
+                            
+                            # Debug: show is_extra_row values
+                            extra_counts = {"True": 0, "False": 0, "None": 0}
+                            for o in old_orders:
+                                val = o.get("is_extra_row")
+                                if val is True:
+                                    extra_counts["True"] += 1
+                                elif val is False:
+                                    extra_counts["False"] += 1
+                                else:
+                                    extra_counts["None"] += 1
+                            print(f"📋 is_extra_row distribution: {extra_counts}")
                             
                             # Get manual edits
                             manual_edits_from_prev = prev_upload_details.get("manual_edits", [])
