@@ -260,6 +260,23 @@ sent_notifications = Table(
     Column("status", String(20), default="sent"),  # sent, delivered, read
 )
 
+# Version changes table (изменения между версиями)
+version_changes = Table(
+    "version_changes",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("upload_id", Integer, ForeignKey("uploads.id"), nullable=False),  # Новая версия
+    Column("prev_upload_id", Integer, ForeignKey("uploads.id"), nullable=True),  # Предыдущая версия
+    Column("change_type", String(20), nullable=False),  # added, deleted, modified, restored
+    Column("order_code", String(50)),
+    Column("worker", String(100)),
+    Column("address", Text),
+    Column("old_total", Float),  # Было (для modified/deleted)
+    Column("new_total", Float),  # Стало (для modified/added)
+    Column("details", JSON),  # Дополнительные детали изменений
+    Column("created_at", DateTime, default=datetime.utcnow),
+)
+
 
 # ============== DATABASE FUNCTIONS ==============
 
@@ -361,6 +378,20 @@ def create_tables():
                     sent_by INTEGER REFERENCES users(id),
                     sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     status VARCHAR(20) DEFAULT 'sent'
+                )""",
+                # Version changes table
+                """CREATE TABLE IF NOT EXISTS version_changes (
+                    id SERIAL PRIMARY KEY,
+                    upload_id INTEGER REFERENCES uploads(id) NOT NULL,
+                    prev_upload_id INTEGER REFERENCES uploads(id),
+                    change_type VARCHAR(20) NOT NULL,
+                    order_code VARCHAR(50),
+                    worker VARCHAR(100),
+                    address TEXT,
+                    old_total FLOAT,
+                    new_total FLOAT,
+                    details JSONB,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )""",
             ]
             
@@ -975,6 +1006,20 @@ async def get_upload_details(upload_id: int) -> Optional[dict]:
     edit_rows = await database.fetch_all(query)
     upload["manual_edits"] = [dict(row._mapping) for row in edit_rows]
     
+    # Get version changes (changes compared to previous version)
+    query = version_changes.select().where(
+        version_changes.c.upload_id == upload_id
+    ).order_by(version_changes.c.change_type, version_changes.c.worker)
+    change_rows = await database.fetch_all(query)
+    upload["version_changes"] = [dict(row._mapping) for row in change_rows]
+    
+    # Get changes (from old changes table - for backward compatibility)
+    query = changes.select().where(
+        changes.c.upload_id == upload_id
+    ).order_by(changes.c.change_type, changes.c.worker)
+    change_rows = await database.fetch_all(query)
+    upload["changes"] = [dict(row._mapping) for row in change_rows]
+    
     return upload
 
 
@@ -1151,3 +1196,45 @@ async def save_manual_edit(
         period_status=period_status
     )
     return await database.execute(query)
+
+
+async def save_version_change(
+    upload_id: int,
+    prev_upload_id: int,
+    change_type: str,
+    order_code: str = None,
+    worker: str = None,
+    address: str = None,
+    old_total: float = None,
+    new_total: float = None,
+    details: dict = None
+) -> int:
+    """Save a version change record"""
+    if not database or not database.is_connected:
+        return None
+    
+    query = version_changes.insert().values(
+        upload_id=upload_id,
+        prev_upload_id=prev_upload_id,
+        change_type=change_type,
+        order_code=order_code,
+        worker=worker,
+        address=address,
+        old_total=old_total,
+        new_total=new_total,
+        details=details
+    )
+    return await database.execute(query)
+
+
+async def get_version_changes(upload_id: int) -> List[dict]:
+    """Get all changes for a specific upload version"""
+    if not database or not database.is_connected:
+        return []
+    
+    query = version_changes.select().where(
+        version_changes.c.upload_id == upload_id
+    ).order_by(version_changes.c.change_type, version_changes.c.worker)
+    
+    rows = await database.fetch_all(query)
+    return [dict(row._mapping) for row in rows]
