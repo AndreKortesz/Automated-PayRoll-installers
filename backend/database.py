@@ -961,13 +961,17 @@ async def get_upload_details(upload_id: int) -> Optional[dict]:
     rows = await database.fetch_all(query, {"upload_id": upload_id})
     upload["orders"] = [dict(row._mapping) for row in rows]
     
-    # Get worker totals
-    query = worker_totals.select().where(worker_totals.c.upload_id == upload_id)
+    # Get worker totals (sorted alphabetically)
+    query = worker_totals.select().where(
+        worker_totals.c.upload_id == upload_id
+    ).order_by(worker_totals.c.worker)
     total_rows = await database.fetch_all(query)
     upload["worker_totals"] = [dict(row._mapping) for row in total_rows]
     
-    # Get manual edits
-    query = manual_edits.select().where(manual_edits.c.upload_id == upload_id)
+    # Get manual edits (sorted by date, newest first)
+    query = manual_edits.select().where(
+        manual_edits.c.upload_id == upload_id
+    ).order_by(manual_edits.c.created_at.desc())
     edit_rows = await database.fetch_all(query)
     upload["manual_edits"] = [dict(row._mapping) for row in edit_rows]
     
