@@ -2501,8 +2501,12 @@ async def update_calculation(calc_id: int, request: Request):
         if not database:
             raise HTTPException(status_code=500, detail="Database not connected")
         
-        # Get current user from session
-        user = request.session.get("user")
+        # Get current user from session (safely)
+        user = None
+        try:
+            user = request.session.get("user")
+        except Exception:
+            pass  # Session not available
         
         data = await request.json()
         fuel_payment = data.get("fuel_payment")
@@ -2661,8 +2665,12 @@ async def delete_order(order_id: int, request: Request):
         from sqlalchemy import delete, and_, update, text
         from database import orders, calculations, worker_totals, manual_edits, log_action, save_manual_edit
         
-        # Get current user
-        user = request.session.get("user")
+        # Get current user (safely)
+        user = None
+        try:
+            user = request.session.get("user")
+        except Exception:
+            pass  # Session not available
         
         # First, get order info for updating worker_totals
         order_query = orders.select().where(orders.c.id == order_id)
