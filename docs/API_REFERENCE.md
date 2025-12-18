@@ -1,385 +1,389 @@
-# API Reference - Salary Service
+# API Reference
 
-## Базовый URL
-```
-https://automated-payroll-installers-production.up.railway.app
-```
+## Оглавление
+
+1. [Аутентификация](#аутентификация)
+2. [Загрузка файлов](#загрузка-файлов)
+3. [Периоды](#периоды)
+4. [Расчёты](#расчёты)
+5. [Отчёты](#отчёты)
+6. [Статусы](#статусы)
 
 ---
 
-## 📋 Периоды и загрузки
+## Аутентификация
 
-### GET /api/periods
-Получить список всех периодов с группировкой по месяцам.
+### OAuth2 через Bitrix24
+
+#### Начало авторизации
+
+```http
+GET /auth/login
+```
+
+Перенаправляет на страницу авторизации Bitrix24.
+
+#### Callback
+
+```http
+GET /auth/callback?code={code}&domain={domain}
+```
+
+Обрабатывает ответ от Bitrix24, создаёт сессию.
+
+#### Выход
+
+```http
+GET /auth/logout
+```
+
+Завершает сессию.
+
+---
+
+## Загрузка файлов
+
+### Определение типа файла
+
+```http
+POST /api/detect-file-type
+Content-Type: multipart/form-data
+
+file: <Excel file>
+```
 
 **Response:**
 ```json
 {
-  "months": {
-    "2025-11": {
-      "periods": [
-        {
-          "id": 4,
-          "name": "16-30.11.25",
-          "uploads_count": 11,
-          "latest_upload": {...}
-        }
-      ]
-    }
-  }
+    "success": true,
+    "file_type": "revenue",  // "revenue" | "diagnostic" | "yandex_fuel" | "unknown"
+    "period": "16-30.11.25",
+    "workers_count": 5
 }
 ```
 
----
+### Загрузка файлов
 
-### GET /api/period/{period_id}
-Получить детали периода со всеми версиями.
+```http
+POST /upload
+Content-Type: multipart/form-data
 
-**Response:**
+file_revenue: <Excel file>       // Обязательный
+file_diagnostic: <Excel file>    // Обязательный
+file_yandex_fuel: <Excel file>   // Обязательный для периодов 16-30
+```
+
+**Response (есть предыдущая версия):**
 ```json
 {
-  "period": {
-    "id": 4,
-    "name": "16-30.11.25"
-  },
-  "uploads": [
-    {
-      "id": 23,
-      "version": 11,
-      "workers": [
-        {
-          "worker": "Ветренко Дмитрий",
-          "total_amount": 46436,
-          "company_amount": 28186,
-          "client_amount": 18250,
-          "orders_count": 23,
-          "company_orders_count": 13,
-          "client_orders_count": 10
-        }
-      ]
+    "success": true,
+    "session_id": "20251218103627",
+    "redirect_to_review": true,
+    "has_changes": true,
+    "changes": {
+        "added": [...],
+        "deleted": [...],
+        "modified": [...]
     }
-  ]
 }
 ```
 
----
-
-### GET /api/upload/{upload_id}
-Получить детали конкретной загрузки.
-
-**Response:**
+**Response (первая загрузка):**
 ```json
 {
-  "upload": {
-    "id": 23,
+    "success": true,
     "period_id": 4,
-    "version": 11
-  },
-  "workers": [...],
-  "totals": {
-    "company": 460990,
-    "client": 36250,
-    "total": 497240
-  }
+    "upload_id": 48
 }
 ```
 
 ---
 
-### GET /api/upload/{upload_id}/worker/{worker}
-Получить все заказы работника.
+## Периоды
 
-**URL encode** имя работника: `%D0%92%D0%B5%D1%82%D1%80%D0%B5%D0%BD%D0%BA%D0%BE%20%D0%94%D0%BC%D0%B8%D1%82%D1%80%D0%B8%D0%B9`
+### Список периодов
 
-**Response:**
-```json
-{
-  "worker": "Ветренко Дмитрий",
-  "totals": {
-    "orders_count": 23,
-    "revenue": 27065,
-    "service_payment": 45136,
-    "fuel": 300,
-    "transport": 1000,
-    "total": 46436
-  },
-  "orders": [
-    {
-      "id": 1920,
-      "order_code": "КАУТ-001736",
-      "address": "Москва, Мосфильмовская улица, 74Б",
-      "revenue_services": 27065,
-      "service_payment": 8120,
-      "percent": "30,00 %",
-      "is_client_payment": false,
-      "is_extra_row": false,
-      "calculation": {
-        "id": 1920,
-        "fuel_payment": 300,
-        "transport": 1000,
-        "total": 9420
-      }
-    }
-  ]
-}
-```
-
----
-
-## ✏️ Редактирование
-
-### POST /api/calculation/{calc_id}/update
-Обновить значения расчёта (бензин, транспортные, итого).
-
-**Request:**
-```json
-{
-  "fuel_payment": 500,
-  "transport": 1000,
-  "total": 10000
-}
+```http
+GET /api/periods
 ```
 
 **Response:**
 ```json
 {
-  "success": true,
-  "updated": {
-    "total": 10000
-  }
+    "periods": [
+        {
+            "id": 4,
+            "name": "16-30.11.25",
+            "month": 11,
+            "year": 2025,
+            "status": "DRAFT",
+            "uploads_count": 3,
+            "latest_upload": {
+                "id": 48,
+                "version": 3,
+                "created_at": "2025-12-18T10:36:27"
+            }
+        }
+    ]
 }
 ```
 
-**Эффект:** 
-- Обновляет `calculations`
-- Пересчитывает `worker_totals` через JOIN
-- Сохраняет в `manual_edits`
+### Детали периода
 
----
-
-### PUT /api/order/{order_id}/update
-Обновить данные заказа (код, адрес).
-
-**Request:**
-```json
-{
-  "order_code": "ДОПЛАТА",
-  "address": "Отпускные"
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "updated": {
-    "order_code": "ДОПЛАТА",
-    "address": "Отпускные",
-    "order_full": "ДОПЛАТА, Отпускные"
-  }
-}
-```
-
----
-
-### POST /api/upload/{upload_id}/worker/{worker}/add-row
-Добавить новую строку для работника.
-
-**Request:**
-```json
-{
-  "order_code": "",
-  "address": "",
-  "fuel_payment": 0,
-  "transport": 0,
-  "total": 0
-}
+```http
+GET /api/period/{period_id}
 ```
 
 **Response:**
 ```json
 {
-  "success": true,
-  "order": {
-    "id": 1950,
-    "order_code": "",
-    "address": "",
-    "is_extra_row": true,
-    "calculation": {
-      "id": 1950,
-      "total": 0
-    }
-  }
+    "id": 4,
+    "name": "16-30.11.25",
+    "status": "DRAFT",
+    "uploads": [
+        {
+            "id": 48,
+            "version": 3,
+            "created_at": "2025-12-18T10:36:27",
+            "created_by": "Конторин Андрей"
+        }
+    ],
+    "worker_totals": [
+        {
+            "worker": "Ветренко Дмитрий",
+            "total": 66180,
+            "fuel": 300,
+            "transport": 1000,
+            "orders_count": 15
+        }
+    ]
 }
 ```
 
-**Эффект:**
-- Создаёт `order` с `is_extra_row=true`
-- Создаёт `calculation`
-- Пересчитывает `worker_totals`
+### Права на период
 
----
-
-### DELETE /api/order/{order_id}
-Удалить заказ и связанный расчёт.
+```http
+GET /api/period/{period_id}/permissions
+```
 
 **Response:**
 ```json
 {
-  "success": true,
-  "deleted_order_id": 1950,
-  "deleted_total": 39493
+    "can_edit": true,
+    "can_upload": true,
+    "can_change_status": true,
+    "can_delete": false,
+    "current_status": "DRAFT",
+    "available_statuses": ["SENT"]
 }
 ```
 
-**Эффект:**
-- Удаляет `manual_edits` (FK constraint!)
-- Удаляет `calculation`
-- Удаляет `order`
-- Пересчитывает `worker_totals`
-
 ---
 
-## 📥 Отчёты
+## Расчёты
 
-### GET /api/period/{period_id}/download/full
-Скачать полный Excel отчёт.
+### Preview расчёта
 
-**Response:** Excel файл (application/vnd.openxmlformats...)
+```http
+POST /preview
+Content-Type: application/x-www-form-urlencoded
 
----
-
-### GET /api/period/{period_id}/download/workers
-Скачать Excel для монтажников (упрощённый).
-
-**Response:** Excel файл
-
----
-
-### GET /api/period/{period_id}/download/archive
-Скачать ZIP архив с отдельными файлами для каждого работника.
-
-**Response:** ZIP файл
-
----
-
-## 🔧 Служебные
-
-### POST /api/upload/{upload_id}/recalculate
-Принудительно пересчитать все `worker_totals` для загрузки.
-
-**Использовать когда:** данные рассинхронизировались
+session_id=20251218103627
+config_json={"diagnostic_percent": 50}
+days_json={}
+extra_rows_json={"Иванов Иван": [{"description": "Доплата", "amount": 5000}]}
+```
 
 **Response:**
 ```json
 {
-  "success": true,
-  "recalculated_count": 8,
-  "workers": [
-    {
-      "worker": "Ветренко Дмитрий",
-      "company_amount": 28186,
-      "client_amount": 18250,
-      "total_amount": 46436
-    }
-  ]
-}
-```
-
----
-
-### GET /api/1c/status
-Проверить статус интеграции с 1С.
-
-**Response:**
-```json
-{
-  "enabled": false,
-  "base_url": null,
-  "message": "Интеграция с 1С не настроена"
-}
-```
-
----
-
-### GET /api/1c/order/{order_code}
-Получить информацию о заказе из 1С (когда интеграция включена).
-
-**Response (когда включено):**
-```json
-{
-  "success": true,
-  "order": {
-    "number": "КАУТ-001770",
-    "date": "2024-11-15T10:30:00",
-    "status": "Выполнен",
-    "client": {
-      "name": "ООО Рога и копыта",
-      "inn": "7701234567"
+    "success": true,
+    "preview": [
+        {
+            "worker": "Ветренко Дмитрий",
+            "order": "КАУТ-001405, газетный переулок",
+            "revenue_total": 70742,
+            "service_payment": 21223,
+            "fuel_payment": 300,
+            "transport": 1000,
+            "total": 22523
+        }
+    ],
+    "summary": {
+        "total": 350000,
+        "workers_count": 5
     },
-    "amounts": {
-      "total": 38236,
-      "paid": 38236,
-      "debt": 0
-    },
-    "payments": [...]
-  }
+    "alarms": []
 }
 ```
 
----
+### Применение изменений из Review
 
-## 🔄 Сравнение версий
+```http
+POST /api/apply-review
+Content-Type: application/json
 
-### GET /api/upload/{upload_id}/comparison/{prev_upload_id}
-Сравнить две версии загрузки.
+{
+    "session_id": "20251218103627",
+    "selections": {
+        "added": ["ИБУТ-000392_Ветренко Дмитрий"],
+        "deleted": ["КАУТ-001405_Фадин Сергей"],
+        "modified": []
+    }
+}
+```
 
 **Response:**
 ```json
 {
-  "changes": {
-    "added": [...],
-    "modified": [...],
-    "deleted": [...]
-  }
+    "success": true,
+    "period_id": 4,
+    "upload_id": 49
+}
+```
+
+### Финальный расчёт
+
+```http
+POST /calculate
+Content-Type: application/x-www-form-urlencoded
+
+session_id=20251218103627
+config_json={"diagnostic_percent": 50}
+days_json={}
+extra_rows_json={}
+deleted_rows=[]
+```
+
+**Response:**
+```json
+{
+    "success": true,
+    "period_id": 4,
+    "upload_id": 49,
+    "archives": {
+        "full": "base64...",
+        "workers": "base64..."
+    }
 }
 ```
 
 ---
 
-## 📝 Примеры использования
+## Отчёты
 
-### JavaScript (в консоли браузера)
+### Скачать архив
 
-```javascript
-// Пересчитать worker_totals для upload_id=23
-fetch('/api/upload/23/recalculate', {method: 'POST'})
-  .then(r => r.json())
-  .then(console.log)
-
-// Обновить итого для calculation_id=1920
-fetch('/api/calculation/1920/update', {
-  method: 'POST',
-  headers: {'Content-Type': 'application/json'},
-  body: JSON.stringify({total: 10000})
-}).then(r => r.json()).then(console.log)
-
-// Добавить строку
-fetch('/api/upload/23/worker/Ветренко%20Дмитрий/add-row', {
-  method: 'POST',
-  headers: {'Content-Type': 'application/json'},
-  body: JSON.stringify({total: 5000})
-}).then(r => r.json()).then(console.log)
+```http
+GET /api/period/{period_id}/download/{archive_type}
 ```
 
-### cURL
+**Параметры:**
+- `archive_type`: `full` | `workers`
 
-```bash
-# Пересчитать
-curl -X POST https://...railway.app/api/upload/23/recalculate
+**Response:** ZIP-архив с Excel-файлами
 
-# Обновить
-curl -X POST https://...railway.app/api/calculation/1920/update \
-  -H "Content-Type: application/json" \
-  -d '{"total": 10000}'
+**Содержимое архива (full):**
+- `Общий_отчет_16-30_11_25.xlsx` — сводный отчёт
+- `Ветренко_16-30_11_25.xlsx` — отчёт монтажника
+- ... (файл для каждого монтажника)
+
+**Содержимое архива (workers):**
+Те же файлы, но с скрытыми колонками (для выдачи монтажникам).
+
+### Детали загрузки
+
+```http
+GET /api/upload/{upload_id}
+```
+
+**Response:**
+```json
+{
+    "id": 48,
+    "version": 3,
+    "period_id": 4,
+    "created_at": "2025-12-18T10:36:27",
+    "orders": [...],
+    "worker_totals": [...],
+    "config": {
+        "diagnostic_percent": 50,
+        "yandex_fuel": {
+            "Ветренко Дмитрий": 4898.52
+        }
+    }
+}
+```
+
+### Отчёт по монтажнику
+
+```http
+GET /upload/{upload_id}?worker={worker_name}
+```
+
+Страница с детальным отчётом по монтажнику.
+
+### Скачать отчёт монтажника
+
+```http
+GET /api/upload/{upload_id}/worker/{worker_name}/download
+```
+
+**Response:** Excel-файл
+
+---
+
+## Статусы
+
+### Изменить статус периода
+
+```http
+POST /api/period/{period_id}/status
+Content-Type: application/json
+
+{
+    "status": "SENT"
+}
+```
+
+**Response:**
+```json
+{
+    "success": true,
+    "period_id": 4,
+    "old_status": "DRAFT",
+    "new_status": "SENT",
+    "sent_at": "2025-12-18T10:45:00"
+}
+```
+
+### Возможные статусы
+
+| Статус | Описание |
+|--------|----------|
+| DRAFT | Черновик, можно редактировать |
+| SENT | Отправлено, только просмотр |
+| PAID | Оплачено, архив |
+
+---
+
+## Коды ошибок
+
+| Код | Описание |
+|-----|----------|
+| 400 | Неверный запрос (отсутствуют обязательные поля) |
+| 401 | Не авторизован |
+| 403 | Нет прав доступа |
+| 404 | Ресурс не найден |
+| 409 | Конфликт (например, статус не позволяет действие) |
+| 500 | Внутренняя ошибка сервера |
+
+### Формат ошибки
+
+```json
+{
+    "success": false,
+    "error": "Описание ошибки",
+    "detail": "Подробности (опционально)"
+}
 ```
