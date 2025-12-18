@@ -936,6 +936,8 @@ async def upload_files(
                             # Also add manual_edits info for potential restoration
                             changes_summary["manual_edits_prev"] = manual_edits_from_prev
                             
+                            print(f"📋 FINAL: changes_summary has {len(changes_summary['added'])} added, {len(changes_summary['deleted'])} deleted (including {len(changes_summary.get('extra_rows', []))} extra_rows)")
+                            
         except Exception as e:
             print(f"⚠️ Changes comparison error (non-critical): {e}")
             import traceback
