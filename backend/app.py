@@ -2635,14 +2635,17 @@ async def update_calculation(calc_id: int, request: Request):
 
 
 @app.delete("/api/order/{order_id}")
-async def delete_order(order_id: int):
+async def delete_order(order_id: int, request: Request):
     """Delete an order and its calculation from the database"""
     try:
         if not database:
             raise HTTPException(status_code=500, detail="Database not connected")
         
         from sqlalchemy import delete, and_, update, text
-        from database import orders, calculations, worker_totals, manual_edits
+        from database import orders, calculations, worker_totals, manual_edits, log_action, save_manual_edit
+        
+        # Get current user
+        user = request.session.get("user")
         
         # First, get order info for updating worker_totals
         order_query = orders.select().where(orders.c.id == order_id)
@@ -2654,6 +2657,8 @@ async def delete_order(order_id: int):
         upload_id = order["upload_id"]
         full_worker = order["worker"]
         base_worker = full_worker.replace(" (оплата клиентом)", "")
+        order_code = order["order_code"] or ""
+        address = order["address"] or order.get("order_full", "")[:100] if order.get("order_full") else ""
         
         # Get calculation info for logging
         calc_query = calculations.select().where(calculations.c.order_id == order_id)
@@ -2662,13 +2667,40 @@ async def delete_order(order_id: int):
         deleted_total = calc["total"] if calc else 0
         calc_id = calc["id"] if calc else None
         
+        # Save deletion as manual_edit with special field_name "DELETED"
+        if calc:
+            await save_manual_edit(
+                upload_id=upload_id,
+                order_id=order_id,
+                calculation_id=calc_id,
+                order_code=order_code,
+                worker=full_worker,
+                address=address,
+                field_name="DELETED",
+                old_value=deleted_total,
+                new_value=0,
+                edited_by=user.get("id") if user else None
+            )
+            print(f"📝 Deletion saved to history: {order_code} {full_worker} - total was {deleted_total}")
+        
         # Delete manual_edits first (they reference calculation)
         if calc_id:
-            del_edits = delete(manual_edits).where(manual_edits.c.calculation_id == calc_id)
+            # Don't delete the DELETED record we just created
+            del_edits = delete(manual_edits).where(
+                and_(
+                    manual_edits.c.calculation_id == calc_id,
+                    manual_edits.c.field_name != "DELETED"
+                )
+            )
             await database.execute(del_edits)
         
-        # Also delete manual_edits by order_id
-        del_edits_order = delete(manual_edits).where(manual_edits.c.order_id == order_id)
+        # Also delete manual_edits by order_id (but keep DELETED records for history)
+        del_edits_order = delete(manual_edits).where(
+            and_(
+                manual_edits.c.order_id == order_id,
+                manual_edits.c.field_name != "DELETED"
+            )
+        )
         await database.execute(del_edits_order)
         
         # Delete calculation (foreign key to orders)

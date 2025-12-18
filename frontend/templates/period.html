@@ -370,15 +370,31 @@
 
             let editsHtml = '';
             if (manualEdits.length > 0) {
-                editsHtml = '<div class="card" style="margin-top:24px"><div class="card-header"><h3 class="card-title">✏️ Ручные корректировки</h3></div><div class="card-body"><div class="changes-list">';
+                editsHtml = '<div class="card" style="margin-top:24px"><div class="card-header"><h3 class="card-title">📝 История изменений</h3></div><div class="card-body"><div class="changes-list">';
                 manualEdits.forEach(edit => {
-                    const fieldLabels = { fuel_payment: 'Бензин', transport: 'Транспортные', total: 'Итого' };
-                    const fieldClasses = { fuel_payment: 'fuel', transport: 'transport', total: 'total' };
-                    editsHtml += `<div class="manual-edit-item">
-                        <span style="font-size:20px">✏️</span>
-                        <div class="edit-content">
-                            <div class="edit-header">${escapeHtml(edit.order_code || edit.address)} - ${escapeHtml(edit.worker)}</div>
-                            <div class="edit-change ${fieldClasses[edit.field_name] || ''}">${escapeHtml(fieldLabels[edit.field_name] || edit.field_name)}: ${Math.round(edit.old_value || 0).toLocaleString('ru-RU')} → ${Math.round(edit.new_value || 0).toLocaleString('ru-RU')} ₽</div>
+                    const fieldLabels = { 
+                        fuel_payment: 'Бензин', 
+                        transport: 'Транспортные', 
+                        total: 'Итого',
+                        DELETED: 'Удалено'
+                    };
+                    const isDeleted = edit.field_name === 'DELETED';
+                    const icon = isDeleted ? '🗑️' : '✏️';
+                    const itemClass = isDeleted ? 'deleted' : '';
+                    
+                    let changeText = '';
+                    if (isDeleted) {
+                        changeText = `<span style="color: #dc3545">Удалено (было: ${Math.round(edit.old_value || 0).toLocaleString('ru-RU')} ₽)</span>`;
+                    } else {
+                        changeText = `${escapeHtml(fieldLabels[edit.field_name] || edit.field_name)}: ${Math.round(edit.old_value || 0).toLocaleString('ru-RU')} → ${Math.round(edit.new_value || 0).toLocaleString('ru-RU')} ₽`;
+                    }
+                    
+                    editsHtml += `<div class="manual-edit-item ${itemClass}" style="display:flex;gap:12px;padding:12px;border-bottom:1px solid #eee;">
+                        <span style="font-size:20px">${icon}</span>
+                        <div class="edit-content" style="flex:1">
+                            <div class="edit-header" style="font-weight:500">${escapeHtml(edit.order_code || edit.address || 'Заказ')} — ${escapeHtml(edit.worker)}</div>
+                            <div class="edit-change" style="color:#666;font-size:14px">${changeText}</div>
+                            ${edit.created_at ? `<div style="color:#999;font-size:12px;margin-top:4px">${new Date(edit.created_at).toLocaleString('ru-RU')}</div>` : ''}
                         </div>
                     </div>`;
                 });

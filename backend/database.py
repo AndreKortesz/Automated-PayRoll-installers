@@ -1106,3 +1106,34 @@ async def get_period_notifications(period_id: int) -> List[dict]:
     
     rows = await database.fetch_all(query)
     return [dict(row._mapping) for row in rows]
+
+
+async def save_manual_edit(
+    upload_id: int,
+    order_id: int,
+    calculation_id: int,
+    order_code: str,
+    worker: str,
+    address: str,
+    field_name: str,
+    old_value: float,
+    new_value: float,
+    edited_by: int = None
+) -> int:
+    """Save a manual edit to history"""
+    if not database or not database.is_connected:
+        return None
+    
+    query = manual_edits.insert().values(
+        upload_id=upload_id,
+        order_id=order_id,
+        calculation_id=calculation_id,
+        order_code=order_code,
+        worker=worker,
+        address=address,
+        field_name=field_name,
+        old_value=old_value,
+        new_value=new_value,
+        edited_by=edited_by
+    )
+    return await database.execute(query)
