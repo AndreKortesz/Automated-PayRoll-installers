@@ -2501,6 +2501,9 @@ async def update_calculation(calc_id: int, request: Request):
         if not database:
             raise HTTPException(status_code=500, detail="Database not connected")
         
+        # Get current user from session
+        user = request.session.get("user")
+        
         data = await request.json()
         fuel_payment = data.get("fuel_payment")
         transport = data.get("transport")
@@ -2508,7 +2511,7 @@ async def update_calculation(calc_id: int, request: Request):
         
         # Build update query
         from sqlalchemy import update
-        from database import calculations, orders, save_manual_edit
+        from database import calculations, orders, save_manual_edit, uploads, periods
         
         # First, get current values to record the change
         calc_query = calculations.select().where(calculations.c.id == calc_id)
@@ -2520,6 +2523,17 @@ async def update_calculation(calc_id: int, request: Request):
         # Get order info for logging
         order_query = orders.select().where(orders.c.id == calc_row["order_id"])
         order_row = await database.fetch_one(order_query)
+        
+        # Get period status
+        upload_id = calc_row["upload_id"]
+        upload_query = uploads.select().where(uploads.c.id == upload_id)
+        upload_row = await database.fetch_one(upload_query)
+        period_status = "DRAFT"
+        if upload_row:
+            period_query = periods.select().where(periods.c.id == upload_row["period_id"])
+            period_row = await database.fetch_one(period_query)
+            if period_row:
+                period_status = period_row.get("status", "DRAFT") or "DRAFT"
         
         update_values = {}
         edits_to_save = []
@@ -2569,9 +2583,12 @@ async def update_calculation(calc_id: int, request: Request):
                 address=address,
                 field_name=edit["field"],
                 old_value=edit["old_value"],
-                new_value=edit["new_value"]
+                new_value=edit["new_value"],
+                edited_by=user.get("id") if user else None,
+                edited_by_name=user.get("name") if user else None,
+                period_status=period_status
             )
-            print(f"📝 Manual edit saved: {order_code} {worker} - {edit['field']}: {edit['old_value']} → {edit['new_value']}")
+            print(f"📝 Manual edit saved: {order_code} {worker} - {edit['field']}: {edit['old_value']} → {edit['new_value']} by {user.get('name') if user else 'Unknown'} (status: {period_status})")
         
         # Update worker_totals
         full_worker = calc_row["worker"]
@@ -2660,6 +2677,17 @@ async def delete_order(order_id: int, request: Request):
         order_code = order["order_code"] or ""
         address = order["address"] or order.get("order_full", "")[:100] if order.get("order_full") else ""
         
+        # Get period status
+        from database import uploads, periods
+        upload_query = uploads.select().where(uploads.c.id == upload_id)
+        upload_row = await database.fetch_one(upload_query)
+        period_status = "DRAFT"
+        if upload_row:
+            period_query = periods.select().where(periods.c.id == upload_row["period_id"])
+            period_row = await database.fetch_one(period_query)
+            if period_row:
+                period_status = period_row.get("status", "DRAFT") or "DRAFT"
+        
         # Get calculation info for logging
         calc_query = calculations.select().where(calculations.c.order_id == order_id)
         calc = await database.fetch_one(calc_query)
@@ -2679,9 +2707,11 @@ async def delete_order(order_id: int, request: Request):
                 field_name="DELETED",
                 old_value=deleted_total,
                 new_value=0,
-                edited_by=user.get("id") if user else None
+                edited_by=user.get("id") if user else None,
+                edited_by_name=user.get("name") if user else None,
+                period_status=period_status
             )
-            print(f"📝 Deletion saved to history: {order_code} {full_worker} - total was {deleted_total}")
+            print(f"📝 Deletion saved to history: {order_code} {full_worker} - total was {deleted_total} by {user.get('name') if user else 'Unknown'} (status: {period_status})")
         
         # Delete manual_edits first (they reference calculation)
         if calc_id:

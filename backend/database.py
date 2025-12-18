@@ -218,10 +218,12 @@ manual_edits = Table(
     Column("order_code", String(50)),
     Column("worker", String(100)),
     Column("address", Text),
-    Column("field_name", String(50)),  # fuel_payment, transport, total
+    Column("field_name", String(50)),  # fuel_payment, transport, total, DELETED
     Column("old_value", Float),
     Column("new_value", Float),
-    Column("edited_by", Integer, ForeignKey("users.id"), nullable=True),  # Кто редактировал
+    Column("edited_by", Integer, ForeignKey("users.id"), nullable=True),  # Кто редактировал (ID)
+    Column("edited_by_name", String(200)),  # ФИО редактора
+    Column("period_status", String(20)),  # DRAFT, SENT, PAID - статус на момент редактирования
     Column("created_at", DateTime, default=datetime.utcnow),
 )
 
@@ -310,6 +312,10 @@ def create_tables():
                 )""",
                 # Add edited_by to manual_edits if not exists
                 "ALTER TABLE manual_edits ADD COLUMN IF NOT EXISTS edited_by INTEGER REFERENCES users(id)",
+                # Add edited_by_name to manual_edits
+                "ALTER TABLE manual_edits ADD COLUMN IF NOT EXISTS edited_by_name VARCHAR(200)",
+                # Add period_status to manual_edits
+                "ALTER TABLE manual_edits ADD COLUMN IF NOT EXISTS period_status VARCHAR(20)",
                 # Period status columns
                 "ALTER TABLE periods ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'draft'",
                 "ALTER TABLE periods ADD COLUMN IF NOT EXISTS sent_at TIMESTAMP",
@@ -1118,7 +1124,9 @@ async def save_manual_edit(
     field_name: str,
     old_value: float,
     new_value: float,
-    edited_by: int = None
+    edited_by: int = None,
+    edited_by_name: str = None,
+    period_status: str = None
 ) -> int:
     """Save a manual edit to history"""
     if not database or not database.is_connected:
@@ -1134,6 +1142,8 @@ async def save_manual_edit(
         field_name=field_name,
         old_value=old_value,
         new_value=new_value,
-        edited_by=edited_by
+        edited_by=edited_by,
+        edited_by_name=edited_by_name,
+        period_status=period_status
     )
     return await database.execute(query)

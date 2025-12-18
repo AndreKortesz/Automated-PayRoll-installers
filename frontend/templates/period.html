@@ -378,23 +378,59 @@
                         total: 'Итого',
                         DELETED: 'Удалено'
                     };
+                    const statusLabels = {
+                        'DRAFT': 'Черновик',
+                        'draft': 'Черновик',
+                        'SENT': 'Отправлено',
+                        'sent': 'Отправлено',
+                        'PAID': 'Оплачено',
+                        'paid': 'Оплачено'
+                    };
+                    const statusColors = {
+                        'DRAFT': '#6c757d',
+                        'draft': '#6c757d',
+                        'SENT': '#0d6efd',
+                        'sent': '#0d6efd',
+                        'PAID': '#198754',
+                        'paid': '#198754'
+                    };
+                    const statusBgColors = {
+                        'DRAFT': '#f8f9fa',
+                        'draft': '#f8f9fa',
+                        'SENT': '#e7f1ff',
+                        'sent': '#e7f1ff',
+                        'PAID': '#d1e7dd',
+                        'paid': '#d1e7dd'
+                    };
+                    
                     const isDeleted = edit.field_name === 'DELETED';
                     const icon = isDeleted ? '🗑️' : '✏️';
-                    const itemClass = isDeleted ? 'deleted' : '';
+                    const status = edit.period_status || 'DRAFT';
+                    const bgColor = statusBgColors[status] || '#f8f9fa';
+                    const statusColor = statusColors[status] || '#6c757d';
+                    const statusLabel = statusLabels[status] || status;
                     
                     let changeText = '';
                     if (isDeleted) {
-                        changeText = `<span style="color: #dc3545">Удалено (было: ${Math.round(edit.old_value || 0).toLocaleString('ru-RU')} ₽)</span>`;
+                        changeText = `<span style="color: #dc3545; font-weight: 500">Строка удалена (было: ${Math.round(edit.old_value || 0).toLocaleString('ru-RU')} ₽)</span>`;
                     } else {
-                        changeText = `${escapeHtml(fieldLabels[edit.field_name] || edit.field_name)}: ${Math.round(edit.old_value || 0).toLocaleString('ru-RU')} → ${Math.round(edit.new_value || 0).toLocaleString('ru-RU')} ₽`;
+                        changeText = `${escapeHtml(fieldLabels[edit.field_name] || edit.field_name)}: <span style="text-decoration: line-through; color: #999">${Math.round(edit.old_value || 0).toLocaleString('ru-RU')}</span> → <span style="font-weight: 500; color: #198754">${Math.round(edit.new_value || 0).toLocaleString('ru-RU')} ₽</span>`;
                     }
                     
-                    editsHtml += `<div class="manual-edit-item ${itemClass}" style="display:flex;gap:12px;padding:12px;border-bottom:1px solid #eee;">
-                        <span style="font-size:20px">${icon}</span>
+                    const editorName = edit.edited_by_name || 'Неизвестно';
+                    
+                    editsHtml += `<div class="manual-edit-item" style="display:flex;gap:12px;padding:16px;border-bottom:1px solid #eee;background:${bgColor};border-radius:8px;margin-bottom:8px;">
+                        <span style="font-size:24px">${icon}</span>
                         <div class="edit-content" style="flex:1">
-                            <div class="edit-header" style="font-weight:500">${escapeHtml(edit.order_code || edit.address || 'Заказ')} — ${escapeHtml(edit.worker)}</div>
-                            <div class="edit-change" style="color:#666;font-size:14px">${changeText}</div>
-                            ${edit.created_at ? `<div style="color:#999;font-size:12px;margin-top:4px">${new Date(edit.created_at).toLocaleString('ru-RU')}</div>` : ''}
+                            <div class="edit-header" style="font-weight:600;font-size:15px;margin-bottom:4px">${escapeHtml(edit.order_code || edit.address || 'Заказ')} — ${escapeHtml(edit.worker)}</div>
+                            <div class="edit-change" style="margin-bottom:8px">${changeText}</div>
+                            <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+                                <span style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:${statusColor};color:white;border-radius:12px;font-size:12px;font-weight:500">
+                                    ${statusLabel}
+                                </span>
+                                <span style="color:#666;font-size:13px">👤 ${escapeHtml(editorName)}</span>
+                                ${edit.created_at ? `<span style="color:#999;font-size:12px">🕐 ${new Date(edit.created_at).toLocaleString('ru-RU')}</span>` : ''}
+                            </div>
                         </div>
                     </div>`;
                 });
