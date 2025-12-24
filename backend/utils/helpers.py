@@ -113,27 +113,56 @@ def extract_address_from_order(order_text: str) -> str:
             return ""
     
     # Pattern 1: Full datetime format "27.10.2025 0:00:00, address"
-    match = re.search(r'\d{2}\.\d{2}\.\d{4}\s+\d{1,2}:\d{2}:\d{2},\s*(.+?)(?:\n|$)', text)
+    match = re.search(r'\d{2}\.\d{2}\.\d{4}\s+\d{1,2}:\d{2}:\d{2},\s*(.+)', text, re.DOTALL)
     if match:
-        addr = match.group(1).strip()
+        addr_part = match.group(1).strip()
+        # Split by newline and process
+        lines = addr_part.split('\n')
+        addr = lines[0].strip()
+        
+        # If first line is manager comment, try second line
+        manager_patterns = [r'^оплата монтажник', r'^зарплата\s+\d', r'^оплатить\s+\d']
+        is_manager_comment = any(re.match(p, addr, re.IGNORECASE) for p in manager_patterns)
+        
+        if is_manager_comment and len(lines) > 1:
+            addr = lines[1].strip()
+        
         addr = re.sub(r'\\n.*', '', addr)
         addr = re.sub(r'\|.*', '', addr)
         addr = clean_address_for_geocoding(addr)
         return addr.strip()
     
     # Pattern 2: Short time format "0:00:00, address"
-    match = re.search(r'\d:\d{2}:\d{2},\s*(.+?)(?:\n|$)', text)
+    match = re.search(r'\d:\d{2}:\d{2},\s*(.+)', text, re.DOTALL)
     if match:
-        addr = match.group(1).strip()
+        addr_part = match.group(1).strip()
+        lines = addr_part.split('\n')
+        addr = lines[0].strip()
+        
+        manager_patterns = [r'^оплата монтажник', r'^зарплата\s+\d', r'^оплатить\s+\d']
+        is_manager_comment = any(re.match(p, addr, re.IGNORECASE) for p in manager_patterns)
+        
+        if is_manager_comment and len(lines) > 1:
+            addr = lines[1].strip()
+            
         addr = re.sub(r'\\n.*', '', addr)
         addr = re.sub(r'\|.*', '', addr)
         addr = clean_address_for_geocoding(addr)
         return addr.strip()
     
     # Pattern 3: Date only format "27.10.2025, address" (no time)
-    match = re.search(r'\d{2}\.\d{2}\.\d{4},\s*(.+?)(?:\n|$)', text)
+    match = re.search(r'\d{2}\.\d{2}\.\d{4},\s*(.+)', text, re.DOTALL)
     if match:
-        addr = match.group(1).strip()
+        addr_part = match.group(1).strip()
+        lines = addr_part.split('\n')
+        addr = lines[0].strip()
+        
+        manager_patterns = [r'^оплата монтажник', r'^зарплата\s+\d', r'^оплатить\s+\d']
+        is_manager_comment = any(re.match(p, addr, re.IGNORECASE) for p in manager_patterns)
+        
+        if is_manager_comment and len(lines) > 1:
+            addr = lines[1].strip()
+            
         addr = re.sub(r'\\n.*', '', addr)
         addr = re.sub(r'\|.*', '', addr)
         addr = clean_address_for_geocoding(addr)
