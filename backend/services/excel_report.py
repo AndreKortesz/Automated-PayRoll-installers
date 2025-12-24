@@ -49,12 +49,13 @@ def create_excel_report(data: List[dict], period: str, config: dict, for_workers
     alignment_wrap = Alignment(horizontal='left', vertical='top', wrap_text=True)
     alignment_center = Alignment(horizontal='center', vertical='center', wrap_text=True)
     
-    # Column widths
+    # Column widths (O is now the last column)
     column_widths = {
         'A': 55,
         'B': 12, 'C': 13, 'D': 12, 'E': 13,
         'F': 13, 'G': 15, 'H': 15, 'I': 14,
-        'J': 12, 'K': 12, 'L': 14, 'M': 12, 'N': 14
+        'J': 18,  # ЗП от менеджера (NEW)
+        'K': 12, 'L': 12, 'M': 14, 'N': 12, 'O': 14
     }
     
     for col, width in column_widths.items():
@@ -67,6 +68,7 @@ def create_excel_report(data: List[dict], period: str, config: dict, for_workers
         ws.column_dimensions['G'].hidden = True
         ws.column_dimensions['H'].hidden = True
         ws.column_dimensions['I'].hidden = True
+        ws.column_dimensions['J'].hidden = True  # Hide manager comment for workers
     
     # Parameter rows (1-3)
     ws['A1'] = "Параметры:"
@@ -85,16 +87,17 @@ def create_excel_report(data: List[dict], period: str, config: dict, for_workers
         ("G", "Доп. расходы (Оплата услуг помощников)"),
         ("H", "Сумма оплаты от услуг"),
         ("I", "Процент от выручки по услугам"),
-        ("J", "Оплата бензина"), ("K", "Транспортные"),
-        ("L", "Яндекс заправки"),  # NEW column
-        ("M", "Итого"), ("N", "Диагностика -50%")
+        ("J", "ЗП от менеджера"),  # NEW column
+        ("K", "Оплата бензина"), ("L", "Транспортные"),
+        ("M", "Яндекс заправки"),
+        ("N", "Итого"), ("O", "Диагностика -50%")
     ]
     
     for col_letter, header_text in headers:
         cell = ws[f"{col_letter}5"]
         cell.value = header_text
         cell.font = header_font
-        cell.fill = header_fill if col_letter != "N" else diagnostic_header_fill
+        cell.fill = header_fill if col_letter != "O" else diagnostic_header_fill
         cell.alignment = alignment_center
         cell.border = thin_border
     
@@ -139,7 +142,7 @@ def create_excel_report(data: List[dict], period: str, config: dict, for_workers
         cell.alignment = alignment_wrap
         cell.border = thin_border
         
-        for col in range(2, 15):  # Extended to column 15 (N)
+        for col in range(2, 16):  # Extended to column 16 (O)
             c = ws.cell(row=current_row, column=col)
             c.fill = worker_fill
             c.border = thin_border
@@ -175,29 +178,37 @@ def create_excel_report(data: List[dict], period: str, config: dict, for_workers
             c.font = data_font
             c.border = thin_border
             
+            # Column 10 (J) - ЗП от менеджера
+            manager_comment = record.get("manager_comment", "")
+            c = ws.cell(row=current_row, column=10, value=manager_comment if manager_comment else None)
+            c.font = data_font
+            c.border = thin_border
+            
             fuel = to_int(record.get("fuel_payment", 0))
             transport = to_int(record.get("transport", 0))
             
-            c = ws.cell(row=current_row, column=10, value=fuel if fuel else None)
+            # Column 11 (K) - Оплата бензина
+            c = ws.cell(row=current_row, column=11, value=fuel if fuel else None)
             c.font = data_font
             c.border = thin_border
             
-            c = ws.cell(row=current_row, column=11, value=transport if transport else None)
+            # Column 12 (L) - Транспортные
+            c = ws.cell(row=current_row, column=12, value=transport if transport else None)
             c.font = data_font
             c.border = thin_border
             
-            # Column 12 - Yandex Fuel (empty for individual orders)
-            c = ws.cell(row=current_row, column=12)
+            # Column 13 (M) - Yandex Fuel (empty for individual orders)
+            c = ws.cell(row=current_row, column=13)
             c.border = thin_border
             
-            # Column 13 - Total (was 12)
+            # Column 14 (N) - Total
             total_val = to_int(record.get("total", 0))
-            c = ws.cell(row=current_row, column=13, value=total_val if total_val else None)
+            c = ws.cell(row=current_row, column=14, value=total_val if total_val else None)
             c.font = data_font
             c.border = thin_border
             
-            # Column 14 - Diagnostic -50% (was 13)
-            c = ws.cell(row=current_row, column=14)
+            # Column 15 (O) - Diagnostic -50%
+            c = ws.cell(row=current_row, column=15)
             c.border = thin_border
             
             current_row += 1
@@ -209,9 +220,11 @@ def create_excel_report(data: List[dict], period: str, config: dict, for_workers
             fuel_sum = sum(to_int(r.get("fuel_payment", 0)) or 0 for r in regular_rows if not r.get("is_worker_total"))
             transport_sum = sum(to_int(r.get("transport", 0)) or 0 for r in regular_rows if not r.get("is_worker_total"))
             
-            c = ws.cell(row=worker_name_row, column=10, value=fuel_sum if fuel_sum else None)
+            # Column 11 (K) - Fuel sum
+            c = ws.cell(row=worker_name_row, column=11, value=fuel_sum if fuel_sum else None)
             c.font = worker_font
-            c = ws.cell(row=worker_name_row, column=11, value=transport_sum if transport_sum else None)
+            # Column 12 (L) - Transport sum
+            c = ws.cell(row=worker_name_row, column=12, value=transport_sum if transport_sum else None)
             c.font = worker_font
         
         # Client payment section
@@ -224,7 +237,7 @@ def create_excel_report(data: List[dict], period: str, config: dict, for_workers
             cell.alignment = alignment_wrap
             cell.border = thin_border
             
-            for col in range(2, 15):  # Extended to column 15
+            for col in range(2, 16):  # Extended to column 16 (O)
                 c = ws.cell(row=current_row, column=col)
                 c.fill = worker_fill
                 c.border = thin_border
@@ -259,18 +272,24 @@ def create_excel_report(data: List[dict], period: str, config: dict, for_workers
                 c.font = data_font
                 c.border = thin_border
                 
-                for col in [10, 11, 12]:  # fuel, transport, yandex_fuel columns
-                    ws.cell(row=current_row, column=col).border = thin_border
-                
-                # Column 13 - Total (was 12)
-                total_val = to_int(record.get("total", 0))
-                c = ws.cell(row=current_row, column=13, value=total_val if total_val else None)
+                # Column 10 (J) - ЗП от менеджера
+                manager_comment = record.get("manager_comment", "")
+                c = ws.cell(row=current_row, column=10, value=manager_comment if manager_comment else None)
                 c.font = data_font
                 c.border = thin_border
                 
-                # Column 14 - Diagnostic -50% (was 13)
+                for col in [11, 12, 13]:  # fuel, transport, yandex_fuel columns
+                    ws.cell(row=current_row, column=col).border = thin_border
+                
+                # Column 14 (N) - Total
+                total_val = to_int(record.get("total", 0))
+                c = ws.cell(row=current_row, column=14, value=total_val if total_val else None)
+                c.font = data_font
+                c.border = thin_border
+                
+                # Column 15 (O) - Diagnostic -50%
                 diag_50 = to_int(record.get("diagnostic_50", 0))
-                c = ws.cell(row=current_row, column=14, value=diag_50 if diag_50 else None)
+                c = ws.cell(row=current_row, column=15, value=diag_50 if diag_50 else None)
                 c.font = data_font
                 c.border = thin_border
                 
@@ -282,10 +301,10 @@ def create_excel_report(data: List[dict], period: str, config: dict, for_workers
                 client_total_sum = sum(to_int(r.get("total", 0)) or 0 for r in client_rows if not r.get("is_worker_total"))
                 client_diag50_sum = sum(to_int(r.get("diagnostic_50", 0)) or 0 for r in client_rows if not r.get("is_worker_total"))
                 
-                # Column 13 = Total, Column 14 = Diagnostic -50%
-                c = ws.cell(row=client_name_row, column=13, value=client_total_sum if client_total_sum else None)
+                # Column 14 = Total, Column 15 = Diagnostic -50%
+                c = ws.cell(row=client_name_row, column=14, value=client_total_sum if client_total_sum else None)
                 c.font = worker_font
-                c = ws.cell(row=client_name_row, column=14, value=client_diag50_sum if client_diag50_sum else None)
+                c = ws.cell(row=client_name_row, column=15, value=client_diag50_sum if client_diag50_sum else None)
                 c.font = worker_font
         
         # Main worker row Итого
@@ -306,13 +325,13 @@ def create_excel_report(data: List[dict], period: str, config: dict, for_workers
             else:
                 main_total = regular_total_sum - yandex_fuel_deduction
             
-            # Column 12 - Yandex Fuel (only show if there's a deduction)
+            # Column 13 (M) - Yandex Fuel (only show if there's a deduction)
             if yandex_fuel_deduction:
-                c = ws.cell(row=worker_name_row, column=12, value=-int(yandex_fuel_deduction))
+                c = ws.cell(row=worker_name_row, column=13, value=-int(yandex_fuel_deduction))
                 c.font = worker_font
             
-            # Column 13 - Total
-            c = ws.cell(row=worker_name_row, column=13, value=int(main_total) if main_total else None)
+            # Column 14 (N) - Total
+            c = ws.cell(row=worker_name_row, column=14, value=int(main_total) if main_total else None)
             c.font = worker_font
             c.fill = yellow_fill
             c.border = thin_border
@@ -320,14 +339,14 @@ def create_excel_report(data: List[dict], period: str, config: dict, for_workers
             if client_name_row:
                 main_total = -client_diag50_sum_for_main - yandex_fuel_deduction
                 
-                # Column 12 - Yandex Fuel
+                # Column 13 (M) - Yandex Fuel
                 if yandex_fuel_deduction:
-                    c = ws.cell(row=worker_name_row, column=12, value=-int(yandex_fuel_deduction))
+                    c = ws.cell(row=worker_name_row, column=13, value=-int(yandex_fuel_deduction))
                     c.font = worker_font
                 
-                c = ws.cell(row=worker_name_row, column=13, value=int(main_total) if main_total else None)
+                c = ws.cell(row=worker_name_row, column=14, value=int(main_total) if main_total else None)
             else:
-                c = ws.cell(row=worker_name_row, column=13, value=0)
+                c = ws.cell(row=worker_name_row, column=14, value=0)
             c.font = worker_font
             c.fill = yellow_fill
             c.border = thin_border
