@@ -631,12 +631,13 @@ async def upload_files(
                                 # IMPORTANT: Use name_map for consistent normalization with old_map
                                 worker = normalize_worker_name(str(row.get("worker", "")), name_map).replace(" (оплата клиентом)", "")
                                 
-                                # Extract address from order text
-                                address = ""
-                                if ", " in order_text:
+                                # Extract address from order text using proper function
+                                address = extract_address_from_order(order_text)
+                                if not address and ", " in order_text:
+                                    # Fallback: simple extraction
                                     parts = order_text.split(", ", 1)
                                     if len(parts) > 1:
-                                        address = parts[1].split("\n")[0][:80]  # First 80 chars of address
+                                        address = parts[1].split("\n")[0][:80]
                                 
                                 key = (order_code, worker)
                                 
