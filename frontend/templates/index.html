@@ -650,7 +650,8 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    if (data.redirect_to_review && data.has_changes) {
+                    // Redirect to review if there are changes OR manager comments
+                    if (data.redirect_to_review && (data.has_changes || data.has_manager_comments)) {
                         Security.safeRedirect(`/review?session_id=${data.session_id}`);
                     } else if (data.period_id) {
                         Security.safeRedirect(`/period/${data.period_id}`);
