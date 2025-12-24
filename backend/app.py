@@ -447,7 +447,7 @@ async def upload_files(
         content_over = await file_over_10k.read()
         
         # Parse both files with automatic name normalization
-        combined, name_map, manager_comments = parse_both_excel_files(content_under, content_over)
+        combined, name_map, manager_comments, parse_warnings = parse_both_excel_files(content_under, content_over)
         
         period_df = pd.read_excel(BytesIO(content_under), header=None)
         period = extract_period(period_df)
@@ -516,7 +516,8 @@ async def upload_files(
             "workers": workers,
             "name_map": name_map,  # Save for later use
             "yandex_fuel": yandex_fuel_data,  # Yandex Fuel deductions per worker
-            "manager_comments": manager_comments  # Manager comments for orders
+            "manager_comments": manager_comments,  # Manager comments for orders
+            "parse_warnings": parse_warnings  # Warnings (e.g., managers in data)
         }
         
         # ===== CHECK FOR CHANGES FROM PREVIOUS UPLOAD =====
@@ -956,9 +957,11 @@ async def upload_files(
             )
         )
         
-        # Get manager comments from session
+        # Get manager comments and warnings from session
         manager_comments = session_data[session_id].get("manager_comments", [])
+        parse_warnings = session_data[session_id].get("parse_warnings", [])
         has_manager_comments = len(manager_comments) > 0
+        has_warnings = len(parse_warnings) > 0
         
         return JSONResponse({
             "success": True,
@@ -969,9 +972,11 @@ async def upload_files(
             "total_records": len(combined),
             "changes": changes_summary,
             "has_changes": has_changes,
-            "redirect_to_review": has_changes or has_manager_comments,  # Also redirect if has manager comments
+            "redirect_to_review": has_changes or has_manager_comments or has_warnings,  # Also redirect if has warnings
             "manager_comments": manager_comments,
-            "has_manager_comments": has_manager_comments
+            "has_manager_comments": has_manager_comments,
+            "parse_warnings": parse_warnings,
+            "has_warnings": has_warnings
         })
         
     except Exception as e:
@@ -995,6 +1000,7 @@ async def get_review_data(session_id: str):
         session = session_data[session_id]
         changes = session.get("changes_summary", {})
         manager_comments = session.get("manager_comments", [])
+        parse_warnings = session.get("parse_warnings", [])
         
         return JSONResponse({
             "success": True,
@@ -1006,7 +1012,8 @@ async def get_review_data(session_id: str):
                 "deleted": changes.get("deleted", []),
                 "modified": changes.get("modified", [])
             },
-            "manager_comments": manager_comments
+            "manager_comments": manager_comments,
+            "parse_warnings": parse_warnings
         })
     except Exception as e:
         return JSONResponse({"success": False, "error": str(e)})

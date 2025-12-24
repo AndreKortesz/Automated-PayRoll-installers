@@ -17,6 +17,32 @@ EXCLUDED_GROUPS = {
     "заказ, комментарий",
 }
 
+# Managers - should NOT be in salary calculation (warning if found)
+MANAGERS = {
+    "колбик",
+    "юнников",
+    "серафим юнников",
+    "юнников серафим",
+}
+
+
+def is_manager(name: str) -> bool:
+    """Check if name belongs to a manager (should not be in calculation)"""
+    if not name:
+        return False
+    name_lower = name.lower().strip()
+    
+    # Check exact match
+    if name_lower in MANAGERS:
+        return True
+    
+    # Check if any manager name is contained in the name
+    for manager in MANAGERS:
+        if manager in name_lower:
+            return True
+    
+    return False
+
 
 def build_worker_name_map(all_names: set) -> dict:
     """

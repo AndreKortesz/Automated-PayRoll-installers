@@ -10,6 +10,7 @@ from utils.workers import (
     build_worker_name_map,
     normalize_worker_name,
     is_valid_worker_name,
+    is_manager,
 )
 
 
@@ -64,7 +65,7 @@ def parse_manager_comment(comment: str) -> dict:
 
 def parse_excel_file(file_bytes: bytes, is_over_10k: bool, name_map: dict = None) -> tuple:
     """Parse Excel file from 1C and extract data.
-    Returns (DataFrame, set of worker names found, list of manager comments)
+    Returns (DataFrame, set of worker names found, list of manager comments, list of warnings)
     """
     df = pd.read_excel(BytesIO(file_bytes), header=None)
     
@@ -135,11 +136,13 @@ def parse_excel_file(file_bytes: bytes, is_over_10k: bool, name_map: dict = None
     
     # If no external map provided, just return names for first pass
     if name_map is None:
-        return None, all_worker_names, []
+        return None, all_worker_names, [], []
     
     # Second pass: extract records with normalized names
     records = []
     manager_comments = []  # Collect orders with manager comments
+    warnings = []  # Collect warnings (e.g., managers in data)
+    managers_found = set()  # Track unique managers found
     current_worker = None
     is_client_payment_section = False
     is_valid_worker = False
@@ -170,6 +173,11 @@ def parse_excel_file(file_bytes: bytes, is_over_10k: bool, name_map: dict = None
             if is_valid_worker:
                 worker_name = normalize_worker_name(worker_name, name_map)
                 current_worker = worker_name
+                
+                # Check if this is a manager (should not be in calculation)
+                if is_manager(worker_name) and worker_name not in managers_found:
+                    managers_found.add(worker_name)
+                    print(f"⚠️ ПРЕДУПРЕЖДЕНИЕ: В расчёт попал менеджер: {worker_name}")
             else:
                 current_worker = None
             
@@ -217,16 +225,25 @@ def parse_excel_file(file_bytes: bytes, is_over_10k: bool, name_map: dict = None
                         "is_over_10k": is_over_10k
                     })
     
-    return pd.DataFrame(records), all_worker_names, manager_comments
+    # Add warnings for managers found
+    for manager_name in managers_found:
+        warnings.append({
+            "type": "manager_in_data",
+            "message": f"В расчёт попал менеджер: {manager_name}",
+            "worker": manager_name,
+            "severity": "error"
+        })
+    
+    return pd.DataFrame(records), all_worker_names, manager_comments, warnings
 
 
 def parse_both_excel_files(content_under: bytes, content_over: bytes) -> tuple:
     """Parse both Excel files and return combined DataFrame with normalized worker names.
-    Returns (combined_df, name_map, manager_comments)
+    Returns (combined_df, name_map, manager_comments, warnings)
     """
     # First pass: collect all worker names from both files
-    _, names_under, _ = parse_excel_file(content_under, is_over_10k=False, name_map=None)
-    _, names_over, _ = parse_excel_file(content_over, is_over_10k=True, name_map=None)
+    _, names_under, _, _ = parse_excel_file(content_under, is_over_10k=False, name_map=None)
+    _, names_over, _, _ = parse_excel_file(content_over, is_over_10k=True, name_map=None)
     
     all_names = names_under | names_over
     
@@ -236,13 +253,28 @@ def parse_both_excel_files(content_under: bytes, content_over: bytes) -> tuple:
         print(f"📋 Нормализация имён: {name_map}")
     
     # Second pass: parse with normalization
-    df_under, _, comments_under = parse_excel_file(content_under, is_over_10k=False, name_map=name_map)
-    df_over, _, comments_over = parse_excel_file(content_over, is_over_10k=True, name_map=name_map)
+    df_under, _, comments_under, warnings_under = parse_excel_file(content_under, is_over_10k=False, name_map=name_map)
+    df_over, _, comments_over, warnings_over = parse_excel_file(content_over, is_over_10k=True, name_map=name_map)
     
     combined = pd.concat([df_over, df_under], ignore_index=True)
     all_comments = comments_over + comments_under
+    all_warnings = warnings_over + warnings_under
+    
+    # Deduplicate warnings by worker name
+    seen_managers = set()
+    unique_warnings = []
+    for w in all_warnings:
+        if w["type"] == "manager_in_data":
+            if w["worker"] not in seen_managers:
+                seen_managers.add(w["worker"])
+                unique_warnings.append(w)
+        else:
+            unique_warnings.append(w)
     
     if all_comments:
         print(f"📝 Найдено {len(all_comments)} заказов с комментариями менеджера")
     
-    return combined, name_map, all_comments
+    if unique_warnings:
+        print(f"⚠️ Найдено {len(unique_warnings)} предупреждений")
+    
+    return combined, name_map, all_comments, unique_warnings

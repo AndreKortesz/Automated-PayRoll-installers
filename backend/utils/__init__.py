@@ -13,9 +13,11 @@ from .helpers import (
 
 from .workers import (
     EXCLUDED_GROUPS,
+    MANAGERS,
     build_worker_name_map,
     normalize_worker_name,
     is_valid_worker_name,
+    is_manager,
 )
 
 __all__ = [
@@ -26,7 +28,9 @@ __all__ = [
     'clean_address_for_geocoding',
     'extract_period',
     'EXCLUDED_GROUPS',
+    'MANAGERS',
     'build_worker_name_map',
     'normalize_worker_name',
     'is_valid_worker_name',
+    'is_manager',
 ]

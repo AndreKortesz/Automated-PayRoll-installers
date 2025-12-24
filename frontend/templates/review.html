@@ -316,6 +316,7 @@
         function renderReview() {
             const changes = reviewData.changes || {};
             const managerComments = reviewData.manager_comments || [];
+            const parseWarnings = reviewData.parse_warnings || [];
             const period = reviewData.period || '';
             const prevVersion = reviewData.previous_version || 1;
             
@@ -323,6 +324,7 @@
                               (changes.deleted?.length > 0) || 
                               (changes.modified?.length > 0);
             const hasManagerComments = managerComments.length > 0;
+            const hasWarnings = parseWarnings.length > 0;
             
             let html = `
                 <div class="review-header">
@@ -332,6 +334,40 @@
                     </div>
                 </div>
             `;
+            
+            // WARNINGS SECTION (show first, most important!)
+            if (hasWarnings) {
+                html += `
+                    <div class="section-card" style="border: 2px solid #dc3545; background: #fff5f5;">
+                        <div class="section-header">
+                            <span class="section-icon">🚨</span>
+                            <span class="section-title" style="color: #dc3545;">ВНИМАНИЕ! Обнаружены ошибки</span>
+                            <span class="section-badge" style="background: #dc3545; color: white;">${parseWarnings.length}</span>
+                        </div>
+                        <p style="color: #dc3545; margin-bottom: 16px; font-weight: 500;">
+                            Обнаружены критические ошибки в данных. Необходимо исправить в 1С!
+                        </p>
+                `;
+                
+                parseWarnings.forEach((warning) => {
+                    html += `
+                        <div style="background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 8px; padding: 16px; margin-bottom: 12px;">
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <span style="font-size: 24px;">⛔</span>
+                                <div>
+                                    <div style="font-weight: 600; color: #721c24; font-size: 16px;">${warning.message}</div>
+                                    <div style="color: #721c24; margin-top: 4px;">
+                                        Менеджеры не должны попадать в расчёт зарплаты монтажников. 
+                                        Проверьте данные в 1С и исправьте.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                html += `</div>`;
+            }
             
             // Manager Comments Section
             if (hasManagerComments) {
