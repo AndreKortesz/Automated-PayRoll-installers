@@ -447,7 +447,7 @@ async def upload_files(
         content_over = await file_over_10k.read()
         
         # Parse both files with automatic name normalization
-        combined, name_map = parse_both_excel_files(content_under, content_over)
+        combined, name_map, manager_comments = parse_both_excel_files(content_under, content_over)
         
         period_df = pd.read_excel(BytesIO(content_under), header=None)
         period = extract_period(period_df)
@@ -515,7 +515,8 @@ async def upload_files(
             "period": period,
             "workers": workers,
             "name_map": name_map,  # Save for later use
-            "yandex_fuel": yandex_fuel_data  # Yandex Fuel deductions per worker
+            "yandex_fuel": yandex_fuel_data,  # Yandex Fuel deductions per worker
+            "manager_comments": manager_comments  # Manager comments for orders
         }
         
         # ===== CHECK FOR CHANGES FROM PREVIOUS UPLOAD =====
@@ -955,6 +956,10 @@ async def upload_files(
             )
         )
         
+        # Get manager comments from session
+        manager_comments = session_data[session_id].get("manager_comments", [])
+        has_manager_comments = len(manager_comments) > 0
+        
         return JSONResponse({
             "success": True,
             "session_id": session_id,
@@ -964,7 +969,9 @@ async def upload_files(
             "total_records": len(combined),
             "changes": changes_summary,
             "has_changes": has_changes,
-            "redirect_to_review": has_changes  # Flag for frontend
+            "redirect_to_review": has_changes or has_manager_comments,  # Also redirect if has manager comments
+            "manager_comments": manager_comments,
+            "has_manager_comments": has_manager_comments
         })
         
     except Exception as e:
@@ -987,6 +994,7 @@ async def get_review_data(session_id: str):
         
         session = session_data[session_id]
         changes = session.get("changes_summary", {})
+        manager_comments = session.get("manager_comments", [])
         
         return JSONResponse({
             "success": True,
@@ -997,7 +1005,8 @@ async def get_review_data(session_id: str):
                 "added": changes.get("added", []),
                 "deleted": changes.get("deleted", []),
                 "modified": changes.get("modified", [])
-            }
+            },
+            "manager_comments": manager_comments
         })
     except Exception as e:
         return JSONResponse({"success": False, "error": str(e)})
@@ -1187,6 +1196,53 @@ async def apply_review_changes(request: Request):
         session["review_applied"] = True
         session_data[session_id] = session
         
+        # Process manager comment selections
+        # manager_comment_selections is a dict: {order_key: true/false}
+        # where true = apply manager's payment, false = use standard calculation
+        manager_selections = selections.get("manager_comments", {})
+        applied_manager_comments = {}  # Track which orders have manager overrides
+        
+        if manager_selections:
+            for record in modified_records:
+                order_text = str(record.get("order", ""))
+                order_code_match = re.search(r'(КАУТ|ИБУТ|ТДУТ)-\d+', order_text)
+                order_code = order_code_match.group(0) if order_code_match else ""
+                worker = normalize_worker_name(str(record.get("worker", "")), name_map).replace(" (оплата клиентом)", "")
+                key = order_code + "_" + worker
+                
+                if key in manager_selections and manager_selections[key]:
+                    # Apply manager comment
+                    parsed = record.get("manager_comment_parsed")
+                    if parsed:
+                        if parsed["type"] == "percent":
+                            # Calculate new service_payment based on percent
+                            revenue_services = float(record.get("revenue_services", 0) or 0)
+                            new_payment = revenue_services * (parsed["value"] / 100)
+                            record["service_payment"] = new_payment
+                            record["manager_override"] = True
+                            record["manager_override_type"] = "percent"
+                            record["manager_override_value"] = parsed["value"]
+                            applied_manager_comments[key] = {
+                                "type": "percent",
+                                "value": parsed["value"],
+                                "new_payment": new_payment,
+                                "comment": parsed["original"]
+                            }
+                            print(f"📝 Applied manager comment for {key}: {parsed['value']}% = {new_payment:.2f}₽")
+                        elif parsed["type"] == "fixed":
+                            # Set fixed payment
+                            record["service_payment"] = parsed["value"]
+                            record["manager_override"] = True
+                            record["manager_override_type"] = "fixed"
+                            record["manager_override_value"] = parsed["value"]
+                            applied_manager_comments[key] = {
+                                "type": "fixed",
+                                "value": parsed["value"],
+                                "new_payment": parsed["value"],
+                                "comment": parsed["original"]
+                            }
+                            print(f"📝 Applied manager comment for {key}: fixed {parsed['value']}₽")
+        
         # Now proceed with calculation (similar to /calculate endpoint)
         # Use default config and calculate
         config = DEFAULT_CONFIG.copy()
@@ -1281,7 +1337,7 @@ async def apply_review_changes(request: Request):
                 "specialist_fee": float(row.get("specialist_fee", 0) or 0),
                 "additional_expenses": float(row.get("additional_expenses", 0) or 0),
                 "service_payment": float(row.get("service_payment", 0) or 0),
-                "percent": float(str(row.get("percent", "0")).replace("%", "").replace(",", ".") or 0)
+                "percent": parse_percent(row.get("percent", 0))
             }
             order_id = await save_order(upload_id, order_data)
             
@@ -1437,7 +1493,7 @@ async def process_first_upload(request: Request):
                 "specialist_fee": float(row.get("specialist_fee", 0) or 0),
                 "additional_expenses": float(row.get("additional_expenses", 0) or 0),
                 "service_payment": float(row.get("service_payment", 0) or 0),
-                "percent": float(str(row.get("percent", "0")).replace("%", "").replace(",", ".") or 0)
+                "percent": parse_percent(row.get("percent", 0))
             }
             order_id = await save_order(upload_id, order_data)
             

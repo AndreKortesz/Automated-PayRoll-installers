@@ -3,697 +3,710 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="csrf-token" content="{{ csrf_token }}">
-    <title>Mos-GSM | Ревью изменений</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto+Condensed:wght@300;400;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css">
-    <script src="/static/security.js"></script>
+    <title>Просмотр изменений | Mos-GSM</title>
+    <link rel="stylesheet" href="/style.css">
     <style>
-        /* Additional styles for review page */
-        .page-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 32px;
-            flex-wrap: wrap;
-            gap: 16px;
+        .review-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 24px;
         }
-
-        .page-title {
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 42px;
-            color: var(--black);
-            letter-spacing: 1px;
-            margin-bottom: 8px;
-        }
-
-        .page-subtitle {
-            font-size: 16px;
-            color: var(--gray-dark);
-        }
-
-        .info-banner {
-            background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%);
-            border-radius: var(--radius-md);
-            padding: 20px 24px;
-            margin-bottom: 24px;
-            display: flex;
-            align-items: flex-start;
-            gap: 16px;
-        }
-
-        .info-banner-icon {
-            width: 48px;
-            height: 48px;
-            background: linear-gradient(135deg, var(--blue) 0%, #0D47A1 100%);
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
-
-        .info-banner-icon svg {
-            width: 24px;
-            height: 24px;
-            fill: var(--white);
-        }
-
-        .info-banner-content h3 {
-            font-family: 'Roboto Condensed', sans-serif;
-            font-size: 16px;
-            font-weight: 700;
-            color: #0D47A1;
-            margin-bottom: 4px;
-        }
-
-        .info-banner-content p {
-            font-size: 14px;
-            color: #1565C0;
-            line-height: 1.5;
-        }
-
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 16px;
-            margin-bottom: 24px;
-        }
-
-        .stat-card {
-            background: var(--white);
-            border-radius: var(--radius-md);
-            padding: 20px;
-            display: flex;
-            align-items: center;
-            gap: 14px;
-            box-shadow: var(--shadow-soft);
-        }
-
-        .stat-icon {
-            width: 48px;
-            height: 48px;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 20px;
-        }
-
-        .stat-icon.green { background: linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%); }
-        .stat-icon.red { background: linear-gradient(135deg, #FFEBEE 0%, #FFCDD2 100%); }
-        .stat-icon.orange { background: linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 100%); }
-        .stat-icon.blue { background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%); }
-
-        .stat-info { flex: 1; }
-
-        .stat-value {
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 28px;
-            color: var(--black);
-            line-height: 1;
-        }
-
-        .stat-label {
-            font-family: 'Roboto Condensed', sans-serif;
-            font-size: 12px;
-            color: var(--gray-dark);
-            text-transform: uppercase;
-            margin-top: 4px;
-        }
-
-        .section {
-            background: var(--white);
-            border-radius: var(--radius-lg);
-            box-shadow: var(--shadow-medium);
-            margin-bottom: 24px;
-            overflow: hidden;
-        }
-
-        .section-header {
-            padding: 20px 24px;
-            border-bottom: 1px solid var(--gray);
+        .review-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            margin-bottom: 24px;
         }
-
-        .section-title {
-            font-family: 'Bebas Neue', sans-serif;
+        .review-title {
             font-size: 24px;
-            color: var(--black);
+            font-weight: 700;
+            color: #1A1A1A;
+        }
+        .review-period {
+            font-size: 16px;
+            color: #666;
+        }
+        .section-card {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        .section-header {
             display: flex;
             align-items: center;
             gap: 12px;
+            margin-bottom: 16px;
         }
-
+        .section-icon {
+            font-size: 24px;
+        }
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1A1A1A;
+        }
         .section-badge {
-            background: var(--gray-light);
+            background: #F3C04D;
+            color: #1A1A1A;
             padding: 4px 12px;
             border-radius: 20px;
-            font-family: 'Roboto Condensed', sans-serif;
-            font-size: 14px;
-            font-weight: 700;
+            font-size: 13px;
+            font-weight: 500;
         }
-
-        .section-badge.green { background: #E8F5E9; color: var(--green); }
-        .section-badge.red { background: #FFEBEE; color: var(--red); }
-        .section-badge.orange { background: #FFF3E0; color: var(--orange); }
-
-        .section-actions { display: flex; gap: 8px; }
-
-        .section-btn {
-            font-family: 'Roboto Condensed', sans-serif;
-            font-size: 12px;
-            font-weight: 700;
-            text-transform: uppercase;
+        .item-card {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            border-left: 4px solid #ccc;
+        }
+        .item-card.added { border-left-color: #28a745; background: #f0fff4; }
+        .item-card.deleted { border-left-color: #dc3545; background: #fff5f5; }
+        .item-card.modified { border-left-color: #ffc107; background: #fffbeb; }
+        .item-card.manager { border-left-color: #6f42c1; background: #f8f5ff; }
+        
+        .item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+        .item-order {
+            font-weight: 600;
+            color: #1A1A1A;
+        }
+        .item-worker {
+            color: #666;
+            font-size: 14px;
+        }
+        .item-details {
+            font-size: 14px;
+            color: #666;
+            margin-top: 8px;
+        }
+        .item-comment {
+            background: #e9ecef;
+            padding: 8px 12px;
+            border-radius: 8px;
+            margin-top: 8px;
+            font-style: italic;
+        }
+        .manager-comment-text {
+            background: #6f42c1;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 8px;
+            margin-top: 8px;
+            font-weight: 500;
+        }
+        .item-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+        .btn-action {
             padding: 8px 16px;
             border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+        }
+        .btn-apply {
+            background: #28a745;
+            color: white;
+        }
+        .btn-apply:hover { background: #218838; }
+        .btn-apply.active {
+            background: #218838;
+            box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.3);
+        }
+        .btn-reject {
+            background: #dc3545;
+            color: white;
+        }
+        .btn-reject:hover { background: #c82333; }
+        .btn-reject.active {
+            background: #c82333;
+            box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.3);
+        }
+        .btn-skip {
+            background: #6c757d;
+            color: white;
+        }
+        .btn-skip:hover { background: #5a6268; }
+        
+        .bottom-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 24px;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            position: sticky;
+            bottom: 24px;
+        }
+        .btn-primary {
+            background: #F3C04D;
+            color: #1A1A1A;
+            padding: 12px 32px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
             border: none;
             cursor: pointer;
             transition: all 0.2s;
         }
-
-        .section-btn.select-all { background: var(--green); color: var(--white); }
-        .section-btn.select-none { background: var(--gray-light); color: var(--gray-dark); }
-        .section-btn:hover { transform: scale(1.05); }
-
-        .section-body { padding: 0; }
-
-        .change-item {
-            display: flex;
-            align-items: flex-start;
-            gap: 16px;
-            padding: 16px 24px;
-            border-bottom: 1px solid var(--gray-light);
-            transition: background 0.2s;
-        }
-
-        .change-item:last-child { border-bottom: none; }
-        .change-item:hover { background: var(--gray-light); }
-        .change-item.selected { background: rgba(46, 125, 50, 0.05); }
-
-        .change-checkbox { flex-shrink: 0; margin-top: 4px; }
-
-        .change-checkbox input {
-            width: 22px;
-            height: 22px;
+        .btn-primary:hover { background: #e5b347; }
+        .btn-secondary {
+            background: #f8f9fa;
+            color: #1A1A1A;
+            padding: 12px 32px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            border: 1px solid #dee2e6;
             cursor: pointer;
-            accent-color: var(--yellow);
+            transition: all 0.2s;
         }
-
-        .change-icon {
-            width: 40px;
-            height: 40px;
-            border-radius: 10px;
+        .btn-secondary:hover { background: #e9ecef; }
+        
+        .summary-stats {
             display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 18px;
-            flex-shrink: 0;
+            gap: 24px;
         }
-
-        .change-icon.added { background: linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%); }
-        .change-icon.deleted { background: linear-gradient(135deg, #FFEBEE 0%, #FFCDD2 100%); }
-        .change-icon.modified { background: linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 100%); }
-
-        .change-content { flex: 1; min-width: 0; }
-
-        .change-header {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 6px;
-            flex-wrap: wrap;
+        .stat-item {
+            text-align: center;
         }
-
-        .change-order {
-            font-family: 'Roboto Condensed', sans-serif;
+        .stat-value {
+            font-size: 24px;
             font-weight: 700;
-            font-size: 15px;
-            color: var(--black);
+            color: #1A1A1A;
         }
-
-        .change-worker {
-            font-size: 13px;
-            color: var(--gray-dark);
-            background: var(--gray-light);
-            padding: 2px 10px;
-            border-radius: 4px;
-        }
-
-        .change-address {
-            font-size: 13px;
-            color: var(--gray-dark);
-            margin-bottom: 8px;
-        }
-
-        .change-details { display: flex; flex-wrap: wrap; gap: 8px; }
-
-        .change-detail {
+        .stat-label {
             font-size: 12px;
-            padding: 4px 10px;
-            border-radius: 6px;
-            display: flex;
-            align-items: center;
-            gap: 4px;
+            color: #666;
         }
-
-        .change-detail.added { background: #E8F5E9; color: var(--green); }
-        .change-detail.deleted { background: #FFEBEE; color: var(--red); }
-        .change-detail.modified { background: #FFF3E0; color: var(--orange); }
-
-        .change-detail .old-value { text-decoration: line-through; opacity: 0.7; }
-        .change-detail .arrow { margin: 0 4px; }
-
-        .change-action {
-            font-size: 12px;
-            padding: 6px 12px;
-            border-radius: 6px;
-            font-weight: 500;
+        
+        .empty-section {
+            text-align: center;
+            padding: 32px;
+            color: #666;
         }
-
-        .change-action.restore { background: #E8F5E9; color: var(--green); }
-        .change-action.skip { background: #FFEBEE; color: var(--red); }
-        .change-action.keep-old { background: #FFF3E0; color: var(--orange); }
-
-        .sticky-footer {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: var(--white);
-            padding: 16px 32px;
-            box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.1);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            z-index: 99;
-        }
-
-        .footer-info { display: flex; gap: 24px; }
-
-        .footer-stat {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .footer-stat-icon {
-            width: 32px;
-            height: 32px;
+        
+        .calculated-payment {
+            margin-top: 8px;
+            padding: 8px 12px;
+            background: #e8f5e9;
             border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
             font-size: 14px;
         }
-
-        .footer-stat-icon.green { background: #E8F5E9; }
-        .footer-stat-icon.red { background: #FFEBEE; }
-        .footer-stat-icon.orange { background: #FFF3E0; }
-
-        .footer-stat-text {
-            font-family: 'Roboto Condensed', sans-serif;
-            font-size: 14px;
-            color: var(--gray-dark);
+        .calculated-payment strong {
+            color: #28a745;
         }
-
-        .footer-stat-value { font-weight: 700; color: var(--black); }
-        .footer-actions { display: flex; gap: 12px; }
-
-        @media (max-width: 1024px) {
-            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+        
+        .loading {
+            text-align: center;
+            padding: 48px;
         }
-
-        @media (max-width: 768px) {
-            .stats-grid { grid-template-columns: 1fr; }
-            .sticky-footer { flex-direction: column; gap: 12px; padding: 12px 16px; }
-            .footer-info { flex-wrap: wrap; justify-content: center; }
+        .loading-spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #F3C04D;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
     </style>
 </head>
 <body>
     <header class="header">
-        <a href="/" class="logo">
-            <div class="logo-icon">
-                <div class="logo-bar"></div>
-                <div class="logo-bar"></div>
-                <div class="logo-bar"></div>
-                <div class="logo-bar"></div>
-                <div class="logo-bar"></div>
-            </div>
-            <span class="logo-text">Mos-GSM</span>
-        </a>
-        <nav class="nav">
-            <a href="/" class="nav-link">Главная</a>
-            <a href="/history" class="nav-link">История</a>
-            <a href="/comparison" class="nav-link">Сравнение</a>
-        </nav>
+        <div class="header-content">
+            <a href="/" class="logo">
+                <div class="logo-icon">
+                    <div class="logo-bars">
+                        <span></span><span></span><span></span><span></span>
+                    </div>
+                </div>
+                <span class="logo-text">Mos-GSM</span>
+            </a>
+            <nav class="nav">
+                <a href="/" class="nav-link">ГЛАВНАЯ</a>
+            </nav>
+        </div>
     </header>
 
-    <main class="main" style="padding-bottom: 100px;">
-        <div class="page-header">
-            <div>
-                <h1 class="page-title">Ревью изменений</h1>
-                <p class="page-subtitle" id="periodInfo">Загрузка...</p>
-            </div>
-            <div>
-                <a href="/" class="btn btn-secondary">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
-                    Отмена
-                </a>
-            </div>
-        </div>
-
-        <div class="info-banner">
-            <div class="info-banner-icon">
-                <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
-            </div>
-            <div class="info-banner-content">
-                <h3>Проверьте изменения перед сохранением</h3>
-                <p>Система обнаружила различия между новыми файлами и предыдущей версией. 
-                   Отметьте галочками изменения, которые хотите применить.</p>
-            </div>
-        </div>
-
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-icon green">➕</div>
-                <div class="stat-info">
-                    <div class="stat-value" id="addedCount">0</div>
-                    <div class="stat-label">Новых заказов</div>
-                </div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon red">➖</div>
-                <div class="stat-info">
-                    <div class="stat-value" id="deletedCount">0</div>
-                    <div class="stat-label">Удалённых</div>
-                </div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon orange">✏️</div>
-                <div class="stat-info">
-                    <div class="stat-value" id="modifiedCount">0</div>
-                    <div class="stat-label">Изменённых</div>
-                </div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon blue">✓</div>
-                <div class="stat-info">
-                    <div class="stat-value" id="selectedCount">0</div>
-                    <div class="stat-label">Выбрано</div>
-                </div>
-            </div>
-        </div>
-
-        <div id="content">
-            <div class="loading">
-                <div class="spinner"></div>
-                <p>Загрузка изменений...</p>
-            </div>
+    <main class="review-container" id="content">
+        <div class="loading">
+            <div class="loading-spinner"></div>
+            <p>Загрузка данных...</p>
         </div>
     </main>
 
-    <div class="sticky-footer" id="stickyFooter" style="display: none;">
-        <div class="footer-info">
-            <div class="footer-stat">
-                <div class="footer-stat-icon green">➕</div>
-                <span class="footer-stat-text">Добавить: <span class="footer-stat-value" id="footerAdded">0</span></span>
-            </div>
-            <div class="footer-stat">
-                <div class="footer-stat-icon red">➖</div>
-                <span class="footer-stat-text">Восстановить: <span class="footer-stat-value" id="footerDeleted">0</span></span>
-            </div>
-            <div class="footer-stat">
-                <div class="footer-stat-icon orange">✏️</div>
-                <span class="footer-stat-text">Откатить: <span class="footer-stat-value" id="footerModified">0</span></span>
-            </div>
-        </div>
-        <div class="footer-actions">
-            <button class="btn btn-secondary" onclick="skipReview()">Пропустить всё</button>
-            <button class="btn btn-success" id="applyBtn" onclick="applyChanges()">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></svg>
-                Применить и продолжить
-            </button>
-        </div>
-    </div>
-
     <script>
+        let sessionId = null;
+        let reviewData = null;
+        let selections = {
+            deleted: [],      // order keys to restore
+            added: [],        // order keys to skip (not add)
+            modified: [],     // order keys to revert to old values
+            manager_comments: {}  // order_key: true/false (apply/reject)
+        };
+
+        // Get session_id from URL
         const urlParams = new URLSearchParams(window.location.search);
-        const sessionId = urlParams.get('session_id');
-        
-        let changesData = null;
-        let selections = { added: {}, deleted: {}, modified: {} };
+        sessionId = urlParams.get('session_id');
 
-        document.addEventListener('DOMContentLoaded', () => {
-            if (!sessionId) {
-                showError('Сессия не найдена');
-                return;
-            }
-            loadChanges();
-        });
+        if (!sessionId) {
+            document.getElementById('content').innerHTML = `
+                <div class="section-card">
+                    <div class="empty-section">
+                        <h2>❌ Сессия не найдена</h2>
+                        <p>Пожалуйста, загрузите файлы заново</p>
+                        <a href="/" class="btn-primary" style="display: inline-block; margin-top: 16px; text-decoration: none;">На главную</a>
+                    </div>
+                </div>
+            `;
+        } else {
+            loadReviewData();
+        }
 
-        async function loadChanges() {
+        async function loadReviewData() {
             try {
-                const response = await Security.fetch(`/api/review/${encodeURIComponent(sessionId)}`);
+                const response = await fetch(`/api/review/${sessionId}`);
                 const data = await response.json();
-
+                
                 if (!data.success) {
                     throw new Error(data.error || 'Ошибка загрузки');
                 }
-
-                changesData = data;
                 
-                // XSS-safe: use textContent
-                Security.setText(document.getElementById('periodInfo'), 
-                    `Период: ${data.period} • Предыдущая версия: v${data.previous_version || 1}`);
-
-                data.changes.added.forEach(c => selections.added[c.order_code + '_' + c.worker] = true);
-                data.changes.deleted.forEach(c => selections.deleted[c.order_code + '_' + c.worker] = false);
-                data.changes.modified.forEach(c => selections.modified[c.order_code + '_' + c.worker] = false);
-
-                renderContent();
-                updateStats();
-                document.getElementById('stickyFooter').style.display = 'flex';
-
+                reviewData = data;
+                renderReview();
             } catch (error) {
-                showError(error.message);
-            }
-        }
-
-        function showError(message) {
-            document.getElementById('content').innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-icon" style="background: #FFEBEE;">❌</div>
-                    <h3 class="empty-title">Ошибка</h3>
-                    <p class="empty-text">${escapeHtml(message)}</p>
-                    <a href="/" class="btn btn-primary">На главную</a>
-                </div>
-            `;
-        }
-
-        function renderContent() {
-            const { added, deleted, modified } = changesData.changes;
-
-            if (added.length === 0 && deleted.length === 0 && modified.length === 0) {
                 document.getElementById('content').innerHTML = `
-                    <div class="empty-state">
-                        <div class="empty-icon" style="background: #E8F5E9;">✅</div>
-                        <h3 class="empty-title">Изменений не найдено</h3>
-                        <p class="empty-text">Новые файлы идентичны предыдущей версии</p>
-                        <button class="btn btn-success" onclick="skipReview()">Продолжить</button>
+                    <div class="section-card">
+                        <div class="empty-section">
+                            <h2>❌ Ошибка</h2>
+                            <p>${error.message}</p>
+                            <a href="/" class="btn-primary" style="display: inline-block; margin-top: 16px; text-decoration: none;">На главную</a>
+                        </div>
                     </div>
                 `;
-                document.getElementById('stickyFooter').style.display = 'none';
-                return;
             }
+        }
 
-            let html = '';
+        function formatCurrency(value) {
+            return Math.round(value || 0).toLocaleString('ru-RU');
+        }
 
-            if (added.length > 0) {
-                html += renderSection('added', 'Новые заказы', added, 'green', '➕');
+        function extractOrderCode(orderText) {
+            const match = orderText.match(/(КАУТ|ИБУТ|ТДУТ)-\d+/);
+            return match ? match[0] : '';
+        }
+
+        function renderReview() {
+            const changes = reviewData.changes || {};
+            const managerComments = reviewData.manager_comments || [];
+            const period = reviewData.period || '';
+            const prevVersion = reviewData.previous_version || 1;
+            
+            const hasChanges = (changes.added?.length > 0) || 
+                              (changes.deleted?.length > 0) || 
+                              (changes.modified?.length > 0);
+            const hasManagerComments = managerComments.length > 0;
+            
+            let html = `
+                <div class="review-header">
+                    <div>
+                        <h1 class="review-title">📋 Просмотр изменений</h1>
+                        <p class="review-period">Период: ${period} | Сравнение с версией ${prevVersion}</p>
+                    </div>
+                </div>
+            `;
+            
+            // Manager Comments Section
+            if (hasManagerComments) {
+                html += `
+                    <div class="section-card">
+                        <div class="section-header">
+                            <span class="section-icon">💬</span>
+                            <span class="section-title">Комментарии менеджера</span>
+                            <span class="section-badge">${managerComments.length}</span>
+                        </div>
+                        <p style="color: #666; margin-bottom: 16px;">
+                            Менеджер оставил комментарии по оплате для следующих заказов. 
+                            Выберите "Применить" чтобы использовать условия менеджера, или "Отклонить" для стандартного расчёта.
+                        </p>
+                `;
+                
+                // Separate actionable and info comments
+                const actionableComments = managerComments.filter(c => c.parsed?.type === 'percent' || c.parsed?.type === 'fixed');
+                const infoComments = managerComments.filter(c => c.parsed?.type === 'info');
+                
+                // Actionable comments (require decision)
+                if (actionableComments.length > 0) {
+                    html += `<h4 style="color: #6f42c1; margin-bottom: 12px;">⚡ Требуют решения (${actionableComments.length})</h4>`;
+                    
+                    actionableComments.forEach((item, idx) => {
+                        const orderCode = extractOrderCode(item.order);
+                        const key = orderCode + '_' + item.worker;
+                        const parsed = item.parsed || {};
+                        
+                        // Initialize selection as null (not decided)
+                        if (!(key in selections.manager_comments)) {
+                            selections.manager_comments[key] = null;
+                        }
+                        
+                        // Calculate what the payment would be if applied
+                        let calculatedPayment = '';
+                        if (parsed.type === 'percent') {
+                            const newPayment = (item.revenue_services || 0) * (parsed.value / 100);
+                            calculatedPayment = `${parsed.value}% от ${formatCurrency(item.revenue_services)} ₽ = <strong>${formatCurrency(newPayment)} ₽</strong>`;
+                        } else if (parsed.type === 'fixed') {
+                            calculatedPayment = `Фиксированная сумма: <strong>${formatCurrency(parsed.value)} ₽</strong>`;
+                        }
+                        
+                        html += `
+                            <div class="item-card manager" id="manager-${idx}">
+                                <div class="item-header">
+                                    <div>
+                                        <div class="item-order">${orderCode || 'Заказ'}</div>
+                                        <div class="item-worker">👷 ${item.worker}</div>
+                                    </div>
+                                </div>
+                                <div class="manager-comment-text">
+                                    💬 "${item.comment}"
+                                </div>
+                                ${calculatedPayment ? `<div class="calculated-payment">📊 Расчёт: ${calculatedPayment}</div>` : ''}
+                                <div class="item-details">
+                                    Текущая оплата по стандарту: ${formatCurrency(item.current_service_payment)} ₽
+                                </div>
+                                <div class="item-actions">
+                                    <button class="btn-action btn-apply" onclick="setManagerSelection('${key}', true, ${idx})">
+                                        ✓ Применить
+                                    </button>
+                                    <button class="btn-action btn-reject" onclick="setManagerSelection('${key}', false, ${idx})">
+                                        ✕ Отклонить
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                }
+                
+                // Info comments (just for display, no decision needed)
+                if (infoComments.length > 0) {
+                    html += `<h4 style="color: #17a2b8; margin: 24px 0 12px;">ℹ️ Информационные заметки (${infoComments.length})</h4>`;
+                    
+                    infoComments.forEach((item) => {
+                        const orderCode = extractOrderCode(item.order);
+                        
+                        html += `
+                            <div class="item-card" style="border-left-color: #17a2b8; background: #e8f4f8;">
+                                <div class="item-header">
+                                    <div>
+                                        <div class="item-order">${orderCode || 'Заказ'}</div>
+                                        <div class="item-worker">👷 ${item.worker}</div>
+                                    </div>
+                                    <span style="background: #17a2b8; color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px;">Информация</span>
+                                </div>
+                                <div style="background: #17a2b8; color: white; padding: 8px 12px; border-radius: 8px; margin-top: 8px;">
+                                    💬 "${item.comment}"
+                                </div>
+                                <div class="item-details" style="margin-top: 8px; font-style: italic; color: #666;">
+                                    Заметка не влияет на расчёт
+                                </div>
+                            </div>
+                        `;
+                    });
+                }
+                
+                html += `</div>`;
             }
-
-            if (deleted.length > 0) {
-                html += renderSection('deleted', 'Удалённые / Ручные корректировки', deleted, 'red', '➖');
+            
+            // Added Section
+            if (changes.added?.length > 0) {
+                html += `
+                    <div class="section-card">
+                        <div class="section-header">
+                            <span class="section-icon">➕</span>
+                            <span class="section-title">Добавленные заказы</span>
+                            <span class="section-badge">${changes.added.length}</span>
+                        </div>
+                `;
+                
+                changes.added.forEach((item, idx) => {
+                    const key = item.order_code + '_' + item.worker;
+                    html += `
+                        <div class="item-card added" id="added-${idx}">
+                            <div class="item-header">
+                                <div>
+                                    <div class="item-order">${item.order_code || 'Новый заказ'}</div>
+                                    <div class="item-worker">👷 ${item.worker}</div>
+                                </div>
+                            </div>
+                            <div class="item-details">
+                                ${item.address || ''}
+                            </div>
+                            <div class="item-actions">
+                                <button class="btn-action btn-apply active" onclick="toggleAdded('${key}', ${idx}, false)">
+                                    ✓ Добавить
+                                </button>
+                                <button class="btn-action btn-skip" onclick="toggleAdded('${key}', ${idx}, true)">
+                                    ✕ Пропустить
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                html += `</div>`;
             }
-
-            if (modified.length > 0) {
-                html += renderSection('modified', 'Изменённые заказы', modified, 'orange', '✏️');
+            
+            // Deleted Section
+            if (changes.deleted?.length > 0) {
+                html += `
+                    <div class="section-card">
+                        <div class="section-header">
+                            <span class="section-icon">➖</span>
+                            <span class="section-title">Удалённые заказы</span>
+                            <span class="section-badge">${changes.deleted.length}</span>
+                        </div>
+                        <p style="color: #666; margin-bottom: 16px;">
+                            Эти заказы были в предыдущей версии, но отсутствуют в новых файлах
+                        </p>
+                `;
+                
+                changes.deleted.forEach((item, idx) => {
+                    const key = item.order_code + '_' + item.worker;
+                    html += `
+                        <div class="item-card deleted" id="deleted-${idx}">
+                            <div class="item-header">
+                                <div>
+                                    <div class="item-order">${item.order_code || 'Заказ'}</div>
+                                    <div class="item-worker">👷 ${item.worker}</div>
+                                </div>
+                            </div>
+                            <div class="item-details">
+                                ${item.address || ''}
+                            </div>
+                            <div class="item-actions">
+                                <button class="btn-action btn-reject active" onclick="toggleDeleted('${key}', ${idx}, false)">
+                                    ✕ Удалить
+                                </button>
+                                <button class="btn-action btn-apply" onclick="toggleDeleted('${key}', ${idx}, true)">
+                                    ↩ Восстановить
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                html += `</div>`;
             }
-
+            
+            // Modified Section
+            if (changes.modified?.length > 0) {
+                html += `
+                    <div class="section-card">
+                        <div class="section-header">
+                            <span class="section-icon">✏️</span>
+                            <span class="section-title">Изменённые заказы</span>
+                            <span class="section-badge">${changes.modified.length}</span>
+                        </div>
+                `;
+                
+                changes.modified.forEach((item, idx) => {
+                    const key = item.order_code + '_' + item.worker;
+                    let changesText = (item.changes || []).map(c => 
+                        `${c.field}: ${c.old} → ${c.new}`
+                    ).join(', ');
+                    
+                    html += `
+                        <div class="item-card modified" id="modified-${idx}">
+                            <div class="item-header">
+                                <div>
+                                    <div class="item-order">${item.order_code || 'Заказ'}</div>
+                                    <div class="item-worker">👷 ${item.worker}</div>
+                                </div>
+                            </div>
+                            <div class="item-details">
+                                📝 ${changesText}
+                            </div>
+                            <div class="item-actions">
+                                <button class="btn-action btn-apply active" onclick="toggleModified('${key}', ${idx}, false)">
+                                    ✓ Принять новые
+                                </button>
+                                <button class="btn-action btn-skip" onclick="toggleModified('${key}', ${idx}, true)">
+                                    ↩ Оставить старые
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                html += `</div>`;
+            }
+            
+            // No changes message
+            if (!hasChanges && !hasManagerComments) {
+                html += `
+                    <div class="section-card">
+                        <div class="empty-section">
+                            <h2>✅ Изменений нет</h2>
+                            <p>Данные совпадают с предыдущей версией</p>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Bottom actions
+            html += `
+                <div class="bottom-actions">
+                    <a href="/" class="btn-secondary">← Отмена</a>
+                    <div class="summary-stats">
+                        <div class="stat-item">
+                            <div class="stat-value" style="color: #28a745">${changes.added?.length || 0}</div>
+                            <div class="stat-label">Добавлено</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value" style="color: #dc3545">${changes.deleted?.length || 0}</div>
+                            <div class="stat-label">Удалено</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value" style="color: #ffc107">${changes.modified?.length || 0}</div>
+                            <div class="stat-label">Изменено</div>
+                        </div>
+                        ${hasManagerComments ? `
+                        <div class="stat-item">
+                            <div class="stat-value" style="color: #6f42c1">${managerComments.length}</div>
+                            <div class="stat-label">От менеджера</div>
+                        </div>
+                        ` : ''}
+                    </div>
+                    <button class="btn-primary" onclick="applyChanges()">
+                        Применить и рассчитать →
+                    </button>
+                </div>
+            `;
+            
             document.getElementById('content').innerHTML = html;
         }
 
-        function renderSection(type, title, items, colorClass, icon) {
-            let itemsHtml = items.map((item, idx) => renderChangeItem(type, item, idx)).join('');
+        function setManagerSelection(key, apply, idx) {
+            selections.manager_comments[key] = apply;
             
-            return `
-                <div class="section">
-                    <div class="section-header">
-                        <h2 class="section-title">
-                            ${icon} ${escapeHtml(title)}
-                            <span class="section-badge ${colorClass}">${items.length}</span>
-                        </h2>
-                        <div class="section-actions">
-                            <button class="section-btn select-all" onclick="selectAll('${type}', true)">Выбрать все</button>
-                            <button class="section-btn select-none" onclick="selectAll('${type}', false)">Снять все</button>
-                        </div>
-                    </div>
-                    <div class="section-body">${itemsHtml}</div>
-                </div>
-            `;
+            // Update UI
+            const card = document.getElementById(`manager-${idx}`);
+            const applyBtn = card.querySelector('.btn-apply');
+            const rejectBtn = card.querySelector('.btn-reject');
+            
+            applyBtn.classList.toggle('active', apply);
+            rejectBtn.classList.toggle('active', !apply);
         }
 
-        function renderChangeItem(type, item, idx) {
-            const key = item.order_code + '_' + item.worker;
-            const isChecked = selections[type][key];
-            const selectedClass = isChecked ? 'selected' : '';
-            const isExtraRow = item.type === 'extra_row';
-
-            let detailsHtml = '';
-            let actionLabel = '';
-
-            if (type === 'added') {
-                actionLabel = isChecked ? 
-                    '<span class="change-action restore">Будет добавлен</span>' : 
-                    '<span class="change-action skip">Не добавлять</span>';
-                
-                if (item.details) {
-                    detailsHtml = Object.entries(item.details).map(([k, v]) => 
-                        `<span class="change-detail added">${escapeHtml(k)}: ${escapeHtml(String(v))}</span>`
-                    ).join('');
+        function toggleAdded(key, idx, skip) {
+            if (skip) {
+                if (!selections.added.includes(key)) {
+                    selections.added.push(key);
                 }
-            } else if (type === 'deleted') {
-                actionLabel = isChecked ? 
-                    '<span class="change-action restore">Восстановить</span>' : 
-                    '<span class="change-action skip">Оставить удалённым</span>';
-                
-                if (item.details) {
-                    detailsHtml = Object.entries(item.details).map(([k, v]) => 
-                        `<span class="change-detail deleted">${escapeHtml(k)}: ${escapeHtml(String(v))}</span>`
-                    ).join('');
-                }
-            } else if (type === 'modified') {
-                actionLabel = isChecked ? 
-                    '<span class="change-action keep-old">Оставить старые значения</span>' : 
-                    '<span class="change-action restore">Применить новые значения</span>';
-                
-                if (item.changes) {
-                    detailsHtml = item.changes.map(c => 
-                        `<span class="change-detail modified">
-                            ${escapeHtml(c.field)}: 
-                            <span class="old-value">${escapeHtml(String(c.old))}</span>
-                            <span class="arrow">→</span>
-                            ${escapeHtml(String(c.new))}
-                        </span>`
-                    ).join('');
-                }
+            } else {
+                selections.added = selections.added.filter(k => k !== key);
             }
-
-            const displayAddress = item.address || (isExtraRow ? item.order_code : '');
-            const extraBadge = isExtraRow ? '<span style="background: #E8F5E9; color: #2E7D32; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-left: 8px;">Ручная корректировка</span>' : '';
-
-            return `
-                <div class="change-item ${selectedClass}" id="item-${type}-${idx}">
-                    <div class="change-checkbox">
-                        <input type="checkbox" ${isChecked ? 'checked' : ''} 
-                               onchange="toggleSelection('${type}', '${escapeAttr(key)}', ${idx})">
-                    </div>
-                    <div class="change-icon ${type}">${type === 'added' ? '➕' : type === 'deleted' ? '➖' : '✏️'}</div>
-                    <div class="change-content">
-                        <div class="change-header">
-                            <span class="change-order">${isExtraRow ? '📝 ' : ''}${escapeHtml(item.order_code || '')}</span>
-                            <span class="change-worker">👷 ${escapeHtml(item.worker || '')}</span>
-                            ${extraBadge}
-                            ${actionLabel}
-                        </div>
-                        ${displayAddress && displayAddress !== item.order_code ? `<div class="change-address">📍 ${escapeHtml(displayAddress)}</div>` : ''}
-                        <div class="change-details">${detailsHtml}</div>
-                    </div>
-                </div>
-            `;
+            
+            const card = document.getElementById(`added-${idx}`);
+            const addBtn = card.querySelector('.btn-apply');
+            const skipBtn = card.querySelector('.btn-skip');
+            
+            addBtn.classList.toggle('active', !skip);
+            skipBtn.classList.toggle('active', skip);
         }
 
-        function toggleSelection(type, key, idx) {
-            selections[type][key] = !selections[type][key];
-            renderContent();
-            updateStats();
-        }
-
-        function selectAll(type, value) {
-            for (const key in selections[type]) {
-                selections[type][key] = value;
+        function toggleDeleted(key, idx, restore) {
+            if (restore) {
+                if (!selections.deleted.includes(key)) {
+                    selections.deleted.push(key);
+                }
+            } else {
+                selections.deleted = selections.deleted.filter(k => k !== key);
             }
-            renderContent();
-            updateStats();
+            
+            const card = document.getElementById(`deleted-${idx}`);
+            const deleteBtn = card.querySelector('.btn-reject');
+            const restoreBtn = card.querySelector('.btn-apply');
+            
+            deleteBtn.classList.toggle('active', !restore);
+            restoreBtn.classList.toggle('active', restore);
         }
 
-        function updateStats() {
-            const addedTotal = changesData.changes.added.length;
-            const deletedTotal = changesData.changes.deleted.length;
-            const modifiedTotal = changesData.changes.modified.length;
-
-            const addedSelected = Object.values(selections.added).filter(v => v).length;
-            const deletedSelected = Object.values(selections.deleted).filter(v => v).length;
-            const modifiedSelected = Object.values(selections.modified).filter(v => v).length;
-
-            document.getElementById('addedCount').textContent = addedTotal;
-            document.getElementById('deletedCount').textContent = deletedTotal;
-            document.getElementById('modifiedCount').textContent = modifiedTotal;
-            document.getElementById('selectedCount').textContent = addedSelected + deletedSelected + modifiedSelected;
-
-            document.getElementById('footerAdded').textContent = addedSelected;
-            document.getElementById('footerDeleted').textContent = deletedSelected;
-            document.getElementById('footerModified').textContent = modifiedSelected;
-        }
-
-        function skipReview() {
-            proceedToCalculation({
-                added: Object.keys(selections.added).filter(k => selections.added[k]),
-                deleted: [],
-                modified: []
-            });
+        function toggleModified(key, idx, revert) {
+            if (revert) {
+                if (!selections.modified.includes(key)) {
+                    selections.modified.push(key);
+                }
+            } else {
+                selections.modified = selections.modified.filter(k => k !== key);
+            }
+            
+            const card = document.getElementById(`modified-${idx}`);
+            const acceptBtn = card.querySelector('.btn-apply');
+            const revertBtn = card.querySelector('.btn-skip');
+            
+            acceptBtn.classList.toggle('active', !revert);
+            revertBtn.classList.toggle('active', revert);
         }
 
         async function applyChanges() {
-            const applyBtn = document.getElementById('applyBtn');
-            applyBtn.disabled = true;
-            applyBtn.innerHTML = '<div class="spinner" style="width: 20px; height: 20px; border-width: 2px; margin: 0;"></div> Обработка...';
-
-            const selectedChanges = {
-                added: Object.keys(selections.added).filter(k => selections.added[k]),
-                deleted: Object.keys(selections.deleted).filter(k => selections.deleted[k]),
-                modified: Object.keys(selections.modified).filter(k => selections.modified[k])
-            };
-
-            await proceedToCalculation(selectedChanges);
-        }
-
-        async function proceedToCalculation(selectedChanges) {
+            // Check if all actionable manager comments have been decided (skip info type)
+            const managerComments = reviewData.manager_comments || [];
+            const actionableComments = managerComments.filter(c => c.parsed?.type === 'percent' || c.parsed?.type === 'fixed');
+            const undecided = actionableComments.filter(item => {
+                const key = extractOrderCode(item.order) + '_' + item.worker;
+                return selections.manager_comments[key] === null;
+            });
+            
+            if (undecided.length > 0) {
+                alert(`Пожалуйста, примите решение по всем комментариям менеджера (${undecided.length} не решено)`);
+                return;
+            }
+            
             try {
-                const response = await Security.fetchJson('/api/apply-review', {
-                    session_id: sessionId,
-                    selections: selectedChanges
-                }, 'POST');
-
-                if (response.success && Security.isValidId(response.period_id)) {
-                    Security.safeRedirect(`/period/${response.period_id}`);
+                const btn = document.querySelector('.btn-primary');
+                btn.disabled = true;
+                btn.textContent = 'Обработка...';
+                
+                const response = await fetch('/api/apply-review', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        selections: selections
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    window.location.href = `/period/${data.period_id}`;
                 } else {
-                    throw new Error(response.error || 'Ошибка применения');
+                    alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
+                    btn.disabled = false;
+                    btn.textContent = 'Применить и рассчитать →';
                 }
             } catch (error) {
                 alert('Ошибка: ' + error.message);
-                const applyBtn = document.getElementById('applyBtn');
-                applyBtn.disabled = false;
-                applyBtn.innerHTML = `
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></svg>
-                    Применить и продолжить
-                `;
+                const btn = document.querySelector('.btn-primary');
+                btn.disabled = false;
+                btn.textContent = 'Применить и рассчитать →';
             }
         }
     </script>

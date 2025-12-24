@@ -3,6 +3,7 @@ Excel file parsing from 1C exports
 """
 
 import pandas as pd
+import re
 from io import BytesIO
 
 from utils.workers import (
@@ -12,9 +13,58 @@ from utils.workers import (
 )
 
 
+def parse_manager_comment(comment: str) -> dict:
+    """Parse manager comment to extract payment instructions.
+    
+    Returns dict with:
+    - type: 'percent' | 'fixed' | 'info' | None
+    - value: numeric value (percent or fixed amount)
+    - original: original comment text
+    """
+    if not comment or pd.isna(comment):
+        return None
+    
+    comment = str(comment).strip()
+    if not comment:
+        return None
+    
+    result = {
+        "type": None,
+        "value": None,
+        "original": comment
+    }
+    
+    comment_lower = comment.lower()
+    
+    # Pattern: "Оплата монтажнику 40%" or "оплатить 40%"
+    percent_match = re.search(r'(\d+(?:[.,]\d+)?)\s*%', comment)
+    if percent_match and ('оплат' in comment_lower or 'монтажник' in comment_lower):
+        result["type"] = "percent"
+        result["value"] = float(percent_match.group(1).replace(',', '.'))
+        return result
+    
+    # Pattern: "зарплата 3500" or "оплатить 7000" or "оплата 5000"
+    fixed_match = re.search(r'(?:зарплата|оплатить|оплата)\s*(\d+(?:[.,]\d+)?)', comment_lower)
+    if fixed_match:
+        result["type"] = "fixed"
+        result["value"] = float(fixed_match.group(1).replace(',', '.'))
+        return result
+    
+    # Pattern: just a number like "7000" or "3500"
+    just_number = re.match(r'^(\d+(?:[.,]\d+)?)\s*(?:руб|₽)?\.?$', comment.strip())
+    if just_number:
+        result["type"] = "fixed"
+        result["value"] = float(just_number.group(1).replace(',', '.'))
+        return result
+    
+    # Informational comment (no action needed)
+    result["type"] = "info"
+    return result
+
+
 def parse_excel_file(file_bytes: bytes, is_over_10k: bool, name_map: dict = None) -> tuple:
     """Parse Excel file from 1C and extract data.
-    Returns (DataFrame, set of worker names found)
+    Returns (DataFrame, set of worker names found, list of manager comments)
     """
     df = pd.read_excel(BytesIO(file_bytes), header=None)
     
@@ -27,6 +77,42 @@ def parse_excel_file(file_bytes: bytes, is_over_10k: bool, name_map: dict = None
     
     if header_row is None:
         raise ValueError("Не найден заголовок с 'Монтажник'")
+    
+    # Detect column layout by checking subheader row
+    subheader_row = header_row + 1
+    has_manager_column = False
+    manager_col_idx = 5  # Default position
+    
+    if subheader_row < len(df):
+        subheader = df.iloc[subheader_row]
+        for idx, val in enumerate(subheader.values):
+            if pd.notna(val) and 'ЗП от менеджера' in str(val):
+                has_manager_column = True
+                manager_col_idx = idx
+                print(f"📋 Обнаружена колонка 'ЗП от менеджера' в позиции {idx}")
+                break
+    
+    # Define column indices based on layout
+    # New format (with manager column): col 5 is manager, data starts at col 6
+    # Old format: data starts at col 4
+    if has_manager_column:
+        col_revenue_total = 6
+        col_revenue_services = 7
+        col_diagnostic = 8
+        col_diagnostic_payment = 9
+        col_specialist_fee = 10
+        col_additional_expenses = 11
+        col_service_payment = 12
+        col_percent = 13
+    else:
+        col_revenue_total = 4
+        col_revenue_services = 5
+        col_diagnostic = 6
+        col_diagnostic_payment = 7
+        col_specialist_fee = 8
+        col_additional_expenses = 9
+        col_service_payment = 10
+        col_percent = 11
     
     # First pass: collect all worker names
     all_worker_names = set()
@@ -49,13 +135,14 @@ def parse_excel_file(file_bytes: bytes, is_over_10k: bool, name_map: dict = None
     
     # If no external map provided, just return names for first pass
     if name_map is None:
-        return None, all_worker_names
+        return None, all_worker_names, []
     
     # Second pass: extract records with normalized names
     records = []
+    manager_comments = []  # Collect orders with manager comments
     current_worker = None
     is_client_payment_section = False
-    is_valid_worker = False  # Track if current group is a valid worker
+    is_valid_worker = False
     
     for i in range(header_row + 2, len(df)):
         row = df.iloc[i]
@@ -72,55 +159,74 @@ def parse_excel_file(file_bytes: bytes, is_over_10k: bool, name_map: dict = None
                    "В прошлом расчете" in first_col_str)
         
         if not is_order:
-            # This is a group header (worker name or service category)
             is_client_payment_section = "(оплата клиентом)" in first_col_str
             worker_name = first_col_str.replace(" (оплата клиентом)", "").strip()
             
             if worker_name == "Монтажник":
                 continue
             
-            # Check if this is a valid worker (not a service category like "Доставка")
             is_valid_worker = is_valid_worker_name(first_col_str)
             
             if is_valid_worker:
-                # Normalize worker name
                 worker_name = normalize_worker_name(worker_name, name_map)
                 current_worker = worker_name
             else:
-                # Skip this group - it's not a real worker
                 current_worker = None
             
-            # "(оплата клиентом)" строка - это заголовок секции, не записываем её как данные
             continue
         else:
-            # This is an order row - only add if current worker is valid
+            # This is an order row
             if current_worker and is_valid_worker:
-                records.append({
+                # Extract manager comment if present
+                manager_comment_raw = None
+                manager_comment_parsed = None
+                if has_manager_column:
+                    manager_val = row.iloc[manager_col_idx] if manager_col_idx < len(row) else None
+                    if pd.notna(manager_val) and str(manager_val).strip():
+                        manager_comment_raw = str(manager_val).strip()
+                        manager_comment_parsed = parse_manager_comment(manager_comment_raw)
+                
+                record = {
                     "worker": normalize_worker_name(current_worker, name_map),
                     "order": first_col_str,
-                    "revenue_total": row.iloc[4] if pd.notna(row.iloc[4]) else 0,
-                    "revenue_services": row.iloc[5] if pd.notna(row.iloc[5]) else 0,
-                    "diagnostic": row.iloc[6] if pd.notna(row.iloc[6]) else 0,
-                    "diagnostic_payment": row.iloc[7] if pd.notna(row.iloc[7]) else 0,
-                    "specialist_fee": row.iloc[8] if pd.notna(row.iloc[8]) else 0,
-                    "additional_expenses": row.iloc[9] if pd.notna(row.iloc[9]) else 0,
-                    "service_payment": row.iloc[10] if pd.notna(row.iloc[10]) else 0,
-                    "percent": row.iloc[11],
+                    "revenue_total": row.iloc[col_revenue_total] if col_revenue_total < len(row) and pd.notna(row.iloc[col_revenue_total]) else 0,
+                    "revenue_services": row.iloc[col_revenue_services] if col_revenue_services < len(row) and pd.notna(row.iloc[col_revenue_services]) else 0,
+                    "diagnostic": row.iloc[col_diagnostic] if col_diagnostic < len(row) and pd.notna(row.iloc[col_diagnostic]) else 0,
+                    "diagnostic_payment": row.iloc[col_diagnostic_payment] if col_diagnostic_payment < len(row) and pd.notna(row.iloc[col_diagnostic_payment]) else 0,
+                    "specialist_fee": row.iloc[col_specialist_fee] if col_specialist_fee < len(row) and pd.notna(row.iloc[col_specialist_fee]) else 0,
+                    "additional_expenses": row.iloc[col_additional_expenses] if col_additional_expenses < len(row) and pd.notna(row.iloc[col_additional_expenses]) else 0,
+                    "service_payment": row.iloc[col_service_payment] if col_service_payment < len(row) and pd.notna(row.iloc[col_service_payment]) else 0,
+                    "percent": row.iloc[col_percent] if col_percent < len(row) else 0,
                     "is_over_10k": is_over_10k,
                     "is_client_payment": is_client_payment_section,
-                    "is_worker_total": False
-                })
+                    "is_worker_total": False,
+                    "manager_comment": manager_comment_raw,
+                    "manager_comment_parsed": manager_comment_parsed
+                }
+                records.append(record)
+                
+                # Track orders with manager comments (including info for display)
+                if manager_comment_parsed and manager_comment_parsed["type"] in ["percent", "fixed", "info"]:
+                    manager_comments.append({
+                        "worker": record["worker"],
+                        "order": first_col_str,
+                        "comment": manager_comment_raw,
+                        "parsed": manager_comment_parsed,
+                        "revenue_services": record["revenue_services"],
+                        "current_service_payment": record["service_payment"],
+                        "is_over_10k": is_over_10k
+                    })
     
-    return pd.DataFrame(records), all_worker_names
+    return pd.DataFrame(records), all_worker_names, manager_comments
 
 
 def parse_both_excel_files(content_under: bytes, content_over: bytes) -> tuple:
     """Parse both Excel files and return combined DataFrame with normalized worker names.
-    Returns (combined_df, name_map)
+    Returns (combined_df, name_map, manager_comments)
     """
     # First pass: collect all worker names from both files
-    _, names_under = parse_excel_file(content_under, is_over_10k=False, name_map=None)
-    _, names_over = parse_excel_file(content_over, is_over_10k=True, name_map=None)
+    _, names_under, _ = parse_excel_file(content_under, is_over_10k=False, name_map=None)
+    _, names_over, _ = parse_excel_file(content_over, is_over_10k=True, name_map=None)
     
     all_names = names_under | names_over
     
@@ -130,9 +236,13 @@ def parse_both_excel_files(content_under: bytes, content_over: bytes) -> tuple:
         print(f"📋 Нормализация имён: {name_map}")
     
     # Second pass: parse with normalization
-    df_under, _ = parse_excel_file(content_under, is_over_10k=False, name_map=name_map)
-    df_over, _ = parse_excel_file(content_over, is_over_10k=True, name_map=name_map)
+    df_under, _, comments_under = parse_excel_file(content_under, is_over_10k=False, name_map=name_map)
+    df_over, _, comments_over = parse_excel_file(content_over, is_over_10k=True, name_map=name_map)
     
     combined = pd.concat([df_over, df_under], ignore_index=True)
+    all_comments = comments_over + comments_under
     
-    return combined, name_map
+    if all_comments:
+        print(f"📝 Найдено {len(all_comments)} заказов с комментариями менеджера")
+    
+    return combined, name_map, all_comments
