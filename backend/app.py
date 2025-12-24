@@ -1177,14 +1177,11 @@ async def apply_review_changes(request: Request):
             except Exception as e:
                 print(f"Error reverting modified orders: {e}")
         
-        # Process added items - remove those not selected
-        added_to_skip = set()
-        for item in changes.get("added", []):
-            key = item["order_code"] + "_" + item["worker"]
-            if key not in selections.get("added", []):
-                added_to_skip.add(key)
+        # Process added items - selections.added contains keys to SKIP (not add)
+        added_to_skip = set(selections.get("added", []))
         
         if added_to_skip:
+            print(f"📋 Skipping {len(added_to_skip)} added orders: {added_to_skip}")
             filtered_records = []
             for record in modified_records:
                 order_text = str(record.get("order", ""))
@@ -1196,6 +1193,8 @@ async def apply_review_changes(request: Request):
 
                 if key not in added_to_skip:
                     filtered_records.append(record)
+                else:
+                    print(f"   ⏭️ Skipping: {key}")
             modified_records = filtered_records
         
         # Update session with modified records

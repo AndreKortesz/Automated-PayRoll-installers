@@ -67,16 +67,35 @@ def format_order_for_workers(order_text: str) -> str:
 
 
 def parse_percent(value) -> float:
-    """Parse percent value from string like '30,00 %' or number"""
+    """Parse percent value from string like '30,00 %', '40%', or 'Оплата монтажнику 40%'"""
     if pd.isna(value):
         return 0
     if isinstance(value, (int, float)):
         return float(value) * 100 if value <= 1 else float(value)
     
-    text = str(value).replace(',', '.').replace('%', '').replace(' ', '')
+    text = str(value)
+    
+    # First try to extract number followed by % (handles "Оплата монтажнику 40%")
+    import re
+    match = re.search(r'(\d+(?:[.,]\d+)?)\s*%', text)
+    if match:
+        try:
+            return float(match.group(1).replace(',', '.'))
+        except:
+            pass
+    
+    # Fallback: try to parse the whole string as number
+    text = text.replace(',', '.').replace('%', '').replace(' ', '')
     try:
         return float(text)
     except:
+        # Last resort: extract any number from string
+        match = re.search(r'(\d+(?:[.,]\d+)?)', str(value))
+        if match:
+            try:
+                return float(match.group(1).replace(',', '.'))
+            except:
+                pass
         return 0
 
 
@@ -131,6 +150,16 @@ def clean_address_for_geocoding(addr: str) -> str:
     # Remove OZON/DDX prefixes - they prevent geocoding
     addr = re.sub(r'^OZON\s+', '', addr)
     addr = re.sub(r'^DDX\s*-?\s*', '', addr)
+    
+    # Remove manager comments that got mixed into address
+    manager_patterns = [
+        r'^Оплата монтажнику\s*\d*%?\s*,?\s*',  # At start
+        r',?\s*Оплата монтажнику\s*\d*%?\s*$',  # At end
+        r'^оплатить\s+\d+\s*,?\s*',  # "оплатить 7000"
+        r'^зарплата\s+\d+.*?,?\s*',  # "зарплата 3500 (ПС Тимофеев)"
+    ]
+    for pattern in manager_patterns:
+        addr = re.sub(pattern, '', addr, flags=re.IGNORECASE)
     
     # Remove garbage suffixes (comments after address)
     garbage_patterns = [

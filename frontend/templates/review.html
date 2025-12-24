@@ -112,32 +112,64 @@
             font-size: 14px;
             font-weight: 500;
             cursor: pointer;
-            border: none;
+            border: 2px solid transparent;
             transition: all 0.2s;
+            opacity: 0.6;
+        }
+        .btn-action.active {
+            opacity: 1;
+            transform: scale(1.05);
         }
         .btn-apply {
             background: #28a745;
             color: white;
         }
-        .btn-apply:hover { background: #218838; }
+        .btn-apply:hover { background: #218838; opacity: 0.9; }
         .btn-apply.active {
             background: #218838;
-            box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.3);
+            border-color: #155724;
+            box-shadow: 0 0 0 4px rgba(40, 167, 69, 0.4);
+            opacity: 1;
         }
         .btn-reject {
             background: #dc3545;
             color: white;
         }
-        .btn-reject:hover { background: #c82333; }
+        .btn-reject:hover { background: #c82333; opacity: 0.9; }
         .btn-reject.active {
             background: #c82333;
-            box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.3);
+            border-color: #721c24;
+            box-shadow: 0 0 0 4px rgba(220, 53, 69, 0.4);
+            opacity: 1;
         }
         .btn-skip {
             background: #6c757d;
             color: white;
         }
-        .btn-skip:hover { background: #5a6268; }
+        .btn-skip:hover { background: #5a6268; opacity: 0.9; }
+        .btn-skip.active {
+            background: #5a6268;
+            border-color: #343a40;
+            box-shadow: 0 0 0 4px rgba(108, 117, 125, 0.4);
+            opacity: 1;
+        }
+        
+        /* Selection indicator on card */
+        .item-card.selected-apply {
+            border-left-width: 6px;
+            border-left-color: #28a745 !important;
+            background: #d4edda !important;
+        }
+        .item-card.selected-reject {
+            border-left-width: 6px;
+            border-left-color: #dc3545 !important;
+            background: #f8d7da !important;
+        }
+        .item-card.selected-skip {
+            border-left-width: 6px;
+            border-left-color: #6c757d !important;
+            background: #e2e3e5 !important;
+        }
         
         .bottom-actions {
             display: flex;
@@ -483,7 +515,7 @@
                 changes.added.forEach((item, idx) => {
                     const key = item.order_code + '_' + item.worker;
                     html += `
-                        <div class="item-card added" id="added-${idx}">
+                        <div class="item-card added selected-apply" id="added-${idx}">
                             <div class="item-header">
                                 <div>
                                     <div class="item-order">${item.order_code || 'Новый заказ'}</div>
@@ -525,7 +557,7 @@
                 changes.deleted.forEach((item, idx) => {
                     const key = item.order_code + '_' + item.worker;
                     html += `
-                        <div class="item-card deleted" id="deleted-${idx}">
+                        <div class="item-card deleted selected-reject" id="deleted-${idx}">
                             <div class="item-header">
                                 <div>
                                     <div class="item-order">${item.order_code || 'Заказ'}</div>
@@ -568,7 +600,7 @@
                     ).join(', ');
                     
                     html += `
-                        <div class="item-card modified" id="modified-${idx}">
+                        <div class="item-card modified selected-apply" id="modified-${idx}">
                             <div class="item-header">
                                 <div>
                                     <div class="item-order">${item.order_code || 'Заказ'}</div>
@@ -643,11 +675,25 @@
             
             // Update UI
             const card = document.getElementById(`manager-${idx}`);
+            if (!card) {
+                console.error('Card not found:', `manager-${idx}`);
+                return;
+            }
+            
             const applyBtn = card.querySelector('.btn-apply');
             const rejectBtn = card.querySelector('.btn-reject');
             
+            // Update button states
             applyBtn.classList.toggle('active', apply);
             rejectBtn.classList.toggle('active', !apply);
+            
+            // Update card visual state
+            card.classList.remove('selected-apply', 'selected-reject');
+            card.classList.add(apply ? 'selected-apply' : 'selected-reject');
+            
+            // Show feedback
+            const feedback = apply ? '✓ Применить' : '✕ Отклонить';
+            console.log(`Manager selection: ${key} = ${feedback}`);
         }
 
         function toggleAdded(key, idx, skip) {
@@ -660,11 +706,20 @@
             }
             
             const card = document.getElementById(`added-${idx}`);
+            if (!card) {
+                console.error('Card not found:', `added-${idx}`);
+                return;
+            }
+            
             const addBtn = card.querySelector('.btn-apply');
             const skipBtn = card.querySelector('.btn-skip');
             
             addBtn.classList.toggle('active', !skip);
             skipBtn.classList.toggle('active', skip);
+            
+            // Update card visual state
+            card.classList.remove('selected-apply', 'selected-skip');
+            card.classList.add(skip ? 'selected-skip' : 'selected-apply');
         }
 
         function toggleDeleted(key, idx, restore) {
@@ -677,11 +732,20 @@
             }
             
             const card = document.getElementById(`deleted-${idx}`);
+            if (!card) {
+                console.error('Card not found:', `deleted-${idx}`);
+                return;
+            }
+            
             const deleteBtn = card.querySelector('.btn-reject');
             const restoreBtn = card.querySelector('.btn-apply');
             
             deleteBtn.classList.toggle('active', !restore);
             restoreBtn.classList.toggle('active', restore);
+            
+            // Update card visual state
+            card.classList.remove('selected-apply', 'selected-reject');
+            card.classList.add(restore ? 'selected-apply' : 'selected-reject');
         }
 
         function toggleModified(key, idx, revert) {
@@ -694,11 +758,20 @@
             }
             
             const card = document.getElementById(`modified-${idx}`);
+            if (!card) {
+                console.error('Card not found:', `modified-${idx}`);
+                return;
+            }
+            
             const acceptBtn = card.querySelector('.btn-apply');
             const revertBtn = card.querySelector('.btn-skip');
             
             acceptBtn.classList.toggle('active', !revert);
             revertBtn.classList.toggle('active', revert);
+            
+            // Update card visual state
+            card.classList.remove('selected-apply', 'selected-skip');
+            card.classList.add(revert ? 'selected-skip' : 'selected-apply');
         }
 
         async function applyChanges() {
