@@ -51,6 +51,20 @@ def parse_manager_comment(comment: str) -> dict:
         result["value"] = float(fixed_match.group(1).replace(',', '.'))
         return result
     
+    # Pattern: "7000 руб в ЗП" or "7000 в зп" or "7000руб зп" - number before ZP keywords
+    zp_match = re.search(r'(\d+(?:[.,]\d+)?)\s*(?:руб(?:\.)?|₽)?\s*(?:в\s+)?(?:зп|з/п|зарплат)', comment_lower)
+    if zp_match:
+        result["type"] = "fixed"
+        result["value"] = float(zp_match.group(1).replace(',', '.'))
+        return result
+    
+    # Pattern: "в ЗП 7000" or "зп 7000" - ZP keywords before number
+    zp_match2 = re.search(r'(?:в\s+)?(?:зп|з/п|зарплат)\s*[:\-]?\s*(\d+(?:[.,]\d+)?)', comment_lower)
+    if zp_match2:
+        result["type"] = "fixed"
+        result["value"] = float(zp_match2.group(1).replace(',', '.'))
+        return result
+    
     # Pattern: just a number like "7000" or "3500"
     just_number = re.match(r'^(\d+(?:[.,]\d+)?)\s*(?:руб|₽)?\.?$', comment.strip())
     if just_number:
