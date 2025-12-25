@@ -400,7 +400,8 @@
                         fuel_payment: 'Бензин', 
                         transport: 'Транспортные', 
                         total: 'Итого',
-                        DELETED: 'Удалено'
+                        DELETED: 'Удалено',
+                        ADDED: 'Добавлено'
                     };
                     const statusLabels = {
                         'DRAFT': 'Черновик',
@@ -428,7 +429,8 @@
                     };
                     
                     const isDeleted = edit.field_name === 'DELETED';
-                    const icon = isDeleted ? '🗑️' : '✏️';
+                    const isAdded = edit.field_name === 'ADDED';
+                    const icon = isDeleted ? '🗑️' : (isAdded ? '➕' : '✏️');
                     const status = edit.period_status || 'DRAFT';
                     const bgColor = statusBgColors[status] || '#f8f9fa';
                     const statusColor = statusColors[status] || '#6c757d';
@@ -437,6 +439,8 @@
                     let changeText = '';
                     if (isDeleted) {
                         changeText = `<span style="color: #dc3545; font-weight: 500">Строка удалена (было: ${Math.round(edit.old_value || 0).toLocaleString('ru-RU')} ₽)</span>`;
+                    } else if (isAdded) {
+                        changeText = `<span style="color: #198754; font-weight: 500">Строка добавлена: ${Math.round(edit.new_value || 0).toLocaleString('ru-RU')} ₽</span>`;
                     } else {
                         changeText = `${escapeHtml(fieldLabels[edit.field_name] || edit.field_name)}: <span style="text-decoration: line-through; color: #999">${Math.round(edit.old_value || 0).toLocaleString('ru-RU')}</span> → <span style="font-weight: 500; color: #198754">${Math.round(edit.new_value || 0).toLocaleString('ru-RU')} ₽</span>`;
                     }

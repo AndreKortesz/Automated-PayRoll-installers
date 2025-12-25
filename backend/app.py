@@ -1385,6 +1385,36 @@ async def apply_review_changes(request: Request):
                 client_orders_count=totals["client_count"]
             )
         
+        # Save Yandex fuel deductions as manual edits (for history tracking)
+        yandex_fuel = config.get("yandex_fuel", {})
+        if yandex_fuel:
+            for worker, deduction in yandex_fuel.items():
+                if deduction and deduction > 0:
+                    # Get period name for the order_code field
+                    period_name = session.get("period", "")
+                    # Determine month from period (e.g., "01-15.12.25" -> "Декабрь")
+                    month_names = {
+                        "01": "Январь", "02": "Февраль", "03": "Март", "04": "Апрель",
+                        "05": "Май", "06": "Июнь", "07": "Июль", "08": "Август",
+                        "09": "Сентябрь", "10": "Октябрь", "11": "Ноябрь", "12": "Декабрь"
+                    }
+                    month_num = period_name.split(".")[-2] if "." in period_name else ""
+                    month_name = month_names.get(month_num, "")
+                    
+                    await save_manual_edit(
+                        upload_id=upload_id,
+                        order_id=None,
+                        calculation_id=None,
+                        order_code=f"Вычет Яндекс заправки ({month_name})",
+                        worker=worker,
+                        address="",
+                        field_name="Итого",
+                        old_value=deduction,
+                        new_value=-deduction,
+                        period_status="DRAFT"
+                    )
+                    print(f"⛽ Saved Yandex fuel deduction for {worker}: -{deduction}₽")
+        
         # Compare with previous upload and save changes
         prev_upload_id = await get_previous_upload(period_id, upload_id)
         if prev_upload_id:
@@ -1540,6 +1570,36 @@ async def process_first_upload(request: Request):
                 company_orders_count=totals["company_count"],
                 client_orders_count=totals["client_count"]
             )
+        
+        # Save Yandex fuel deductions as manual edits (for history tracking)
+        yandex_fuel = full_config.get("yandex_fuel", {})
+        if yandex_fuel:
+            for worker, deduction in yandex_fuel.items():
+                if deduction and deduction > 0:
+                    # Get period name for the order_code field
+                    period_name = session.get("period", "")
+                    # Determine month from period (e.g., "01-15.12.25" -> "Декабрь")
+                    month_names = {
+                        "01": "Январь", "02": "Февраль", "03": "Март", "04": "Апрель",
+                        "05": "Май", "06": "Июнь", "07": "Июль", "08": "Август",
+                        "09": "Сентябрь", "10": "Октябрь", "11": "Ноябрь", "12": "Декабрь"
+                    }
+                    month_num = period_name.split(".")[-2] if "." in period_name else ""
+                    month_name = month_names.get(month_num, "")
+                    
+                    await save_manual_edit(
+                        upload_id=upload_id,
+                        order_id=None,
+                        calculation_id=None,
+                        order_code=f"Вычет Яндекс заправки ({month_name})",
+                        worker=worker,
+                        address="",
+                        field_name="Итого",
+                        old_value=deduction,
+                        new_value=-deduction,
+                        period_status="DRAFT"
+                    )
+                    print(f"⛽ Saved Yandex fuel deduction for {worker}: -{deduction}₽")
         
         # Cleanup session
         del session_data[session_id]
@@ -3046,6 +3106,34 @@ async def add_order_row(upload_id: int, worker: str, request: Request):
         
         print(f"➕ Added new row for {worker_decoded}: order_code={order_code}, total={total}")
         print(f"   Recalculated: company={company_amount}, client={client_amount}, total={total_amount}")
+        
+        # Save to manual_edits for history tracking
+        from database import save_manual_edit, uploads, periods
+        
+        # Get period status
+        upload_query = uploads.select().where(uploads.c.id == upload_id)
+        upload_row = await database.fetch_one(upload_query)
+        period_status = "DRAFT"
+        if upload_row:
+            period_query = periods.select().where(periods.c.id == upload_row["period_id"])
+            period_row = await database.fetch_one(period_query)
+            if period_row:
+                period_status = period_row["status"] if period_row["status"] else "DRAFT"
+        
+        # Save as "ADDED" manual edit
+        await save_manual_edit(
+            upload_id=upload_id,
+            order_id=order_id,
+            calculation_id=calc_id,
+            order_code=order_code or address or "Ручная запись",
+            worker=base_worker,
+            address=address,
+            field_name="ADDED",
+            old_value=0,
+            new_value=total,
+            period_status=period_status
+        )
+        print(f"📝 Saved manual edit for new row: {order_code or address}")
         
         # Return the new order data
         return JSONResponse({
