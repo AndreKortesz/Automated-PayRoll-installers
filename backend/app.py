@@ -454,7 +454,7 @@ async def upload_files(
         
         # Parse Yandex Fuel file if provided (required for second half periods)
         yandex_fuel_data = {}
-        from services.yandex_fuel_parser import parse_yandex_fuel_file, is_second_half_period
+        from services.yandex_fuel_parser import parse_yandex_fuel_file, is_second_half_period, validate_yandex_fuel_period
         
         is_second_half = is_second_half_period(period)
         
@@ -462,6 +462,14 @@ async def upload_files(
             content_yandex = await file_yandex_fuel.read()
             if content_yandex:
                 if is_second_half:
+                    # Validate that Yandex file period matches upload period
+                    is_valid, error_msg = validate_yandex_fuel_period(content_yandex, period)
+                    if not is_valid:
+                        return JSONResponse(
+                            {"success": False, "detail": f"❌ Несоответствие периодов: {error_msg}"},
+                            status_code=400
+                        )
+                    
                     yandex_fuel_data = parse_yandex_fuel_file(content_yandex, name_map)
                     print(f"⛽ Яндекс Заправки загружены: {len(yandex_fuel_data)} монтажников")
                 else:

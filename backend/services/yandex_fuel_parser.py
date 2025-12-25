@@ -154,3 +154,101 @@ def is_second_half_period(period: str) -> bool:
         pass
     
     return False
+
+
+def extract_month_from_yandex_file(file_content: bytes) -> Optional[tuple]:
+    """
+    Extract month and year from Yandex Fuel report.
+    
+    Looks for "Период" row with format like "01.11.2025 - 30.11.2025"
+    
+    Returns: (month, year) tuple like (11, 2025) or None if not found
+    """
+    try:
+        import re
+        file_io = BytesIO(file_content)
+        df = pd.read_excel(file_io, header=None, nrows=10)
+        
+        for i, row in df.iterrows():
+            row_str = ' '.join(str(v) for v in row.values if pd.notna(v))
+            
+            # Look for "Период" row
+            if 'период' in row_str.lower():
+                # Extract date pattern like "01.11.2025" or "30.11.2025"
+                date_match = re.search(r'\d{2}\.(\d{2})\.(\d{4})', row_str)
+                if date_match:
+                    month = int(date_match.group(1))
+                    year = int(date_match.group(2))
+                    print(f"⛽ Яндекс Заправки: обнаружен период {month:02d}.{year}")
+                    return (month, year)
+        
+        print("⚠️ Yandex Fuel: Could not find period in file")
+        return None
+        
+    except Exception as e:
+        print(f"❌ Error extracting month from Yandex Fuel file: {e}")
+        return None
+
+
+def extract_month_from_period(period: str) -> Optional[tuple]:
+    """
+    Extract month and year from period string.
+    
+    Period format examples:
+    - "16-31.12.25" -> (12, 2025)
+    - "01-15.11.25" -> (11, 2025)
+    
+    Returns: (month, year) tuple or None if not found
+    """
+    if not period:
+        return None
+    
+    try:
+        import re
+        # Extract month and year from period like "16-31.12.25"
+        match = re.search(r'\.(\d{2})\.(\d{2})$', period)
+        if match:
+            month = int(match.group(1))
+            year_short = int(match.group(2))
+            year = 2000 + year_short  # Convert 25 -> 2025
+            return (month, year)
+    except Exception as e:
+        print(f"Error extracting month from period: {e}")
+    
+    return None
+
+
+def validate_yandex_fuel_period(file_content: bytes, period: str) -> tuple:
+    """
+    Validate that Yandex Fuel file matches the upload period.
+    
+    Returns: (is_valid, message)
+    - (True, None) if valid
+    - (False, error_message) if mismatch
+    """
+    file_period = extract_month_from_yandex_file(file_content)
+    upload_period = extract_month_from_period(period)
+    
+    if not file_period:
+        return (True, None)  # Can't validate, allow upload
+    
+    if not upload_period:
+        return (True, None)  # Can't validate, allow upload
+    
+    file_month, file_year = file_period
+    upload_month, upload_year = upload_period
+    
+    if file_month != upload_month or file_year != upload_year:
+        month_names = {
+            1: "Январь", 2: "Февраль", 3: "Март", 4: "Апрель",
+            5: "Май", 6: "Июнь", 7: "Июль", 8: "Август",
+            9: "Сентябрь", 10: "Октябрь", 11: "Ноябрь", 12: "Декабрь"
+        }
+        file_month_name = month_names.get(file_month, str(file_month))
+        upload_month_name = month_names.get(upload_month, str(upload_month))
+        
+        error_msg = f"Файл Яндекс заправок за {file_month_name} {file_year}, а период загрузки — {upload_month_name} {upload_year}"
+        print(f"⚠️ {error_msg}")
+        return (False, error_msg)
+    
+    return (True, None)
