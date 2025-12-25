@@ -2557,6 +2557,70 @@ async def comparison_page(request: Request):
     return templates.TemplateResponse("comparison.html", {"request": request})
 
 
+@app.post("/api/order/{order_id}/calculation")
+async def create_or_update_order_calculation(order_id: int, request: Request):
+    """Create or update calculation for an order (used when calculation_id is missing)"""
+    try:
+        if not database:
+            raise HTTPException(status_code=500, detail="Database not connected")
+        
+        from sqlalchemy import update
+        from database import calculations, orders, save_manual_edit, uploads, periods, save_calculation
+        
+        data = await request.json()
+        fuel_payment = data.get("fuel_payment", 0)
+        transport = data.get("transport", 0)
+        total = data.get("total", 0)
+        
+        # Get order info
+        order_query = orders.select().where(orders.c.id == order_id)
+        order_row = await database.fetch_one(order_query)
+        
+        if not order_row:
+            raise HTTPException(status_code=404, detail="Order not found")
+        
+        upload_id = order_row["upload_id"]
+        worker = order_row["worker"]
+        
+        # Check if calculation exists
+        calc_query = calculations.select().where(calculations.c.order_id == order_id)
+        calc_row = await database.fetch_one(calc_query)
+        
+        if calc_row:
+            # Update existing calculation
+            calc_id = calc_row["id"]
+            update_values = {
+                "fuel_payment": float(fuel_payment),
+                "transport": float(transport),
+                "total": float(total)
+            }
+            query = update(calculations).where(calculations.c.id == calc_id).values(**update_values)
+            await database.execute(query)
+            print(f"✅ Updated calculation for order {order_id}: {update_values}")
+        else:
+            # Create new calculation
+            calc_data = {
+                "worker": worker,
+                "fuel_payment": float(fuel_payment),
+                "transport": float(transport),
+                "total": float(total)
+            }
+            calc_id = await save_calculation(upload_id, order_id, calc_data)
+            print(f"✅ Created calculation {calc_id} for order {order_id}")
+        
+        return JSONResponse({
+            "success": True,
+            "calculation_id": calc_id
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/calculation/{calc_id}/update")
 async def update_calculation(calc_id: int, request: Request):
     """Update calculation values (fuel, transport, total)"""

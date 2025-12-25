@@ -828,8 +828,13 @@
 
         function editCell(idx, field, calcId) {
             const order = ordersData[idx];
+            const orderId = order.id;
+            
+            // Use order_id as fallback key if calcId is missing
+            const storageKey = (calcId && calcId !== 'undefined') ? calcId : `order_${orderId}`;
+            
             const calc = order.calculation || {};
-            const currentVal = pendingChanges[calcId]?.[field] ?? calc[field] ?? 0;
+            const currentVal = pendingChanges[storageKey]?.[field] ?? calc[field] ?? order[field] ?? 0;
 
             const cellId = field === 'fuel_payment' ? `cell-fuel-${idx}` : 
                            field === 'transport' ? `cell-transport-${idx}` : `cell-total-${idx}`;
@@ -851,16 +856,21 @@
         function saveCell(idx, field, calcId, input) {
             const newVal = parseFloat(input.value) || 0;
             const order = ordersData[idx];
+            const orderId = order.id;
+            
+            // Use order_id as fallback key if calcId is missing
+            const storageKey = (calcId && calcId !== 'undefined') ? calcId : `order_${orderId}`;
+            
             const calc = order.calculation || {};
-            const originalVal = calc[field] ?? 0;
+            const originalVal = calc[field] ?? order[field] ?? 0;
 
             if (newVal !== originalVal) {
-                if (!pendingChanges[calcId]) pendingChanges[calcId] = {};
-                pendingChanges[calcId][field] = newVal;
+                if (!pendingChanges[storageKey]) pendingChanges[storageKey] = {};
+                pendingChanges[storageKey][field] = newVal;
             } else {
-                if (pendingChanges[calcId]) {
-                    delete pendingChanges[calcId][field];
-                    if (Object.keys(pendingChanges[calcId]).length === 0) delete pendingChanges[calcId];
+                if (pendingChanges[storageKey]) {
+                    delete pendingChanges[storageKey][field];
+                    if (Object.keys(pendingChanges[storageKey]).length === 0) delete pendingChanges[storageKey];
                 }
             }
 
@@ -965,12 +975,26 @@
             try {
                 const promises = [];
 
-                for (const [calcId, changes] of Object.entries(pendingChanges)) {
-                    promises.push(Security.fetch(`/api/calculation/${calcId}/update`, {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify(changes)
-                    }));
+                for (const [key, changes] of Object.entries(pendingChanges)) {
+                    // Check if this is an order-based key (order_123) or calc-based key (123)
+                    if (key.startsWith('order_')) {
+                        // Use order endpoint for missing calculation_id
+                        const orderId = key.replace('order_', '');
+                        promises.push(Security.fetch(`/api/order/${orderId}/calculation`, {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify(changes)
+                        }));
+                    } else if (key && key !== 'undefined' && key !== 'null') {
+                        // Use calculation endpoint
+                        promises.push(Security.fetch(`/api/calculation/${key}/update`, {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify(changes)
+                        }));
+                    } else {
+                        console.error('Invalid key, skipping:', key, changes);
+                    }
                 }
 
                 for (const [orderId, changes] of Object.entries(pendingOrderChanges)) {
