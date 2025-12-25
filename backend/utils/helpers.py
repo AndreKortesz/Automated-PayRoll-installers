@@ -100,7 +100,7 @@ def parse_percent(value) -> float:
 
 
 def extract_address_from_order(order_text: str) -> str:
-    """Extract address from order text"""
+    """Extract address from order text, handling multiline addresses"""
     if not order_text or pd.isna(order_text):
         return ""
     
@@ -112,61 +112,75 @@ def extract_address_from_order(order_text: str) -> str:
         if pattern in text:
             return ""
     
+    # Manager comment patterns - these are NOT addresses
+    manager_patterns = [
+        r'^оплата монтажник',
+        r'^зарплата\s+\d',
+        r'^оплатить\s+\d',
+    ]
+    
+    # Comment patterns (second line) - these are NOT part of address, skip them
+    comment_patterns = [
+        r'^помощник',
+        r'^физ\s*лицо',
+        r'^\(гараж\)',
+        r'^\(этаж',
+        r'^В монтажный',
+        r'^стяжк',
+    ]
+    
+    def is_manager_comment(line):
+        return any(re.match(p, line.strip(), re.IGNORECASE) for p in manager_patterns)
+    
+    def is_comment_line(line):
+        return any(re.match(p, line.strip(), re.IGNORECASE) for p in comment_patterns)
+    
+    def process_address_lines(lines):
+        """Process lines after datetime, return clean address with all parts"""
+        if not lines:
+            return ""
+        
+        result_parts = []
+        for i, line in enumerate(lines):
+            line = line.strip()
+            if not line:
+                continue
+            
+            # Skip manager comments (like "Оплата монтажнику 40%")
+            if is_manager_comment(line):
+                continue
+            
+            # For subsequent lines, skip if it's a technical comment
+            if i > 0 and is_comment_line(line):
+                continue
+                
+            result_parts.append(line)
+        
+        # Join all address parts with comma
+        addr = ', '.join(result_parts) if result_parts else ""
+        addr = clean_address_for_geocoding(addr)
+        return addr.strip()
+    
     # Pattern 1: Full datetime format "27.10.2025 0:00:00, address"
     match = re.search(r'\d{2}\.\d{2}\.\d{4}\s+\d{1,2}:\d{2}:\d{2},\s*(.+)', text, re.DOTALL)
     if match:
         addr_part = match.group(1).strip()
-        # Split by newline and process
         lines = addr_part.split('\n')
-        addr = lines[0].strip()
-        
-        # If first line is manager comment, try second line
-        manager_patterns = [r'^оплата монтажник', r'^зарплата\s+\d', r'^оплатить\s+\d']
-        is_manager_comment = any(re.match(p, addr, re.IGNORECASE) for p in manager_patterns)
-        
-        if is_manager_comment and len(lines) > 1:
-            addr = lines[1].strip()
-        
-        addr = re.sub(r'\\n.*', '', addr)
-        addr = re.sub(r'\|.*', '', addr)
-        addr = clean_address_for_geocoding(addr)
-        return addr.strip()
+        return process_address_lines(lines)
     
     # Pattern 2: Short time format "0:00:00, address"
     match = re.search(r'\d:\d{2}:\d{2},\s*(.+)', text, re.DOTALL)
     if match:
         addr_part = match.group(1).strip()
         lines = addr_part.split('\n')
-        addr = lines[0].strip()
-        
-        manager_patterns = [r'^оплата монтажник', r'^зарплата\s+\d', r'^оплатить\s+\d']
-        is_manager_comment = any(re.match(p, addr, re.IGNORECASE) for p in manager_patterns)
-        
-        if is_manager_comment and len(lines) > 1:
-            addr = lines[1].strip()
-            
-        addr = re.sub(r'\\n.*', '', addr)
-        addr = re.sub(r'\|.*', '', addr)
-        addr = clean_address_for_geocoding(addr)
-        return addr.strip()
+        return process_address_lines(lines)
     
     # Pattern 3: Date only format "27.10.2025, address" (no time)
     match = re.search(r'\d{2}\.\d{2}\.\d{4},\s*(.+)', text, re.DOTALL)
     if match:
         addr_part = match.group(1).strip()
         lines = addr_part.split('\n')
-        addr = lines[0].strip()
-        
-        manager_patterns = [r'^оплата монтажник', r'^зарплата\s+\d', r'^оплатить\s+\d']
-        is_manager_comment = any(re.match(p, addr, re.IGNORECASE) for p in manager_patterns)
-        
-        if is_manager_comment and len(lines) > 1:
-            addr = lines[1].strip()
-            
-        addr = re.sub(r'\\n.*', '', addr)
-        addr = re.sub(r'\|.*', '', addr)
-        addr = clean_address_for_geocoding(addr)
-        return addr.strip()
+        return process_address_lines(lines)
     
     return ""
 
