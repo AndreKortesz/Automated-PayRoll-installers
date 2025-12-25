@@ -2664,7 +2664,7 @@ async def update_calculation(calc_id: int, request: Request):
             period_query = periods.select().where(periods.c.id == upload_row["period_id"])
             period_row = await database.fetch_one(period_query)
             if period_row:
-                period_status = period_row.get("status", "DRAFT") or "DRAFT"
+                period_status = period_row["status"] if period_row["status"] else "DRAFT"
         
         update_values = {}
         edits_to_save = []
@@ -2701,7 +2701,7 @@ async def update_calculation(calc_id: int, request: Request):
         worker = calc_row["worker"]
         # For extra_rows, address is stored in order_full
         address = order_row["address"] if order_row and order_row["address"] else ""
-        if not address and order_row and order_row.get("order_full"):
+        if not address and order_row and order_row["order_full"]:
             address = order_row["order_full"][:200]  # Use order_full as address for extra rows
         
         for edit in edits_to_save:
@@ -2821,7 +2821,7 @@ async def delete_order(order_id: int, request: Request):
             period_query = periods.select().where(periods.c.id == upload_row["period_id"])
             period_row = await database.fetch_one(period_query)
             if period_row:
-                period_status = period_row.get("status", "DRAFT") or "DRAFT"
+                period_status = period_row["status"] if period_row["status"] else "DRAFT"
         
         # Get calculation info for logging
         calc_query = calculations.select().where(calculations.c.order_id == order_id)
