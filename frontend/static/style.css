@@ -833,7 +833,7 @@ body {
 .search-wrapper {
     position: relative;
     flex: 1;
-    max-width: 400px;
+    max-width: 500px;
     margin: 0 20px;
 }
 .search-input-wrapper {
@@ -876,12 +876,12 @@ body {
 .search-dropdown {
     position: absolute;
     top: calc(100% + 8px);
-    left: 0;
-    right: 0;
+    left: -100px;
+    width: 550px;
     background: var(--white);
     border-radius: 16px;
     box-shadow: 0 10px 40px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05);
-    max-height: 480px;
+    max-height: 520px;
     overflow-y: auto;
     z-index: 1000;
     display: none;
@@ -971,11 +971,11 @@ body {
     color: var(--black);
 }
 .search-result-address {
-    color: #888;
+    color: #666;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 200px;
+    max-width: 280px;
 }
 .search-result-right {
     text-align: right;

@@ -3702,6 +3702,7 @@ async def search_orders(q: str = "", limit: int = 10):
             SELECT 
                 o.id as order_id,
                 o.order_code,
+                o.order_date,
                 o.address,
                 o.worker,
                 o.revenue_services,
@@ -3761,6 +3762,7 @@ async def search_orders(q: str = "", limit: int = 10):
                 SELECT 
                     o.id as order_id,
                     o.order_code,
+                    o.order_date,
                     o.address,
                     o.worker,
                     o.revenue_services,
@@ -3803,9 +3805,13 @@ async def search_orders(q: str = "", limit: int = 10):
             r = dict(row._mapping)
             # Clean worker name (remove " (оплата клиентом)" suffix for display)
             worker_display = r["worker"].replace(" (оплата клиентом)", "") if r["worker"] else ""
+            # Format order date
+            order_date = r.get("order_date")
+            order_date_str = order_date.strftime("%d.%m.%y") if order_date else ""
             results.append({
                 "order_id": r["order_id"],
                 "order_code": r["order_code"] or "-",
+                "order_date": order_date_str,
                 "address": r["address"] or "-",
                 "worker": worker_display,
                 "revenue": r["revenue_services"] or 0,

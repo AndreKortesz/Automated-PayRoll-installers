@@ -418,6 +418,7 @@
                                     <th>Период</th>
                                     <th>Монтажник</th>
                                     <th>Заказ</th>
+                                    <th>Дата</th>
                                     <th>Адрес</th>
                                     <th class="number">Выручка</th>
                                     <th class="number">Оплата</th>
@@ -445,6 +446,7 @@
                                     ${highlightMatch(r.order_code, query)}
                                 </a>
                             </td>
+                            <td>${r.order_date || '-'}</td>
                             <td class="address-cell" title="${escapeHtml(r.address)}">${highlightMatch(r.address, query)}</td>
                             <td class="number">${formatNumber(r.revenue)}</td>
                             <td class="number">${formatNumber(r.payment)}</td>
@@ -479,8 +481,15 @@
             if (e.key === 'Enter') doSearch();
         });
 
-        // Initial search if query provided
-        if (searchInput.value.trim().length >= 2) {
+        // Initial search if query provided (with small delay to ensure DOM ready)
+        document.addEventListener('DOMContentLoaded', () => {
+            if (searchInput.value.trim().length >= 2) {
+                doSearch();
+            }
+        });
+        
+        // Also try immediately in case DOMContentLoaded already fired
+        if (document.readyState !== 'loading' && searchInput.value.trim().length >= 2) {
             doSearch();
         }
     </script>
