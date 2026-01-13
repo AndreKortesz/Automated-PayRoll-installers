@@ -3567,6 +3567,87 @@ async def list_uploads(period_id: int):
         return JSONResponse({"success": False, "error": str(e)})
 
 
+@app.delete("/api/period/{period_id}")
+async def delete_period(period_id: int, request: Request):
+    """Delete a period and all related data (admin only)"""
+    try:
+        if not database:
+            raise HTTPException(status_code=500, detail="Database not connected")
+        
+        # Check admin permission
+        user = request.session.get("user")
+        if not user or user.get("role") != "admin":
+            raise HTTPException(status_code=403, detail="Только администратор может удалять периоды")
+        
+        from sqlalchemy import delete
+        from database import periods, uploads, orders, calculations, worker_totals, manual_edits, changes, audit_log
+        
+        # Check period exists
+        period_query = periods.select().where(periods.c.id == period_id)
+        period = await database.fetch_one(period_query)
+        
+        if not period:
+            raise HTTPException(status_code=404, detail="Период не найден")
+        
+        period_name = period["name"]
+        
+        # Get all upload_ids for this period
+        uploads_query = uploads.select().where(uploads.c.period_id == period_id)
+        period_uploads = await database.fetch_all(uploads_query)
+        upload_ids = [u["id"] for u in period_uploads]
+        
+        if upload_ids:
+            # Delete in correct order (foreign key constraints)
+            # 1. manual_edits
+            await database.execute(
+                delete(manual_edits).where(manual_edits.c.upload_id.in_(upload_ids))
+            )
+            
+            # 2. changes
+            await database.execute(
+                delete(changes).where(changes.c.upload_id.in_(upload_ids))
+            )
+            
+            # 3. calculations
+            await database.execute(
+                delete(calculations).where(calculations.c.upload_id.in_(upload_ids))
+            )
+            
+            # 4. orders
+            await database.execute(
+                delete(orders).where(orders.c.upload_id.in_(upload_ids))
+            )
+            
+            # 5. worker_totals
+            await database.execute(
+                delete(worker_totals).where(worker_totals.c.upload_id.in_(upload_ids))
+            )
+            
+            # 6. uploads
+            await database.execute(
+                delete(uploads).where(uploads.c.period_id == period_id)
+            )
+        
+        # 7. period itself
+        await database.execute(
+            delete(periods).where(periods.c.id == period_id)
+        )
+        
+        print(f"🗑️ Period '{period_name}' (id={period_id}) deleted by {user.get('name', 'Unknown')}")
+        
+        return JSONResponse({
+            "success": True,
+            "message": f"Период '{period_name}' удалён"
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

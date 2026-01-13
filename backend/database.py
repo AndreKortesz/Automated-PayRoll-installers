@@ -213,8 +213,8 @@ manual_edits = Table(
     metadata,
     Column("id", Integer, primary_key=True),
     Column("upload_id", Integer, ForeignKey("uploads.id"), nullable=False),
-    Column("order_id", Integer, ForeignKey("orders.id"), nullable=False),
-    Column("calculation_id", Integer, ForeignKey("calculations.id"), nullable=False),
+    Column("order_id", Integer, ForeignKey("orders.id"), nullable=True),  # Nullable for Yandex fuel entries
+    Column("calculation_id", Integer, ForeignKey("calculations.id"), nullable=True),  # Nullable for Yandex fuel entries
     Column("order_code", String(50)),
     Column("worker", String(100)),
     Column("address", Text),
@@ -333,6 +333,9 @@ def create_tables():
                 "ALTER TABLE manual_edits ADD COLUMN IF NOT EXISTS edited_by_name VARCHAR(200)",
                 # Add period_status to manual_edits
                 "ALTER TABLE manual_edits ADD COLUMN IF NOT EXISTS period_status VARCHAR(20)",
+                # Make order_id and calculation_id nullable in manual_edits (for Yandex fuel entries)
+                "ALTER TABLE manual_edits ALTER COLUMN order_id DROP NOT NULL",
+                "ALTER TABLE manual_edits ALTER COLUMN calculation_id DROP NOT NULL",
                 # Period status columns
                 "ALTER TABLE periods ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'draft'",
                 "ALTER TABLE periods ADD COLUMN IF NOT EXISTS sent_at TIMESTAMP",
