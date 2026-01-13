@@ -1265,6 +1265,7 @@ async def apply_review_changes(request: Request):
         # Add Yandex Fuel data to config
         yandex_fuel = session.get("yandex_fuel", {})
         config["yandex_fuel"] = yandex_fuel
+        print(f"💾 /api/apply-review: yandex_fuel from session: {list(yandex_fuel.keys()) if yandex_fuel else 'EMPTY'}")
         
         name_map = session.get("name_map", {})
         
@@ -1476,6 +1477,7 @@ async def process_first_upload(request: Request):
         config = DEFAULT_CONFIG.copy()
         yandex_fuel = session.get("yandex_fuel", {})
         config["yandex_fuel"] = yandex_fuel
+        print(f"💾 /api/process-first-upload: yandex_fuel from session: {list(yandex_fuel.keys()) if yandex_fuel else 'EMPTY'}")
         
         name_map = session.get("name_map", {})
         
@@ -1891,6 +1893,10 @@ async def calculate_salaries(
         # ===== SAVE TO DATABASE =====
         try:
             if database:
+                # Debug: check yandex_fuel before saving
+                yf = full_config.get("yandex_fuel", {})
+                print(f"💾 /calculate: yandex_fuel in full_config: {list(yf.keys()) if yf else 'EMPTY'}")
+                
                 # 1. Get or create period
                 period_id = await get_or_create_period(period)
                 
