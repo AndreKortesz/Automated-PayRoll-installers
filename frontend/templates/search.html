@@ -320,6 +320,8 @@
     </main>
 
     <script>
+        console.log('[Search] ===== Script loaded at', new Date().toISOString(), '=====');
+        
         const searchInput = document.getElementById('searchInput');
         const resultsDiv = document.getElementById('results');
         const resultsInfo = document.getElementById('resultsInfo');
@@ -329,16 +331,11 @@
             return Math.round(num).toLocaleString('ru-RU');
         }
 
-        function escapeHtml(text) {
-            if (!text) return '';
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
+        // escapeHtml используется из security.js
 
         function highlightMatch(text, query) {
-            if (!text || !query) return escapeHtml(text);
-            const escaped = escapeHtml(text);
+            if (!text || !query) return Security.escapeHtml(text);
+            const escaped = Security.escapeHtml(text);
             const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
             return escaped.replace(regex, '<span class="highlight">$1</span>');
         }
@@ -386,7 +383,7 @@
                                 <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
                             </div>
                             <h3>Ошибка</h3>
-                            <p>${escapeHtml(data.error)}</p>
+                            <p>${Security.escapeHtml(data.error)}</p>
                         </div>
                     `;
                     return;
@@ -402,7 +399,7 @@
                                 <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
                             </div>
                             <h3>Ничего не найдено</h3>
-                            <p>Попробуйте изменить запрос «${escapeHtml(query)}»</p>
+                            <p>Попробуйте изменить запрос «${Security.escapeHtml(query)}»</p>
                         </div>
                     `;
                     return;
@@ -410,7 +407,7 @@
 
                 // Show results count
                 const countWord = results.length === 1 ? 'заказ' : (results.length < 5 ? 'заказа' : 'заказов');
-                resultsInfo.innerHTML = `Найдено <span class="results-count">${results.length} ${countWord}</span> по запросу «${escapeHtml(query)}»`;
+                resultsInfo.innerHTML = `Найдено <span class="results-count">${results.length} ${countWord}</span> по запросу «${Security.escapeHtml(query)}»`;
 
                 let html = `
                     <div class="results-table">
@@ -437,11 +434,11 @@
 
                 results.forEach(r => {
                     const typeClass = r.type === 'Клиент' ? 'type-client' : 'type-company';
-                    const managerIcon = r.manager_comment ? `<span class="manager-icon" title="${escapeHtml(r.manager_comment)}">💬</span>` : '';
+                    const managerIcon = r.manager_comment ? `<span class="manager-icon" title="${Security.escapeHtml(r.manager_comment)}">💬</span>` : '';
                     
                     html += `
                         <tr>
-                            <td><span class="period-badge">${escapeHtml(r.period_name)}</span></td>
+                            <td><span class="period-badge">${Security.escapeHtml(r.period_name)}</span></td>
                             <td class="worker-name">${highlightMatch(r.worker, query)}</td>
                             <td>
                                 <a href="/upload/${r.upload_id}?worker=${encodeURIComponent(r.worker)}" class="order-code-link">
@@ -449,10 +446,10 @@
                                 </a>
                             </td>
                             <td>${r.order_date || '-'}</td>
-                            <td class="address-cell" title="${escapeHtml(r.address)}">${highlightMatch(r.address, query)}</td>
+                            <td class="address-cell" title="${Security.escapeHtml(r.address)}">${highlightMatch(r.address, query)}</td>
                             <td class="number">${formatNumber(r.revenue)}</td>
                             <td class="number">${formatNumber(r.payment)}</td>
-                            <td>${escapeHtml(r.percent)}</td>
+                            <td>${Security.escapeHtml(r.percent)}</td>
                             <td class="number">${formatNumber(r.fuel)}</td>
                             <td class="number">${formatNumber(r.transport)}</td>
                             <td class="number"><strong>${formatNumber(r.total)}</strong></td>
@@ -472,7 +469,7 @@
                             <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
                         </div>
                         <h3>Ошибка</h3>
-                        <p>${escapeHtml(error.message)}</p>
+                        <p>${Security.escapeHtml(error.message)}</p>
                     </div>
                 `;
             }
@@ -484,16 +481,30 @@
         });
 
         // Run search on page load if query is present
-        (function runInitialSearch() {
+        function runInitialSearch() {
+            console.log('[Search] runInitialSearch called');
+            console.log('[Search] searchInput element:', searchInput);
+            console.log('[Search] searchInput.value raw:', searchInput.value);
+            console.log('[Search] searchInput.value JSON:', JSON.stringify(searchInput.value));
+            
             const query = searchInput.value.trim();
-            console.log('Search input value:', JSON.stringify(query), 'length:', query.length);
+            console.log('[Search] Query after trim:', JSON.stringify(query), 'length:', query.length);
+            
             if (query.length >= 2) {
-                console.log('Running initial search for:', query);
+                console.log('[Search] Running initial search for:', query);
                 doSearch();
             } else {
-                console.log('Query too short, not searching. Value was:', searchInput.value);
+                console.log('[Search] Query too short or empty, not searching');
             }
-        })();
+        }
+        
+        // Try both methods to ensure execution
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', runInitialSearch);
+        } else {
+            // DOM already loaded
+            runInitialSearch();
+        }
         
         // Also add click handler to search button
         document.querySelector('.search-btn')?.addEventListener('click', doSearch);
