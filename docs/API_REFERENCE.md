@@ -1,99 +1,98 @@
-# API Reference
+# 🔌 API Reference — Полный справочник
 
-## Оглавление
-
-1. [Аутентификация](#аутентификация)
-2. [Загрузка файлов](#загрузка-файлов)
+## Содержание
+1. [Общая информация](#общая-информация)
+2. [Аутентификация](#аутентификация)
 3. [Периоды](#периоды)
-4. [Расчёты](#расчёты)
-5. [Отчёты](#отчёты)
-6. [Статусы](#статусы)
+4. [Загрузки](#загрузки)
+5. [Заказы и расчёты](#заказы-и-расчёты)
+6. [Поиск](#поиск)
+7. [Отчёты](#отчёты)
+8. [Статусы](#статусы)
+9. [Коды ошибок](#коды-ошибок)
+
+---
+
+## Общая информация
+
+### Base URL
+```
+Production: https://salary.mos-gsm.ru
+Local:      http://localhost:8000
+```
+
+### Формат ответов
+Все API endpoints возвращают JSON:
+
+```json
+// Успешный ответ
+{
+    "success": true,
+    "data": { ... }
+}
+
+// Ошибка
+{
+    "success": false,
+    "error": "Описание ошибки"
+}
+```
+
+### Заголовки
+```http
+Content-Type: application/json
+X-CSRF-Token: <csrf_token>   # Для POST/PUT/DELETE
+Cookie: salary_session=<session_id>
+```
 
 ---
 
 ## Аутентификация
 
-### OAuth2 через Bitrix24
-
-#### Начало авторизации
-
+### Начать OAuth авторизацию
 ```http
 GET /auth/login
 ```
 
-Перенаправляет на страницу авторизации Bitrix24.
-
-#### Callback
-
-```http
-GET /auth/callback?code={code}&domain={domain}
-```
-
-Обрабатывает ответ от Bitrix24, создаёт сессию.
-
-#### Выход
-
-```http
-GET /auth/logout
-```
-
-Завершает сессию.
+**Response:** Redirect на Bitrix24 OAuth
 
 ---
 
-## Загрузка файлов
-
-### Определение типа файла
-
+### OAuth Callback
 ```http
-POST /api/detect-file-type
-Content-Type: multipart/form-data
+GET /auth/callback?code=<authorization_code>
+```
 
-file: <Excel file>
+**Response:** Redirect на `/` с установкой cookie сессии
+
+---
+
+### Выход
+```http
+GET /auth/logout
+POST /auth/logout
+```
+
+**Response:** Redirect на `/login`
+
+---
+
+### Текущий пользователь
+```http
+GET /api/me
 ```
 
 **Response:**
 ```json
 {
     "success": true,
-    "file_type": "revenue",  // "revenue" | "diagnostic" | "yandex_fuel" | "unknown"
-    "period": "16-30.11.25",
-    "workers_count": 5
-}
-```
-
-### Загрузка файлов
-
-```http
-POST /upload
-Content-Type: multipart/form-data
-
-file_revenue: <Excel file>       // Обязательный
-file_diagnostic: <Excel file>    // Обязательный
-file_yandex_fuel: <Excel file>   // Обязательный для периодов 16-30
-```
-
-**Response (есть предыдущая версия):**
-```json
-{
-    "success": true,
-    "session_id": "20251218103627",
-    "redirect_to_review": true,
-    "has_changes": true,
-    "changes": {
-        "added": [...],
-        "deleted": [...],
-        "modified": [...]
+    "user": {
+        "id": 1,
+        "name": "Иванов Иван Иванович",
+        "email": "ivanov@company.ru",
+        "role": "admin",
+        "bitrix_id": "123"
     }
-}
-```
-
-**Response (первая загрузка):**
-```json
-{
-    "success": true,
-    "period_id": 4,
-    "upload_id": 48
 }
 ```
 
@@ -102,34 +101,45 @@ file_yandex_fuel: <Excel file>   // Обязательный для период
 ## Периоды
 
 ### Список периодов
-
 ```http
 GET /api/periods
 ```
 
+**Query параметры:**
+| Параметр | Тип | По умолчанию | Описание |
+|----------|-----|--------------|----------|
+| `status` | string | - | Фильтр по статусу: DRAFT, SENT, PAID |
+| `year` | int | - | Фильтр по году |
+| `month` | int | - | Фильтр по месяцу |
+| `limit` | int | 50 | Максимум записей |
+| `offset` | int | 0 | Смещение |
+
 **Response:**
 ```json
 {
+    "success": true,
     "periods": [
         {
-            "id": 4,
-            "name": "16-30.11.25",
-            "month": 11,
+            "id": 15,
+            "name": "16-31.12.25",
+            "month": 12,
             "year": 2025,
             "status": "DRAFT",
-            "uploads_count": 3,
-            "latest_upload": {
-                "id": 48,
-                "version": 3,
-                "created_at": "2025-12-18T10:36:27"
-            }
+            "upload_id": 69,
+            "version": 3,
+            "workers_count": 12,
+            "orders_count": 156,
+            "total": 1250000,
+            "created_at": "2025-12-16T10:30:00"
         }
-    ]
+    ],
+    "total_count": 25
 }
 ```
 
-### Детали периода
+---
 
+### Детали периода
 ```http
 GET /api/period/{period_id}
 ```
@@ -137,99 +147,118 @@ GET /api/period/{period_id}
 **Response:**
 ```json
 {
-    "id": 4,
-    "name": "16-30.11.25",
-    "status": "DRAFT",
-    "uploads": [
-        {
-            "id": 48,
-            "version": 3,
-            "created_at": "2025-12-18T10:36:27",
-            "created_by": "Конторин Андрей"
+    "success": true,
+    "period": {
+        "id": 15,
+        "name": "16-31.12.25",
+        "status": "DRAFT",
+        "uploads": [
+            {
+                "id": 69,
+                "version": 3,
+                "created_at": "2025-12-20T14:00:00",
+                "created_by": "Иванов И.И."
+            },
+            {
+                "id": 65,
+                "version": 2,
+                "created_at": "2025-12-18T10:00:00",
+                "created_by": "Петров П.П."
+            }
+        ],
+        "current_upload": {
+            "id": 69,
+            "workers_count": 12,
+            "orders_count": 156,
+            "total": 1250000
         }
-    ],
-    "worker_totals": [
-        {
-            "worker": "Ветренко Дмитрий",
-            "total": 66180,
-            "fuel": 300,
-            "transport": 1000,
-            "orders_count": 15
-        }
-    ]
-}
-```
-
-### Права на период
-
-```http
-GET /api/period/{period_id}/permissions
-```
-
-**Response:**
-```json
-{
-    "can_edit": true,
-    "can_upload": true,
-    "can_change_status": true,
-    "can_delete": false,
-    "current_status": "DRAFT",
-    "available_statuses": ["SENT"]
+    }
 }
 ```
 
 ---
 
-## Расчёты
-
-### Preview расчёта
-
+### Удалить период
 ```http
-POST /preview
-Content-Type: application/x-www-form-urlencoded
+DELETE /api/period/{period_id}
+```
 
-session_id=20251218103627
-config_json={"diagnostic_percent": 50}
-days_json={}
-extra_rows_json={"Иванов Иван": [{"description": "Доплата", "amount": 5000}]}
+**Требуется:** роль `admin`
+
+**Response:**
+```json
+{
+    "success": true,
+    "message": "Период удалён"
+}
+```
+
+---
+
+## Загрузки
+
+### Загрузить файлы
+```http
+POST /upload
+Content-Type: multipart/form-data
+```
+
+**Body:**
+```
+files[]: revenue.xlsx
+files[]: diagnostic.xlsx
+files[]: yandex_fuel.xlsx (опционально)
 ```
 
 **Response:**
 ```json
 {
     "success": true,
-    "preview": [
-        {
-            "worker": "Ветренко Дмитрий",
-            "order": "КАУТ-001405, газетный переулок",
-            "revenue_total": 70742,
-            "service_payment": 21223,
-            "fuel_payment": 300,
-            "transport": 1000,
-            "total": 22523
-        }
-    ],
-    "summary": {
-        "total": 350000,
-        "workers_count": 5
-    },
-    "alarms": []
+    "redirect": "/review?session=abc123"
 }
 ```
 
-### Применение изменений из Review
+---
 
+### Данные для review
+```http
+GET /api/review/{session_id}
+```
+
+**Response:**
+```json
+{
+    "success": true,
+    "period": "16-31.12.25",
+    "changes": {
+        "new": [
+            {
+                "worker": "Иванов Иван",
+                "order_code": "КАУТ-001500",
+                "revenue_services": 50000
+            }
+        ],
+        "deleted": [...],
+        "modified": [...],
+        "manual_edits": [...]
+    },
+    "has_previous": true
+}
+```
+
+---
+
+### Применить изменения
 ```http
 POST /api/apply-review
 Content-Type: application/json
+```
 
+**Body:**
+```json
 {
-    "session_id": "20251218103627",
-    "selections": {
-        "added": ["ИБУТ-000392_Ветренко Дмитрий"],
-        "deleted": ["КАУТ-001405_Фадин Сергей"],
-        "modified": []
-    }
+    "session_id": "abc123",
+    "restore_manual_edits": [1, 2, 5]
 }
 ```
 
@@ -237,62 +266,15 @@ Content-Type: application/json
 ```json
 {
     "success": true,
-    "period_id": 4,
-    "upload_id": 49
-}
-```
-
-### Финальный расчёт
-
-```http
-POST /calculate
-Content-Type: application/x-www-form-urlencoded
-
-session_id=20251218103627
-config_json={"diagnostic_percent": 50}
-days_json={}
-extra_rows_json={}
-deleted_rows=[]
-```
-
-**Response:**
-```json
-{
-    "success": true,
-    "period_id": 4,
-    "upload_id": 49,
-    "archives": {
-        "full": "base64...",
-        "workers": "base64..."
-    }
+    "period_id": 15,
+    "upload_id": 69,
+    "redirect": "/upload/69"
 }
 ```
 
 ---
 
-## Отчёты
-
-### Скачать архив
-
-```http
-GET /api/period/{period_id}/download/{archive_type}
-```
-
-**Параметры:**
-- `archive_type`: `full` | `workers`
-
-**Response:** ZIP-архив с Excel-файлами
-
-**Содержимое архива (full):**
-- `Общий_отчет_16-30_11_25.xlsx` — сводный отчёт
-- `Ветренко_16-30_11_25.xlsx` — отчёт монтажника
-- ... (файл для каждого монтажника)
-
-**Содержимое архива (workers):**
-Те же файлы, но с скрытыми колонками (для выдачи монтажникам).
-
 ### Детали загрузки
-
 ```http
 GET /api/upload/{upload_id}
 ```
@@ -300,49 +282,131 @@ GET /api/upload/{upload_id}
 **Response:**
 ```json
 {
-    "id": 48,
-    "version": 3,
-    "period_id": 4,
-    "created_at": "2025-12-18T10:36:27",
-    "orders": [...],
-    "worker_totals": [...],
-    "config": {
-        "diagnostic_percent": 50,
-        "yandex_fuel": {
-            "Ветренко Дмитрий": 4898.52
+    "success": true,
+    "upload": {
+        "id": 69,
+        "period_id": 15,
+        "period_name": "16-31.12.25",
+        "version": 3,
+        "status": "DRAFT",
+        "created_at": "2025-12-20T14:00:00",
+        "workers": [
+            {
+                "name": "Иванов Иван Иванович",
+                "orders_count": 15,
+                "company_total": 45000,
+                "client_total": 5000,
+                "fuel": 3200,
+                "transport": 2000,
+                "yandex_fuel": 9000,
+                "grand_total": 46200
+            }
+        ],
+        "totals": {
+            "orders_count": 156,
+            "grand_total": 1250000
         }
     }
 }
 ```
 
-### Отчёт по монтажнику
+---
 
+## Заказы и расчёты
+
+### Заказы монтажника
 ```http
-GET /upload/{upload_id}?worker={worker_name}
+GET /api/upload/{upload_id}/worker/{worker_name}
 ```
 
-Страница с детальным отчётом по монтажнику.
-
-### Скачать отчёт монтажника
-
-```http
-GET /api/upload/{upload_id}/worker/{worker_name}/download
+**Response:**
+```json
+{
+    "success": true,
+    "worker": "Иванов Иван Иванович",
+    "orders": [
+        {
+            "id": 1234,
+            "order_code": "КАУТ-001405",
+            "order_date": "2025-12-20",
+            "address": "г. Москва, ул. Ленина, 1",
+            "revenue_total": 50000,
+            "revenue_services": 40000,
+            "service_payment": 12000,
+            "percent": "30%",
+            "is_client_payment": false,
+            "calculation": {
+                "id": 5678,
+                "fuel_payment": 300,
+                "transport": 1000,
+                "diagnostic_50": 0,
+                "total": 13300
+            }
+        }
+    ],
+    "totals": {
+        "company_orders_count": 12,
+        "client_orders_count": 3,
+        "company_total": 45000,
+        "client_total": 5000,
+        "fuel": 3200,
+        "transport": 2000,
+        "yandex_fuel": 9000,
+        "grand_total": 46200
+    }
+}
 ```
-
-**Response:** Excel-файл
 
 ---
 
-## Статусы
-
-### Изменить статус периода
-
+### Обновить расчёт
 ```http
-POST /api/period/{period_id}/status
+POST /api/calculation/{calc_id}/update
 Content-Type: application/json
+```
 
+**Body:**
+```json
 {
-    "status": "SENT"
+    "field": "fuel_payment",
+    "value": 500
+}
+```
+
+**Поля:**
+- `fuel_payment` — Бензин
+- `transport` — Транспортные
+- `total` — Итого
+
+**Response:**
+```json
+{
+    "success": true,
+    "calculation": {
+        "id": 5678,
+        "fuel_payment": 500,
+        "transport": 1000,
+        "total": 13500
+    },
+    "worker_totals": {
+        "grand_total": 46400
+    }
+}
+```
+
+---
+
+### Добавить строку
+```http
+POST /api/upload/{upload_id}/worker/{worker_name}/add-row
+Content-Type: application/json
+```
+
+**Body:**
+```json
+{
+    "description": "Доплата за Кардан",
+    "amount": 5000
 }
 ```
 
@@ -350,40 +414,186 @@ Content-Type: application/json
 ```json
 {
     "success": true,
-    "period_id": 4,
-    "old_status": "DRAFT",
-    "new_status": "SENT",
-    "sent_at": "2025-12-18T10:45:00"
+    "order": {
+        "id": 1500,
+        "order_code": "-",
+        "address": "Доплата за Кардан",
+        "is_extra_row": true
+    },
+    "calculation": {
+        "id": 6000,
+        "total": 5000
+    }
 }
 ```
 
-### Возможные статусы
+---
 
-| Статус | Описание |
-|--------|----------|
-| DRAFT | Черновик, можно редактировать |
-| SENT | Отправлено, только просмотр |
-| PAID | Оплачено, архив |
+### Удалить заказ
+```http
+DELETE /api/order/{order_id}
+```
+
+**Требуется:** роль `admin` или `manager`, статус `DRAFT`
+
+**Response:**
+```json
+{
+    "success": true,
+    "message": "Заказ удалён",
+    "worker_totals": {
+        "grand_total": 41200
+    }
+}
+```
+
+---
+
+## Поиск
+
+### Глобальный поиск
+```http
+GET /api/search?q={query}&limit={limit}
+```
+
+**Query параметры:**
+| Параметр | Тип | По умолчанию | Описание |
+|----------|-----|--------------|----------|
+| `q` | string | - | Поисковый запрос (мин. 2 символа) |
+| `limit` | int | 10 | Максимум результатов (1-100) |
+
+**Поиск по:**
+- Номер заказа (КАУТ-001234)
+- Адрес (частичное совпадение, fuzzy)
+- ФИО монтажника
+
+**Особенности:**
+- Fuzzy search через PostgreSQL `pg_trgm`
+- Автозамена ё↔е
+- Только последние версии периодов
+
+**Response:**
+```json
+{
+    "success": true,
+    "query": "озерная",
+    "results": [
+        {
+            "order_id": 1234,
+            "order_code": "КАУТ-001854",
+            "order_date": "25.12.25",
+            "worker": "Романюк Алексей",
+            "address": "КП Агаларов, ул. Озерная, 14",
+            "total": 24220,
+            "upload_id": 69,
+            "period_name": "16-31.12.25",
+            "type": "Компания"
+        }
+    ],
+    "count": 4
+}
+```
+
+---
+
+## Отчёты
+
+### Скачать архив отчётов
+```http
+GET /api/period/{period_id}/download/{archive_type}
+```
+
+**archive_type:**
+| Значение | Описание |
+|----------|----------|
+| `all` | Все отчёты в ZIP |
+| `accounting` | Только бухгалтерский отчёт |
+| `individual` | Только индивидуальные отчёты |
+
+**Response:** Файл Excel или ZIP
+
+---
+
+### Отчёт по монтажнику
+```http
+GET /api/upload/{upload_id}/worker/{worker_name}/report
+```
+
+**Response:** Excel файл
+
+---
+
+## Статусы
+
+### Изменить статус периода
+```http
+POST /api/period/{period_id}/status
+Content-Type: application/json
+```
+
+**Body:**
+```json
+{
+    "status": "SENT"
+}
+```
+
+**Разрешённые переходы:**
+| Из | В | Роли |
+|----|---|------|
+| DRAFT | SENT | admin, manager |
+| SENT | PAID | admin |
+| PAID | SENT | admin |
+| SENT | DRAFT | admin |
+
+**Response:**
+```json
+{
+    "success": true,
+    "period": {
+        "id": 15,
+        "status": "SENT",
+        "sent_at": "2025-12-25T10:00:00"
+    }
+}
+```
 
 ---
 
 ## Коды ошибок
 
-| Код | Описание |
-|-----|----------|
-| 400 | Неверный запрос (отсутствуют обязательные поля) |
-| 401 | Не авторизован |
-| 403 | Нет прав доступа |
-| 404 | Ресурс не найден |
-| 409 | Конфликт (например, статус не позволяет действие) |
-| 500 | Внутренняя ошибка сервера |
+| Код | HTTP | Описание |
+|-----|------|----------|
+| `UNAUTHORIZED` | 401 | Требуется авторизация |
+| `FORBIDDEN` | 403 | Недостаточно прав |
+| `NOT_FOUND` | 404 | Ресурс не найден |
+| `VALIDATION_ERROR` | 400 | Ошибка валидации |
+| `PERIOD_LOCKED` | 403 | Период заблокирован (не DRAFT) |
+| `FILE_PARSE_ERROR` | 400 | Ошибка парсинга файла |
+| `GEOCODING_ERROR` | 500 | Ошибка геокодирования |
 
-### Формат ошибки
+---
 
-```json
-{
-    "success": false,
-    "error": "Описание ошибки",
-    "detail": "Подробности (опционально)"
-}
+## Примеры
+
+### cURL
+```bash
+# Поиск
+curl "https://salary.mos-gsm.ru/api/search?q=озерная&limit=10" \
+  -H "Cookie: salary_session=xxx"
+
+# Обновить расчёт  
+curl -X POST "https://salary.mos-gsm.ru/api/calculation/123/update" \
+  -H "Cookie: salary_session=xxx" \
+  -H "X-CSRF-Token: xxx" \
+  -H "Content-Type: application/json" \
+  -d '{"field": "fuel_payment", "value": 500}'
+```
+
+### JavaScript
+```javascript
+const result = await Security.fetch('/api/calculation/123/update', {
+    method: 'POST',
+    body: JSON.stringify({ field: 'fuel_payment', value: 500 })
+});
 ```
