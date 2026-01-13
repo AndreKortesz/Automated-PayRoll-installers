@@ -3664,6 +3664,111 @@ async def delete_period(period_id: int, request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ============== SEARCH ==============
+
+@app.get("/api/search")
+async def search_orders(q: str = "", limit: int = 10):
+    """Search orders by order_code, address, worker, or amount"""
+    try:
+        if not database or not database.is_connected:
+            return JSONResponse({"success": False, "error": "Database not connected"})
+        
+        if not q or len(q) < 2:
+            return JSONResponse({"success": True, "results": []})
+        
+        # Search query - search in order_code, address, worker
+        # Also try to parse as number for amount search
+        search_term = f"%{q}%"
+        
+        # Try to parse as number
+        try:
+            amount_search = float(q.replace(" ", "").replace(",", "."))
+        except:
+            amount_search = None
+        
+        # Build query with JOINs to get all needed data
+        query = """
+            SELECT 
+                o.id as order_id,
+                o.order_code,
+                o.address,
+                o.worker,
+                o.revenue_services,
+                o.service_payment,
+                o.percent,
+                o.is_client_payment,
+                o.manager_comment,
+                c.fuel_payment,
+                c.transport,
+                c.total,
+                p.id as period_id,
+                p.name as period_name,
+                u.id as upload_id
+            FROM orders o
+            LEFT JOIN calculations c ON o.id = c.order_id
+            LEFT JOIN uploads u ON o.upload_id = u.id
+            LEFT JOIN periods p ON u.period_id = p.id
+            WHERE (
+                o.order_code ILIKE :search
+                OR o.address ILIKE :search
+                OR o.worker ILIKE :search
+                OR (c.total = :amount AND :amount IS NOT NULL)
+                OR (o.service_payment = :amount AND :amount IS NOT NULL)
+                OR (o.revenue_services = :amount AND :amount IS NOT NULL)
+            )
+            ORDER BY p.created_at DESC, o.id DESC
+            LIMIT :limit
+        """
+        
+        rows = await database.fetch_all(query, {
+            "search": search_term,
+            "amount": amount_search,
+            "limit": limit
+        })
+        
+        results = []
+        for row in rows:
+            r = dict(row._mapping)
+            # Clean worker name (remove " (оплата клиентом)" suffix for display)
+            worker_display = r["worker"].replace(" (оплата клиентом)", "") if r["worker"] else ""
+            results.append({
+                "order_id": r["order_id"],
+                "order_code": r["order_code"] or "-",
+                "address": r["address"] or "-",
+                "worker": worker_display,
+                "revenue": r["revenue_services"] or 0,
+                "payment": r["service_payment"] or 0,
+                "percent": r["percent"] or "-",
+                "fuel": r["fuel_payment"] or 0,
+                "transport": r["transport"] or 0,
+                "total": r["total"] or 0,
+                "type": "Клиент" if r["is_client_payment"] else "Компания",
+                "manager_comment": r["manager_comment"],
+                "period_id": r["period_id"],
+                "period_name": r["period_name"] or "-",
+                "upload_id": r["upload_id"]
+            })
+        
+        return JSONResponse({"success": True, "results": results, "query": q})
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JSONResponse({"success": False, "error": str(e)})
+
+
+@app.get("/search")
+async def search_page(request: Request, q: str = ""):
+    """Search results page"""
+    user = get_current_user(request)
+    return templates.TemplateResponse("search.html", {
+        "request": request,
+        "user": user,
+        "query": q,
+        "csrf_token": request.state.csrf_token if hasattr(request.state, 'csrf_token') else ''
+    })
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

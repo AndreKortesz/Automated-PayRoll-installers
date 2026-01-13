@@ -101,6 +101,16 @@
             <a href="/history" class="nav-link">История</a>
             <a href="/comparison" class="nav-link">Сравнение</a>
         </nav>
+        
+        <!-- Search Component -->
+        <div class="search-wrapper">
+            <div class="search-input-wrapper">
+                <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+                <input type="text" id="globalSearch" placeholder="Поиск заказов..." autocomplete="off">
+            </div>
+            <div class="search-dropdown" id="searchDropdown"></div>
+        </div>
+        
         {% if user %}
         <div class="user-info">
             <span class="user-name">
@@ -813,6 +823,117 @@
             }
             return Math.round(value).toString();
         }
+
+        // ===== Global Search =====
+        (function() {
+            const searchInput = document.getElementById('globalSearch');
+            const searchDropdown = document.getElementById('searchDropdown');
+            if (!searchInput || !searchDropdown) return;
+
+            let searchTimeout = null;
+            let currentQuery = '';
+
+            function escapeHtml(text) {
+                if (!text) return '';
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            function highlightMatch(text, query) {
+                if (!text || !query) return escapeHtml(text);
+                const escaped = escapeHtml(text);
+                const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+                return escaped.replace(regex, '<span class="search-highlight">$1</span>');
+            }
+
+            function formatNum(num) {
+                if (!num) return '-';
+                return Math.round(num).toLocaleString('ru-RU');
+            }
+
+            async function doSearch(query) {
+                if (query.length < 2) {
+                    searchDropdown.classList.remove('active');
+                    return;
+                }
+
+                try {
+                    const response = await Security.fetch(`/api/search?q=${encodeURIComponent(query)}&limit=5`);
+                    const data = await response.json();
+
+                    if (!data.success || currentQuery !== query) return;
+
+                    const results = data.results || [];
+                    
+                    if (results.length === 0) {
+                        searchDropdown.innerHTML = '<div class="search-empty">Ничего не найдено</div>';
+                        searchDropdown.classList.add('active');
+                        return;
+                    }
+
+                    let html = '';
+                    results.forEach(r => {
+                        const typeClass = r.type === 'Клиент' ? 'client' : 'company';
+                        html += `
+                            <a href="/upload/${r.upload_id}?worker=${encodeURIComponent(r.worker)}" class="search-result-item">
+                                <div class="search-result-main">
+                                    <span class="search-result-order">${highlightMatch(r.order_code, query)}</span>
+                                    <span class="search-result-total">${formatNum(r.total)} ₽</span>
+                                </div>
+                                <div class="search-result-details">
+                                    <span class="search-result-worker">${highlightMatch(r.worker, query)}</span>
+                                    <span class="search-result-period">${escapeHtml(r.period_name)}</span>
+                                    <span class="search-result-type ${typeClass}">${r.type}</span>
+                                </div>
+                                <div class="search-result-details" style="margin-top: 4px;">
+                                    <span>${highlightMatch(r.address, query)}</span>
+                                </div>
+                            </a>
+                        `;
+                    });
+
+                    html += `<a href="/search?q=${encodeURIComponent(query)}" class="search-all-link">Все результаты →</a>`;
+                    
+                    searchDropdown.innerHTML = html;
+                    searchDropdown.classList.add('active');
+
+                } catch (error) {
+                    console.error('Search error:', error);
+                }
+            }
+
+            searchInput.addEventListener('input', (e) => {
+                currentQuery = e.target.value.trim();
+                clearTimeout(searchTimeout);
+                
+                if (currentQuery.length < 2) {
+                    searchDropdown.classList.remove('active');
+                    return;
+                }
+
+                searchTimeout = setTimeout(() => doSearch(currentQuery), 300);
+            });
+
+            searchInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter' && currentQuery.length >= 2) {
+                    window.location.href = `/search?q=${encodeURIComponent(currentQuery)}`;
+                }
+            });
+
+            searchInput.addEventListener('focus', () => {
+                if (currentQuery.length >= 2) {
+                    searchDropdown.classList.add('active');
+                }
+            });
+
+            // Close dropdown when clicking outside
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.search-wrapper')) {
+                    searchDropdown.classList.remove('active');
+                }
+            });
+        })();
     </script>
 </body>
 </html>
