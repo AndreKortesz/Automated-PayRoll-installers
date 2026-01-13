@@ -3723,7 +3723,12 @@ async def search_orders(q: str = "", limit: int = 10):
                 ) as match_score
             FROM orders o
             LEFT JOIN calculations c ON o.id = c.order_id
-            LEFT JOIN uploads u ON o.upload_id = u.id
+            INNER JOIN uploads u ON o.upload_id = u.id
+            INNER JOIN (
+                SELECT period_id, MAX(id) as latest_upload_id
+                FROM uploads
+                GROUP BY period_id
+            ) lu ON u.id = lu.latest_upload_id
             LEFT JOIN periods p ON u.period_id = p.id
             WHERE (
                 -- Exact/partial match with ё→е normalization
@@ -3778,7 +3783,12 @@ async def search_orders(q: str = "", limit: int = 10):
                     u.id as upload_id
                 FROM orders o
                 LEFT JOIN calculations c ON o.id = c.order_id
-                LEFT JOIN uploads u ON o.upload_id = u.id
+                INNER JOIN uploads u ON o.upload_id = u.id
+                INNER JOIN (
+                    SELECT period_id, MAX(id) as latest_upload_id
+                    FROM uploads
+                    GROUP BY period_id
+                ) lu ON u.id = lu.latest_upload_id
                 LEFT JOIN periods p ON u.period_id = p.id
                 WHERE (
                     REPLACE(LOWER(o.order_code), 'ё', 'е') ILIKE LOWER(:search)
