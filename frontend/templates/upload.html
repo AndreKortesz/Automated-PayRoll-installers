@@ -878,6 +878,17 @@
                 }
             }
 
+            // Auto-recalculate total when fuel_payment or transport changes
+            if (field === 'fuel_payment' || field === 'transport') {
+                const servicePayment = order.service_payment || 0;
+                const fuelVal = pendingChanges[storageKey]?.fuel_payment ?? calc.fuel_payment ?? order.fuel_payment ?? 0;
+                const transportVal = pendingChanges[storageKey]?.transport ?? calc.transport ?? order.transport ?? 0;
+                const newTotal = servicePayment + fuelVal + transportVal;
+                
+                if (!pendingChanges[storageKey]) pendingChanges[storageKey] = {};
+                pendingChanges[storageKey].total = newTotal;
+            }
+
             renderTable();
         }
 
