@@ -2580,10 +2580,14 @@ async def download_period_archive(period_id: int, archive_type: str):
         for_workers = (archive_type == "workers")
         
         # Load config from DB (includes yandex_fuel if saved)
-        saved_config = latest_upload.get("config_json", {}) or {}
+        saved_config = upload_details.get("config_json", {}) or {}
         if isinstance(saved_config, str):
             saved_config = json.loads(saved_config)
         report_config = {**DEFAULT_CONFIG, **saved_config}
+        
+        # Debug: check if yandex_fuel is in config
+        yandex_fuel = report_config.get("yandex_fuel", {})
+        print(f"📊 Download config yandex_fuel: {yandex_fuel}")
         
         # Generate FULL archive with all worker files (like step 4)
         zip_buffer = BytesIO()

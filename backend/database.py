@@ -763,6 +763,12 @@ async def create_upload(period_id: int, config: dict = None, user: dict = None) 
     if not database or not database.is_connected:
         return None
     
+    # Debug: check if yandex_fuel in config
+    if config:
+        yandex_fuel = config.get("yandex_fuel", {})
+        if yandex_fuel:
+            print(f"💾 Saving upload with yandex_fuel: {list(yandex_fuel.keys())}")
+    
     # Get next version number
     query = uploads.select().where(uploads.c.period_id == period_id).order_by(uploads.c.version.desc())
     latest = await database.fetch_one(query)
