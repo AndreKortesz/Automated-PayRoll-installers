@@ -81,7 +81,8 @@
             try {
                 const response = await Security.fetch('/api/periods');
                 const data = await response.json();
-                document.getElementById('loading').style.display = 'none';
+                const loadingEl = document.getElementById('loading');
+                if (loadingEl) loadingEl.style.display = 'none';
                 if (!data.success) throw new Error(data.error);
 
                 const months = data.months || [];
@@ -129,7 +130,15 @@
             try {
                 const response = await fetch(`/api/period/${periodId}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' } });
                 const data = await response.json();
-                if (data.success) { alert(data.message || 'Период удалён'); loadHistory(); }
+                if (data.success) { 
+                    alert(data.message || 'Период удалён'); 
+                    // Redirect to history page or reload
+                    if (window.location.pathname === '/history') {
+                        loadHistory();
+                    } else {
+                        window.location.href = '/history';
+                    }
+                }
                 else { alert('Ошибка: ' + (data.detail || data.error || 'Неизвестная ошибка')); }
             } catch (error) { alert('Ошибка: ' + error.message); }
         }
