@@ -3668,7 +3668,7 @@ async def delete_period(period_id: int, request: Request):
 
 @app.get("/api/search")
 async def search_orders(q: str = "", limit: int = 10):
-    """Search orders by order_code, address, worker, or amount"""
+    """Search orders by order_code, address, worker, or amount with fuzzy matching"""
     try:
         if not database or not database.is_connected:
             return JSONResponse({"success": False, "error": "Database not connected"})
@@ -3676,17 +3676,28 @@ async def search_orders(q: str = "", limit: int = 10):
         if not q or len(q) < 2:
             return JSONResponse({"success": True, "results": []})
         
-        # Search query - search in order_code, address, worker
-        # Also try to parse as number for amount search
-        search_term = f"%{q}%"
+        # Normalize query: replace ё with е for consistent matching
+        q_normalized = q.replace('ё', 'е').replace('Ё', 'Е')
+        search_term = f"%{q_normalized}%"
         
-        # Try to parse as number
+        # Also create version with е replaced by ё for reverse matching
+        q_with_yo = q.replace('е', 'ё').replace('Е', 'Ё')
+        search_term_yo = f"%{q_with_yo}%"
+        
+        # Try to parse as number for amount search
         try:
             amount_search = float(q.replace(" ", "").replace(",", "."))
         except:
             amount_search = None
         
-        # Build query with JOINs to get all needed data
+        # First, try to enable pg_trgm extension for fuzzy search (ignore if fails)
+        try:
+            await database.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm")
+        except:
+            pass
+        
+        # Build query with fuzzy matching using ILIKE and similarity
+        # Uses trigram similarity for typo tolerance
         query = """
             SELECT 
                 o.id as order_id,
@@ -3703,28 +3714,89 @@ async def search_orders(q: str = "", limit: int = 10):
                 c.total,
                 p.id as period_id,
                 p.name as period_name,
-                u.id as upload_id
+                u.id as upload_id,
+                GREATEST(
+                    COALESCE(similarity(LOWER(REPLACE(o.order_code, 'ё', 'е')), LOWER(:q_norm)), 0),
+                    COALESCE(similarity(LOWER(REPLACE(o.address, 'ё', 'е')), LOWER(:q_norm)), 0),
+                    COALESCE(similarity(LOWER(REPLACE(o.worker, 'ё', 'е')), LOWER(:q_norm)), 0)
+                ) as match_score
             FROM orders o
             LEFT JOIN calculations c ON o.id = c.order_id
             LEFT JOIN uploads u ON o.upload_id = u.id
             LEFT JOIN periods p ON u.period_id = p.id
             WHERE (
-                o.order_code ILIKE :search
-                OR o.address ILIKE :search
-                OR o.worker ILIKE :search
+                -- Exact/partial match with ё→е normalization
+                REPLACE(LOWER(o.order_code), 'ё', 'е') ILIKE LOWER(:search)
+                OR REPLACE(LOWER(o.address), 'ё', 'е') ILIKE LOWER(:search)
+                OR REPLACE(LOWER(o.worker), 'ё', 'е') ILIKE LOWER(:search)
+                -- Also try with е→ё
+                OR LOWER(o.order_code) ILIKE LOWER(:search_yo)
+                OR LOWER(o.address) ILIKE LOWER(:search_yo)
+                OR LOWER(o.worker) ILIKE LOWER(:search_yo)
+                -- Amount search
                 OR (c.total = :amount AND :amount IS NOT NULL)
                 OR (o.service_payment = :amount AND :amount IS NOT NULL)
                 OR (o.revenue_services = :amount AND :amount IS NOT NULL)
+                -- Fuzzy matching for typos (similarity > 0.3)
+                OR similarity(LOWER(REPLACE(o.order_code, 'ё', 'е')), LOWER(:q_norm)) > 0.3
+                OR similarity(LOWER(REPLACE(o.address, 'ё', 'е')), LOWER(:q_norm)) > 0.3
+                OR similarity(LOWER(REPLACE(o.worker, 'ё', 'е')), LOWER(:q_norm)) > 0.3
             )
-            ORDER BY p.created_at DESC, o.id DESC
+            ORDER BY match_score DESC, p.created_at DESC, o.id DESC
             LIMIT :limit
         """
         
-        rows = await database.fetch_all(query, {
-            "search": search_term,
-            "amount": amount_search,
-            "limit": limit
-        })
+        try:
+            rows = await database.fetch_all(query, {
+                "search": search_term,
+                "search_yo": search_term_yo,
+                "q_norm": q_normalized,
+                "amount": amount_search,
+                "limit": limit
+            })
+        except Exception as e:
+            # Fallback to simple search if pg_trgm not available
+            print(f"⚠️ Fuzzy search failed, using simple search: {e}")
+            query = """
+                SELECT 
+                    o.id as order_id,
+                    o.order_code,
+                    o.address,
+                    o.worker,
+                    o.revenue_services,
+                    o.service_payment,
+                    o.percent,
+                    o.is_client_payment,
+                    o.manager_comment,
+                    c.fuel_payment,
+                    c.transport,
+                    c.total,
+                    p.id as period_id,
+                    p.name as period_name,
+                    u.id as upload_id
+                FROM orders o
+                LEFT JOIN calculations c ON o.id = c.order_id
+                LEFT JOIN uploads u ON o.upload_id = u.id
+                LEFT JOIN periods p ON u.period_id = p.id
+                WHERE (
+                    REPLACE(LOWER(o.order_code), 'ё', 'е') ILIKE LOWER(:search)
+                    OR REPLACE(LOWER(o.address), 'ё', 'е') ILIKE LOWER(:search)
+                    OR REPLACE(LOWER(o.worker), 'ё', 'е') ILIKE LOWER(:search)
+                    OR LOWER(o.order_code) ILIKE LOWER(:search_yo)
+                    OR LOWER(o.address) ILIKE LOWER(:search_yo)
+                    OR LOWER(o.worker) ILIKE LOWER(:search_yo)
+                    OR (c.total = :amount AND :amount IS NOT NULL)
+                    OR (o.service_payment = :amount AND :amount IS NOT NULL)
+                )
+                ORDER BY p.created_at DESC, o.id DESC
+                LIMIT :limit
+            """
+            rows = await database.fetch_all(query, {
+                "search": search_term,
+                "search_yo": search_term_yo,
+                "amount": amount_search,
+                "limit": limit
+            })
         
         results = []
         for row in rows:
