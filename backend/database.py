@@ -7,7 +7,7 @@ from typing import Optional, List, Dict, Any
 from databases import Database
 from sqlalchemy import (
     MetaData, Table, Column, Integer, String, Float, DateTime, 
-    Text, Boolean, ForeignKey, create_engine, JSON
+    Text, Boolean, ForeignKey, create_engine, JSON, and_
 )
 
 # Get database URL from environment
@@ -1006,8 +1006,12 @@ async def get_upload_details(upload_id: int) -> Optional[dict]:
     upload["worker_totals"] = [dict(row._mapping) for row in total_rows]
     
     # Get manual edits (sorted by date, newest first)
+    # Filter out YANDEX_FUEL entries - they are automatic deductions, not manual edits
     query = manual_edits.select().where(
-        manual_edits.c.upload_id == upload_id
+        and_(
+            manual_edits.c.upload_id == upload_id,
+            manual_edits.c.field_name != "YANDEX_FUEL"
+        )
     ).order_by(manual_edits.c.created_at.desc())
     edit_rows = await database.fetch_all(query)
     upload["manual_edits"] = [dict(row._mapping) for row in edit_rows]

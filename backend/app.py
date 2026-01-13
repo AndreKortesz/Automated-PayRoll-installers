@@ -1418,7 +1418,7 @@ async def apply_review_changes(request: Request):
                         order_code=f"Вычет Яндекс заправки ({month_name})",
                         worker=worker,
                         address="",
-                        field_name="Итого",
+                        field_name="YANDEX_FUEL",
                         old_value=deduction,
                         new_value=-deduction,
                         period_status="DRAFT"
@@ -1606,7 +1606,7 @@ async def process_first_upload(request: Request):
                         order_code=f"Вычет Яндекс заправки ({month_name})",
                         worker=worker,
                         address="",
-                        field_name="Итого",
+                        field_name="YANDEX_FUEL",
                         old_value=deduction,
                         new_value=-deduction,
                         period_status="DRAFT"
@@ -3576,12 +3576,8 @@ async def delete_period(period_id: int, request: Request):
         if not database:
             raise HTTPException(status_code=500, detail="Database not connected")
         
-        # Check admin permission (safely)
-        user = None
-        try:
-            user = request.session.get("user")
-        except Exception:
-            pass
+        # Check admin permission
+        user = get_current_user(request)
         
         if not user or user.get("role") != "admin":
             raise HTTPException(status_code=403, detail="Только администратор может удалять периоды")
