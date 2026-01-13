@@ -1396,6 +1396,7 @@ async def apply_review_changes(request: Request):
         # Save Yandex fuel deductions as manual edits (for history tracking)
         yandex_fuel = config.get("yandex_fuel", {})
         if yandex_fuel:
+            from database import save_manual_edit
             for worker, deduction in yandex_fuel.items():
                 if deduction and deduction > 0:
                     # Get period name for the order_code field
@@ -1582,6 +1583,7 @@ async def process_first_upload(request: Request):
         # Save Yandex fuel deductions as manual edits (for history tracking)
         yandex_fuel = full_config.get("yandex_fuel", {})
         if yandex_fuel:
+            from database import save_manual_edit
             for worker, deduction in yandex_fuel.items():
                 if deduction and deduction > 0:
                     # Get period name for the order_code field
