@@ -362,6 +362,7 @@
         .badge-client { background: #FFF3E0; color: var(--orange); }
         .badge-over10k { background: var(--gray-light); color: var(--gray-dark); }
         .badge-extra { background: #E8F5E9; color: var(--green); }
+        .badge-manager { background: #E3F2FD; color: #1976D2; cursor: help; font-size: 14px; }
 
         /* Total Row */
         .total-row {
@@ -707,6 +708,7 @@
                             <th class="number">Бензин</th>
                             <th class="number">Транспорт</th>
                             <th class="number">Итого</th>
+                            <th>Менеджер</th>
                             <th>Тип</th>
                             <th></th>
                         </tr>
@@ -780,6 +782,7 @@
                         <td class="number editable ${fuelModified}" onclick="editCell(${idx}, 'fuel_payment', ${calcId})" id="cell-fuel-${idx}">${formatNumber(fuelVal)}</td>
                         <td class="number editable ${transportModified}" onclick="editCell(${idx}, 'transport', ${calcId})" id="cell-transport-${idx}">${formatNumber(transportVal)}</td>
                         <td class="number editable ${totalModified}" onclick="editCell(${idx}, 'total', ${calcId})" id="cell-total-${idx}"><strong>${formatNumber(totalVal)}</strong></td>
+                        <td class="manager-comment" title="${escapeAttr(order.manager_comment || '')}">${order.manager_comment ? '<span class="badge badge-manager" title="' + escapeAttr(order.manager_comment) + '">💬</span>' : ''}</td>
                         <td>${badges.join(' ')}</td>
                         <td><button class="btn-danger" onclick="deleteOrder(${orderId}, ${idx})" title="Удалить">✕</button></td>
                     </tr>
@@ -796,6 +799,7 @@
                     <td class="number">${formatNumber(totalFuel)}</td>
                     <td class="number">${formatNumber(totalTransport)}</td>
                     <td class="number"><strong>${formatNumber(totalFinal)}</strong></td>
+                    <td></td>
                     <td></td>
                     <td></td>
                 </tr>

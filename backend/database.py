@@ -159,6 +159,7 @@ orders = Table(
     Column("is_client_payment", Boolean, default=False),
     Column("is_over_10k", Boolean, default=False),
     Column("is_extra_row", Boolean, default=False),  # Дополнительная строка (ручное добавление)
+    Column("manager_comment", Text),  # Комментарий менеджера из Excel
 )
 
 # Calculations table (результаты расчётов)
@@ -336,6 +337,8 @@ def create_tables():
                 # Make order_id and calculation_id nullable in manual_edits (for Yandex fuel entries)
                 "ALTER TABLE manual_edits ALTER COLUMN order_id DROP NOT NULL",
                 "ALTER TABLE manual_edits ALTER COLUMN calculation_id DROP NOT NULL",
+                # Add manager_comment to orders
+                "ALTER TABLE orders ADD COLUMN IF NOT EXISTS manager_comment TEXT",
                 # Period status columns
                 "ALTER TABLE periods ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'draft'",
                 "ALTER TABLE periods ADD COLUMN IF NOT EXISTS sent_at TIMESTAMP",
@@ -802,7 +805,7 @@ async def save_order(upload_id: int, order_data: dict) -> int:
         'worker', 'order_code', 'order_full', 'address',
         'revenue_total', 'revenue_services', 'diagnostic', 'diagnostic_payment',
         'specialist_fee', 'additional_expenses', 'service_payment', 'percent',
-        'is_client_payment', 'is_over_10k', 'is_extra_row'
+        'is_client_payment', 'is_over_10k', 'is_extra_row', 'manager_comment'
     }
     
     filtered_data = {k: v for k, v in order_data.items() if k in allowed_fields}

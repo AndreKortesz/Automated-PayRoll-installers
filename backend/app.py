@@ -1352,7 +1352,8 @@ async def apply_review_changes(request: Request):
                 "specialist_fee": float(row.get("specialist_fee", 0) or 0),
                 "additional_expenses": float(row.get("additional_expenses", 0) or 0),
                 "service_payment": float(row.get("service_payment", 0) or 0),
-                "percent": parse_percent(row.get("percent", 0))
+                "percent": parse_percent(row.get("percent", 0)),
+                "manager_comment": row.get("manager_comment", None)
             }
             order_id = await save_order(upload_id, order_data)
             
@@ -1539,7 +1540,8 @@ async def process_first_upload(request: Request):
                 "specialist_fee": float(row.get("specialist_fee", 0) or 0),
                 "additional_expenses": float(row.get("additional_expenses", 0) or 0),
                 "service_payment": float(row.get("service_payment", 0) or 0),
-                "percent": parse_percent(row.get("percent", 0))
+                "percent": parse_percent(row.get("percent", 0)),
+                "manager_comment": row.get("manager_comment", None)
             }
             order_id = await save_order(upload_id, order_data)
             
