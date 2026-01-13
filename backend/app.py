@@ -1472,8 +1472,11 @@ async def process_first_upload(request: Request):
         session = session_data[session_id]
         combined_records = session.get("combined", [])
         
-        # Use default config
+        # Use default config and add yandex_fuel
         config = DEFAULT_CONFIG.copy()
+        yandex_fuel = session.get("yandex_fuel", {})
+        config["yandex_fuel"] = yandex_fuel
+        
         name_map = session.get("name_map", {})
         
         calculated_data = []
@@ -1583,7 +1586,7 @@ async def process_first_upload(request: Request):
             )
         
         # Save Yandex fuel deductions as manual edits (for history tracking)
-        yandex_fuel = full_config.get("yandex_fuel", {})
+        yandex_fuel = config.get("yandex_fuel", {})
         if yandex_fuel:
             from database import save_manual_edit
             for worker, deduction in yandex_fuel.items():
