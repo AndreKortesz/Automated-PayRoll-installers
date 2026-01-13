@@ -41,10 +41,6 @@
         .icon-btn.workers svg { width: 20px; height: 20px; fill: white; }
         .period-link { font-family: 'Roboto Condensed', sans-serif; font-weight: 700; font-size: 14px; color: var(--yellow-dark); text-decoration: none; padding: 10px 16px; border-radius: var(--radius-sm); transition: all 0.2s; text-transform: uppercase; background: rgba(243, 192, 77, 0.1); }
         .period-link:hover { background: var(--yellow); color: var(--black); }
-        .icon-btn.delete { background: rgba(220, 53, 69, 0.1); }
-        .icon-btn.delete:hover { background: #dc3545; }
-        .icon-btn.delete svg { fill: #dc3545; }
-        .icon-btn.delete:hover svg { fill: white; }
         @media (max-width: 1024px) { .period-stats { display: none; } }
         @media (max-width: 768px) { .page-title { font-size: 36px; } .period-item { flex-direction: column; align-items: flex-start; gap: 16px; } .period-actions { width: 100%; justify-content: flex-end; } }
     </style>
@@ -109,7 +105,7 @@
                         const total = period.total_amount || (company + client);
                         html += `<div class="period-item"><div class="period-info"><div class="period-name">📅 ${escapeHtml(period.name)}</div><div class="period-meta">Создан: ${escapeHtml(createdDate)} • Итого: ${formatCurrency(total)}</div></div>
                             <div class="period-stats"><div class="period-stat"><div class="period-stat-value green">${formatCurrencyShort(company)}</div><div class="period-stat-label">Компания</div></div><div class="period-stat"><div class="period-stat-value orange">${formatCurrencyShort(client)}</div><div class="period-stat-label">Клиент</div></div></div>
-                            <div class="period-actions">${period.latest_upload_id ? `<a href="/api/period/${period.id}/download/full" class="icon-btn download" title="Скачать"><svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg></a>` : ''}<a href="/period/${period.id}" class="period-link">Подробнее →</a><button class="icon-btn delete" title="Удалить период" onclick="deletePeriod(${period.id}, '${escapeHtml(period.name)}')"><svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg></button></div></div>`;
+                            <div class="period-actions">${period.latest_upload_id ? `<a href="/api/period/${period.id}/download/full" class="icon-btn download" title="Скачать"><svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg></a>` : ''}<a href="/period/${period.id}" class="period-link">Подробнее →</a></div></div>`;
                     });
                     html += '</div></div>';
                 });
@@ -121,30 +117,6 @@
 
         function formatCurrency(value) { if (value >= 1000000) return (value / 1000000).toFixed(1) + ' млн ₽'; return Math.round(value).toLocaleString('ru-RU') + ' ₽'; }
         function formatCurrencyShort(value) { if (value >= 1000000) return (value / 1000000).toFixed(1) + 'М'; if (value >= 1000) return Math.round(value / 1000) + 'К'; return Math.round(value).toString(); }
-
-        async function deletePeriod(periodId, periodName) {
-            if (!confirm(`Удалить период "${periodName}"?\n\nВсе данные периода будут удалены безвозвратно!`)) {
-                return;
-            }
-            
-            try {
-                const response = await fetch(`/api/period/${periodId}`, {
-                    method: 'DELETE',
-                    headers: { 'Content-Type': 'application/json' }
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    alert(data.message || 'Период удалён');
-                    loadHistory();
-                } else {
-                    alert('Ошибка: ' + (data.detail || data.error || 'Неизвестная ошибка'));
-                }
-            } catch (error) {
-                alert('Ошибка: ' + error.message);
-            }
-        }
 
         loadHistory();
     </script>
