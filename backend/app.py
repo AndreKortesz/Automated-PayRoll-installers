@@ -3574,8 +3574,13 @@ async def delete_period(period_id: int, request: Request):
         if not database:
             raise HTTPException(status_code=500, detail="Database not connected")
         
-        # Check admin permission
-        user = request.session.get("user")
+        # Check admin permission (safely)
+        user = None
+        try:
+            user = request.session.get("user")
+        except Exception:
+            pass
+        
         if not user or user.get("role") != "admin":
             raise HTTPException(status_code=403, detail="Только администратор может удалять периоды")
         
