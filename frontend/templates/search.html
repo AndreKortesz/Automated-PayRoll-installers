@@ -374,7 +374,9 @@
             resultsInfo.innerHTML = '';
 
             try {
-                const response = await Security.fetch(`/api/search?q=${encodeURIComponent(query)}&limit=100`);
+                // Use Security.fetch if available, otherwise regular fetch
+                const fetchFn = (typeof Security !== 'undefined' && Security.fetch) ? Security.fetch : fetch;
+                const response = await fetchFn(`/api/search?q=${encodeURIComponent(query)}&limit=100`);
                 const data = await response.json();
 
                 if (!data.success) {
@@ -481,17 +483,20 @@
             if (e.key === 'Enter') doSearch();
         });
 
-        // Initial search if query provided (with small delay to ensure DOM ready)
-        document.addEventListener('DOMContentLoaded', () => {
-            if (searchInput.value.trim().length >= 2) {
+        // Run search on page load if query is present
+        (function runInitialSearch() {
+            const query = searchInput.value.trim();
+            console.log('Search input value:', JSON.stringify(query), 'length:', query.length);
+            if (query.length >= 2) {
+                console.log('Running initial search for:', query);
                 doSearch();
+            } else {
+                console.log('Query too short, not searching. Value was:', searchInput.value);
             }
-        });
+        })();
         
-        // Also try immediately in case DOMContentLoaded already fired
-        if (document.readyState !== 'loading' && searchInput.value.trim().length >= 2) {
-            doSearch();
-        }
+        // Also add click handler to search button
+        document.querySelector('.search-btn')?.addEventListener('click', doSearch);
     </script>
 </body>
 </html>
