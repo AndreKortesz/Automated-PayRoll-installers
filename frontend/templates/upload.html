@@ -545,6 +545,15 @@
             .nav { display: none; }
             .card-body { padding: 16px; }
         }
+
+        /* Highlight order from search */
+        .highlight-order {
+            animation: highlightFade 3s ease-out;
+        }
+        @keyframes highlightFade {
+            0% { background: #FFF59D; }
+            100% { background: transparent; }
+        }
     </style>
     <!-- Security utilities -->
     <script src="/static/security.js"></script>
@@ -771,9 +780,10 @@
                 }
 
                 const rowClass = order._isNew ? 'new-row' : '';
+                const orderCodeAttr = escapeAttr(order.order_code || '');
 
                 tableHtml += `
-                    <tr class="${rowClass}" data-idx="${idx}">
+                    <tr class="${rowClass}" data-idx="${idx}" data-order-code="${orderCodeAttr}">
                         ${orderCodeCell}
                         ${addressCell}
                         <td class="number">${formatNumber(order.revenue_services)}</td>
@@ -1129,7 +1139,24 @@
 
         document.addEventListener('keydown', e => { if (e.key === 'Escape') closeOrderModal(); });
 
+        // Highlight order from search
+        function highlightOrderFromUrl() {
+            const params = new URLSearchParams(window.location.search);
+            const highlight = params.get('highlight');
+            if (!highlight) return;
+            
+            // Wait for table to render
+            setTimeout(() => {
+                const row = document.querySelector(`tr[data-order-code="${highlight}"]`);
+                if (row) {
+                    row.classList.add('highlight-order');
+                    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }, 500);
+        }
+
         loadWorkerData();
+        highlightOrderFromUrl();
     </script>
 </body>
 </html>
