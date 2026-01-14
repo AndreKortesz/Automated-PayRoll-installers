@@ -121,6 +121,24 @@
             <a href="/history" class="nav-link active">История</a>
             <a href="/comparison" class="nav-link">Сравнение</a>
         </nav>
+        
+        <!-- Search Component -->
+        <div class="search-wrapper">
+            <div class="search-input-wrapper">
+                <svg class="search-icon" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+                <input type="text" id="globalSearch" placeholder="Поиск заказов..." autocomplete="off">
+            </div>
+            <div class="search-dropdown" id="searchDropdown"></div>
+        </div>
+        
+        {% if user %}
+        <div class="user-info">
+            <span class="user-name">{% if user.role == 'admin' %}👑{% else %}👤{% endif %} {{ user.name | e }}</span>
+            <a href="/auth/logout" class="logout-btn" title="Выйти">
+                <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>
+            </a>
+        </div>
+        {% endif %}
     </header>
 
     <main class="main">
@@ -610,6 +628,72 @@
         function formatCurrency(value) { if (value >= 1000000) return (value / 1000000).toFixed(1) + 'М'; if (value >= 1000) return Math.round(value / 1000) + 'К'; return Math.round(value).toString(); }
 
         loadPeriod();
+
+        // ===== Global Search =====
+        (function() {
+            const searchInput = document.getElementById('globalSearch');
+            const searchDropdown = document.getElementById('searchDropdown');
+            if (!searchInput || !searchDropdown) return;
+
+            let searchTimeout = null;
+            let currentQuery = '';
+
+            function highlightMatch(text, query) {
+                if (!text || !query) return Security.escapeHtml(text);
+                const escaped = Security.escapeHtml(text);
+                const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+                return escaped.replace(regex, '<span class="search-highlight">$1</span>');
+            }
+
+            function formatNum(num) { return num ? Math.round(num).toLocaleString('ru-RU') : '0'; }
+            function truncate(str, len) { return str && str.length > len ? str.substring(0, len) + '...' : (str || ''); }
+
+            async function doSearch(query) {
+                if (query.length < 2) { searchDropdown.classList.remove('active'); return; }
+                searchDropdown.innerHTML = '<div class="search-loading"><div class="search-loading-spinner"></div></div>';
+                searchDropdown.classList.add('active');
+
+                try {
+                    const response = await Security.fetch(`/api/search?q=${encodeURIComponent(query)}&limit=6`);
+                    const data = await response.json();
+                    if (!data.success || currentQuery !== query) return;
+
+                    const results = data.results || [];
+                    if (results.length === 0) {
+                        searchDropdown.innerHTML = `<div class="search-empty"><div class="search-empty-text">Ничего не найдено</div></div>`;
+                        return;
+                    }
+
+                    let html = '<div class="search-dropdown-header">Найденные заказы</div>';
+                    results.forEach(r => {
+                        const typeClass = r.type === 'Клиент' ? 'client' : 'company';
+                        const icon = r.type === 'Клиент' ? '👤' : '🏢';
+                        html += `<a href="/upload/${r.upload_id}?worker=${encodeURIComponent(r.worker)}&highlight=${encodeURIComponent(r.order_code)}" class="search-result-item">
+                            <div class="search-result-icon ${typeClass}">${icon}</div>
+                            <div class="search-result-content">
+                                <div class="search-result-title"><span class="search-result-order">${highlightMatch(r.order_code, query)}</span><span class="search-result-period">${Security.escapeHtml(r.period_name)}</span></div>
+                                <div class="search-result-meta"><span class="search-result-worker">${highlightMatch(r.worker, query)}</span><span>•</span><span class="search-result-address">${highlightMatch(truncate(r.address, 40), query)}</span></div>
+                            </div>
+                            <div class="search-result-right"><div class="search-result-total">${formatNum(r.total)} ₽</div><span class="search-result-type ${typeClass}">${r.type}</span></div>
+                        </a>`;
+                    });
+                    html += `<a href="/search?q=${encodeURIComponent(query)}" class="search-all-link"><svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>Показать все результаты</a>`;
+                    searchDropdown.innerHTML = html;
+                } catch (error) {
+                    searchDropdown.innerHTML = '<div class="search-empty"><div class="search-empty-text">Ошибка поиска</div></div>';
+                }
+            }
+
+            searchInput.addEventListener('input', (e) => {
+                currentQuery = e.target.value.trim();
+                clearTimeout(searchTimeout);
+                if (currentQuery.length < 2) { searchDropdown.classList.remove('active'); return; }
+                searchTimeout = setTimeout(() => doSearch(currentQuery), 300);
+            });
+            searchInput.addEventListener('keypress', (e) => { if (e.key === 'Enter' && currentQuery.length >= 2) window.location.href = `/search?q=${encodeURIComponent(currentQuery)}`; });
+            searchInput.addEventListener('focus', () => { if (currentQuery.length >= 2) searchDropdown.classList.add('active'); });
+            document.addEventListener('click', (e) => { if (!e.target.closest('.search-wrapper')) searchDropdown.classList.remove('active'); });
+        })();
     </script>
 </body>
 </html>
