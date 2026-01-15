@@ -3886,7 +3886,7 @@ async def get_duplicates(request: Request):
         if not upload_ids:
             return {"success": True, "exact_duplicates": [], "partial_duplicates": [], "needs_review": [], "stats": {}}
         
-        # Get all orders from latest uploads (including those without order_code)
+        # Get all orders from latest uploads
         orders_query = f"""
             SELECT 
                 o.id, o.upload_id, o.order_code, o.address, o.worker, o.order_full,
@@ -3911,7 +3911,6 @@ async def get_duplicates(request: Request):
             revenue = order._mapping.get("revenue_services") or 0
             total = order._mapping.get("total") or 0
             
-            # Check order_full for keywords
             order_full = (order._mapping.get("order_full") or "").lower()
             address = (order._mapping.get("address") or "").lower()
             combined = order_full + " " + address
@@ -3937,120 +3936,86 @@ async def get_duplicates(request: Request):
             
             addr = addr.lower().strip()
             
-            # Remove common prefixes/suffixes
+            # Remove specific prefixes first
+            addr = re.sub(r'^монтаж!\s*', '', addr, flags=re.IGNORECASE)
+            addr = re.sub(r'^сделка:\s*', '', addr, flags=re.IGNORECASE)
+            
             remove_patterns = [
                 r'московская\s+область,?\s*',
-                r'москва,?\s*',
-                r'мо,?\s*',
-                r'городской\s+округ\s+',
-                r'муниципальный\s+округ\s+',
-                r'г\.?\s*о\.?\s*',
+                r'городской\s+округ\s*[^,]*,?\s*',  # Remove "городской округ Люберцы" completely
+                r'муниципальный\s+округ\s*[^,]*,?\s*',
                 r'посёлок\s+городского\s+типа\s+',
-                r'пос\.\s*',
-                r'посёлок\s+',
-                r'поселок\s+',
-                r'деревня\s+',
-                r'дер\.\s*',
-                r'д\.\s*',
-                r'село\s+',
-                r'с\.\s+',
-                r'улица\s+',
-                r'ул\.\s*',
-                r'проспект\s+',
-                r'пр-т\s*',
-                r'шоссе\s+',
-                r'ш\.\s*',
-                r'переулок\s+',
-                r'пер\.\s*',
-                r'район\s+',
-                r'р-н\s*',
-                r'корпус\s+',
-                r'корп\.\s*',
-                r'к\.\s*',
-                r'строение\s+',
-                r'стр\.\s*',
-                r'дом\s+',
-                r'владение\s+',
-                r'вл\.\s*',
-                r'снт\s+',
-                r'тсн\s+',
-                r'кп\s+',
-                r'днп\s+',
-                r'дк\s+',
-                r'ооо\s+[^,]+,?\s*',
-                r'для\s+зп\s*',
-                r'«|»|"|"',
+                r'г\.?\s*о\.?\s*',
+                r'москва,?\s*', r'мо,?\s*',
+                r'пос\.\s*', r'посёлок\s+', r'поселок\s+',
+                r'деревня\s+', r'дер\.\s*', r'село\s+', r'с\.\s+',
+                r'улица\s+', r'ул\.\s*', r'проспект\s+', r'пр-т\.?\s*', r'пр\.\s*',
+                r'шоссе\s+', r'ш\.\s*', r'переулок\s+', r'пер\.\s*',
+                r'район\s+', r'р-н\s*', r'корпус\s+', r'корп\.\s*', r'к\.\s*',
+                r'строение\s+', r'стр\.\s*', r'дом\s+', r'д\.\s*',
+                r'снт\s+', r'тсн\s+', r'кп\s+', r'днп\s+', r'дк\s+',
+                r'ооо\s+[^,]+,?\s*', r'для\s+зп\s*', r'«|»|"|"',
+                r'люберецкий\s*', r'люберцы\s*',
+                r'-\s*улыбка\s+радуги.*',
+                r'\bг\.\s*',
             ]
             
             for pattern in remove_patterns:
                 addr = re.sub(pattern, ' ', addr, flags=re.IGNORECASE)
             
-            # Normalize spaces and punctuation
             addr = re.sub(r'[,.:;\\n]+', ' ', addr)
             addr = re.sub(r'\s+', ' ', addr)
-            addr = addr.strip()
+            return addr.strip()
+        
+        def extract_street_and_number(addr):
+            """Extract street name and house number for strict comparison"""
+            norm = normalize_address(addr)
             
-            # Extract key parts: name + number
-            # e.g. "малаховка просечная 18" -> "малаховка просечная 18"
+            # Find house number
+            number_match = re.search(r'\b(\d+[а-яa-z]?)\b', norm)
+            number = number_match.group(1) if number_match else ""
             
-            return addr
+            # Remove numbers to get street name
+            street = re.sub(r'\b\d+[а-яa-z]?\b', '', norm).strip()
+            street = re.sub(r'\s+', ' ', street).strip()
+            
+            return street, number
         
         def addresses_match(addr1, addr2):
-            """Check if two addresses are similar enough"""
+            """Strict address comparison - requires street AND number match"""
             if not addr1 or not addr2:
                 return False
             
-            n1 = normalize_address(addr1)
-            n2 = normalize_address(addr2)
+            s1, n1 = extract_street_and_number(addr1)
+            s2, n2 = extract_street_and_number(addr2)
             
-            if not n1 or not n2:
+            # Numbers must match (if both exist)
+            if n1 and n2 and n1 != n2:
                 return False
             
-            # Exact match after normalization
-            if n1 == n2:
-                return True
-            
-            # Check if one contains the other (for partial addresses)
-            if len(n1) > 10 and len(n2) > 10:
-                if n1 in n2 or n2 in n1:
-                    return True
-            
-            # Extract words and check overlap
-            words1 = set(w for w in n1.split() if len(w) > 2)
-            words2 = set(w for w in n2.split() if len(w) > 2)
+            # Compare street words
+            words1 = set(w for w in s1.split() if len(w) > 2)
+            words2 = set(w for w in s2.split() if len(w) > 2)
             
             if not words1 or not words2:
                 return False
             
-            # Calculate Jaccard similarity
             intersection = len(words1 & words2)
             union = len(words1 | words2)
             similarity = intersection / union if union > 0 else 0
             
-            # Need at least 60% word overlap
-            return similarity >= 0.6
+            # Require 60% word overlap
+            return similarity >= 0.5
         
         def get_address_from_order(order):
-            """Extract address from order, including parsing order_full for manual entries"""
+            """Extract address from order, including manual entries"""
             addr = order._mapping.get("address") or ""
             order_full = order._mapping.get("order_full") or ""
             
-            # If address is empty but order_full has data (manual entry like "Монтаж! адрес")
             if not addr and order_full:
-                # Try to extract address from order_full
-                # Pattern: "Монтаж! адрес" or just text description
                 addr = order_full
             
             return addr
-        
-        def is_client_company_pair(orders_list):
-            """Check if list contains ONLY client+company pair (not a duplicate)"""
-            if len(orders_list) != 2:
-                return False
-            
-            types = [o._mapping.get("is_client_payment") for o in orders_list]
-            # One True (client), one False (company)
-            return True in types and False in types
         
         def amounts_similar(a1, a2, tolerance=0.1):
             """Check if amounts are within tolerance (default 10%)"""
@@ -4061,7 +4026,7 @@ async def get_duplicates(request: Request):
             diff = abs(a1 - a2) / max(a1, a2)
             return diff <= tolerance
         
-        # === BUILD ORDER LIST WITH NORMALIZED DATA ===
+        # === BUILD ORDER LIST ===
         
         processed_orders = []
         for o in all_orders:
@@ -4070,7 +4035,6 @@ async def get_duplicates(request: Request):
                 "id": o._mapping["id"],
                 "order_code": o._mapping.get("order_code") or "",
                 "address": addr,
-                "address_normalized": normalize_address(addr),
                 "worker": o._mapping.get("worker") or "",
                 "period_name": o._mapping["period_name"],
                 "period_id": o._mapping["period_id"],
@@ -4078,114 +4042,73 @@ async def get_duplicates(request: Request):
                 "work_type": get_work_type(o),
                 "is_client": bool(o._mapping.get("is_client_payment")),
                 "type_label": "Клиент" if o._mapping.get("is_client_payment") else "Компания",
-                "_raw": o
             })
         
         # === FIND DUPLICATES ===
         
-        exact_duplicates = []      # Same address + work_type + similar amount (±10%)
-        partial_duplicates = []    # Same address + work_type + different amount
-        needs_review = []          # Same order_code + different addresses
+        exact_duplicates = []
+        partial_duplicates = []
+        needs_review = []
         
         seen_exact = set()
         seen_partial = set()
         seen_review = set()
         
-        # Group by normalized address for cross-period comparison
-        by_norm_addr = defaultdict(list)
-        for o in processed_orders:
-            if o["address_normalized"] and len(o["address_normalized"]) > 5:
-                by_norm_addr[o["address_normalized"]].append(o)
-        
-        # Also try to match similar addresses
-        addr_keys = list(by_norm_addr.keys())
-        merged_groups = []
-        used_keys = set()
-        
-        for i, key1 in enumerate(addr_keys):
-            if key1 in used_keys:
-                continue
-            
-            group = list(by_norm_addr[key1])
-            used_keys.add(key1)
-            
-            # Find similar addresses
-            for key2 in addr_keys[i+1:]:
-                if key2 in used_keys:
-                    continue
-                if addresses_match(key1, key2):
-                    group.extend(by_norm_addr[key2])
-                    used_keys.add(key2)
-            
-            if len(group) >= 2:
-                merged_groups.append(group)
-        
-        # Analyze merged groups
-        for group in merged_groups:
-            # Skip if only client+company pair
-            if is_client_company_pair([o["_raw"] for o in group]):
-                continue
-            
-            # Filter out client+company pairs within larger groups
-            # Group by (work_type, is_client) to find real duplicates
-            by_type = defaultdict(list)
-            for o in group:
-                # Key: work_type only (we'll compare same payment types)
-                by_type[o["work_type"]].append(o)
-            
-            for work_type, type_group in by_type.items():
-                if len(type_group) < 2:
+        # Compare all pairs of orders
+        n = len(processed_orders)
+        for i in range(n):
+            for j in range(i + 1, n):
+                o1 = processed_orders[i]
+                o2 = processed_orders[j]
+                
+                # Skip if addresses don't match
+                if not addresses_match(o1["address"], o2["address"]):
                     continue
                 
-                # Separate by payment type
-                clients = [o for o in type_group if o["is_client"]]
-                companies = [o for o in type_group if not o["is_client"]]
+                # Skip if work types don't match
+                if o1["work_type"] != o2["work_type"]:
+                    continue
                 
-                # Check for duplicates within same payment type
-                for subgroup in [clients, companies]:
-                    if len(subgroup) < 2:
+                # Check if this is a legitimate Client + Company pair
+                # (different payment types AND different amounts)
+                if o1["is_client"] != o2["is_client"]:
+                    if not amounts_similar(o1["total"], o2["total"]):
+                        # This is a normal client+company split, not a duplicate
                         continue
-                    
-                    ids = tuple(sorted([o["id"] for o in subgroup]))
-                    
-                    # Check if amounts are similar
-                    amounts = [o["total"] for o in subgroup]
-                    all_similar = all(amounts_similar(amounts[0], a) for a in amounts[1:])
-                    
-                    if all_similar:
-                        # Exact duplicate
-                        if ids not in seen_exact:
-                            seen_exact.add(ids)
-                            exact_duplicates.append({
-                                "address": subgroup[0]["address"],
-                                "work_type": work_type,
-                                "match_type": "exact",
-                                "orders": [{
-                                    "id": o["id"],
-                                    "order_code": o["order_code"],
-                                    "period_name": o["period_name"],
-                                    "worker": o["worker"],
-                                    "total": o["total"],
-                                    "type": o["type_label"]
-                                } for o in subgroup]
-                            })
-                    else:
-                        # Partial duplicate (different amounts)
-                        if ids not in seen_partial and ids not in seen_exact:
-                            seen_partial.add(ids)
-                            partial_duplicates.append({
-                                "address": subgroup[0]["address"],
-                                "work_type": work_type,
-                                "match_type": "partial",
-                                "orders": [{
-                                    "id": o["id"],
-                                    "order_code": o["order_code"],
-                                    "period_name": o["period_name"],
-                                    "worker": o["worker"],
-                                    "total": o["total"],
-                                    "type": o["type_label"]
-                                } for o in subgroup]
-                            })
+                
+                # Found a potential duplicate
+                pair_id = tuple(sorted([o1["id"], o2["id"]]))
+                
+                if amounts_similar(o1["total"], o2["total"]):
+                    # Exact duplicate
+                    if pair_id not in seen_exact:
+                        seen_exact.add(pair_id)
+                        exact_duplicates.append({
+                            "address": o1["address"],
+                            "work_type": o1["work_type"],
+                            "match_type": "exact",
+                            "orders": [
+                                {"id": o1["id"], "order_code": o1["order_code"], "period_name": o1["period_name"],
+                                 "worker": o1["worker"], "total": o1["total"], "type": o1["type_label"]},
+                                {"id": o2["id"], "order_code": o2["order_code"], "period_name": o2["period_name"],
+                                 "worker": o2["worker"], "total": o2["total"], "type": o2["type_label"]}
+                            ]
+                        })
+                else:
+                    # Partial duplicate (same address, different amounts)
+                    if pair_id not in seen_partial and pair_id not in seen_exact:
+                        seen_partial.add(pair_id)
+                        partial_duplicates.append({
+                            "address": o1["address"],
+                            "work_type": o1["work_type"],
+                            "match_type": "partial",
+                            "orders": [
+                                {"id": o1["id"], "order_code": o1["order_code"], "period_name": o1["period_name"],
+                                 "worker": o1["worker"], "total": o1["total"], "type": o1["type_label"]},
+                                {"id": o2["id"], "order_code": o2["order_code"], "period_name": o2["period_name"],
+                                 "worker": o2["worker"], "total": o2["total"], "type": o2["type_label"]}
+                            ]
+                        })
         
         # Find needs_review: same order_code, different addresses
         by_order_code = defaultdict(list)
@@ -4197,38 +4120,31 @@ async def get_duplicates(request: Request):
             if len(orders_list) < 2:
                 continue
             
-            # Skip client+company pairs
-            if is_client_company_pair([o["_raw"] for o in orders_list]):
-                continue
-            
-            addresses = set(o["address_normalized"] for o in orders_list if o["address_normalized"])
-            if len(addresses) >= 2:
-                # Check if addresses are actually different (not just normalization artifacts)
-                addr_list = [o["address_normalized"] for o in orders_list if o["address_normalized"]]
-                truly_different = False
-                for i, a1 in enumerate(addr_list):
-                    for a2 in addr_list[i+1:]:
-                        if not addresses_match(a1, a2):
-                            truly_different = True
-                            break
-                    if truly_different:
+            # Check if addresses are truly different
+            truly_different = False
+            for i, o1 in enumerate(orders_list):
+                for o2 in orders_list[i+1:]:
+                    if not addresses_match(o1["address"], o2["address"]):
+                        truly_different = True
                         break
-                
                 if truly_different:
-                    ids = tuple(sorted([o["id"] for o in orders_list]))
-                    if ids not in seen_review:
-                        seen_review.add(ids)
-                        needs_review.append({
-                            "order_code": code,
-                            "orders": [{
-                                "id": o["id"],
-                                "address": o["address"],
-                                "period_name": o["period_name"],
-                                "worker": o["worker"],
-                                "total": o["total"],
-                                "type": o["type_label"]
-                            } for o in orders_list]
-                        })
+                    break
+            
+            if truly_different:
+                ids = tuple(sorted([o["id"] for o in orders_list]))
+                if ids not in seen_review:
+                    seen_review.add(ids)
+                    needs_review.append({
+                        "order_code": code,
+                        "orders": [{
+                            "id": o["id"],
+                            "address": o["address"],
+                            "period_name": o["period_name"],
+                            "worker": o["worker"],
+                            "total": o["total"],
+                            "type": o["type_label"]
+                        } for o in orders_list]
+                    })
         
         # Sort by period (newest first)
         exact_duplicates.sort(key=lambda x: x["orders"][0]["period_name"], reverse=True)
@@ -4253,8 +4169,6 @@ async def get_duplicates(request: Request):
         import traceback
         traceback.print_exc()
         return {"success": False, "error": str(e)}
-
-
 @app.get("/duplicates")
 async def duplicates_page(request: Request):
     """Duplicate check page (admin only)"""
