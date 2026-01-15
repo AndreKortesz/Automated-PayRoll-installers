@@ -232,6 +232,25 @@
             opacity: 1;
         }
         
+        /* Clickable order code for future 1C sync */
+        .order-code-link {
+            color: var(--orange);
+            font-weight: 700;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.15s;
+            padding: 4px 8px;
+            margin: -4px -8px;
+            border-radius: 6px;
+        }
+        .order-code-link:hover {
+            background: var(--orange);
+            color: white;
+        }
+        .order-code-link:active {
+            transform: scale(0.95);
+        }
+        
         /* Type Badges */
         .type-badge {
             padding: 4px 10px;
@@ -463,7 +482,6 @@
                         ${crossPeriod ? '<div class="cross-period-badge">⚠️ КРОСС-ПЕРИОД</div>' : ''}
                         <div class="dup-group-header">
                             <span class="dup-address">📍 ${Security.escapeHtml(dup.address)}</span>
-                            <span class="dup-work-type ${getWorkTypeClass(dup.work_type)}">${getWorkTypeLabel(dup.work_type)}</span>
                         </div>
                         <div class="dup-orders">
                             <table>
@@ -472,6 +490,7 @@
                                         <th>Заказ</th>
                                         <th>Период</th>
                                         <th>Монтажник</th>
+                                        <th>Тип работ</th>
                                         <th>Тип оплаты</th>
                                         <th class="number">Итого</th>
                                     </tr>
@@ -480,11 +499,15 @@
                                     ${dup.orders.map(o => {
                                         const typeClass = o.type === 'Клиент' ? 'type-client' : 'type-company';
                                         const url = `/upload/${o.upload_id}?worker=${encodeURIComponent(o.worker)}&highlight=${encodeURIComponent(o.order_code || o.id)}`;
+                                        const orderCodeHtml = o.order_code 
+                                            ? `<span class="order-code-link" onclick="event.stopPropagation(); onOrderCodeClick('${Security.escapeHtml(o.order_code)}')" title="Синхронизация с 1С (скоро)">${Security.escapeHtml(o.order_code)}</span>`
+                                            : '—';
                                         return `
                                             <tr class="clickable-row" onclick="window.location.href='${url}'" title="Перейти к заказу">
-                                                <td class="dup-order-code">${Security.escapeHtml(o.order_code) || '—'}<span class="row-link-hint">→</span></td>
+                                                <td class="dup-order-code">${orderCodeHtml}<span class="row-link-hint">→</span></td>
                                                 <td>${Security.escapeHtml(o.period_name)}</td>
                                                 <td>${Security.escapeHtml(o.worker)}</td>
+                                                <td><span class="dup-work-type ${getWorkTypeClass(o.work_type)}">${getWorkTypeLabel(o.work_type)}</span></td>
                                                 <td><span class="type-badge ${typeClass}">${o.type}</span></td>
                                                 <td class="number">${formatNumber(o.total)} ₽</td>
                                             </tr>
@@ -519,7 +542,6 @@
                         ${crossPeriod ? '<div class="cross-period-badge">⚠️ КРОСС-ПЕРИОД</div>' : ''}
                         <div class="dup-group-header">
                             <span class="dup-address">📍 ${Security.escapeHtml(dup.address)}</span>
-                            <span class="dup-work-type ${getWorkTypeClass(dup.work_type)}">${getWorkTypeLabel(dup.work_type)}</span>
                         </div>
                         <div class="dup-orders">
                             <table>
@@ -528,6 +550,7 @@
                                         <th>Заказ</th>
                                         <th>Период</th>
                                         <th>Монтажник</th>
+                                        <th>Тип работ</th>
                                         <th>Тип оплаты</th>
                                         <th class="number">Итого</th>
                                     </tr>
@@ -536,11 +559,15 @@
                                     ${dup.orders.map(o => {
                                         const typeClass = o.type === 'Клиент' ? 'type-client' : 'type-company';
                                         const url = `/upload/${o.upload_id}?worker=${encodeURIComponent(o.worker)}&highlight=${encodeURIComponent(o.order_code || o.id)}`;
+                                        const orderCodeHtml = o.order_code 
+                                            ? `<span class="order-code-link" onclick="event.stopPropagation(); onOrderCodeClick('${Security.escapeHtml(o.order_code)}')" title="Синхронизация с 1С (скоро)">${Security.escapeHtml(o.order_code)}</span>`
+                                            : '—';
                                         return `
                                             <tr class="clickable-row" onclick="window.location.href='${url}'" title="Перейти к заказу">
-                                                <td class="dup-order-code">${Security.escapeHtml(o.order_code) || '—'}<span class="row-link-hint">→</span></td>
+                                                <td class="dup-order-code">${orderCodeHtml}<span class="row-link-hint">→</span></td>
                                                 <td>${Security.escapeHtml(o.period_name)}</td>
                                                 <td>${Security.escapeHtml(o.worker)}</td>
+                                                <td><span class="dup-work-type ${getWorkTypeClass(o.work_type)}">${getWorkTypeLabel(o.work_type)}</span></td>
                                                 <td><span class="type-badge ${typeClass}">${o.type}</span></td>
                                                 <td class="number">${formatNumber(o.total)} ₽</td>
                                             </tr>
@@ -567,10 +594,13 @@
 
             let html = '';
             items.forEach(item => {
+                const orderCodeHtml = item.order_code 
+                    ? `<span class="order-code-link" onclick="onOrderCodeClick('${Security.escapeHtml(item.order_code)}')" title="Синхронизация с 1С (скоро)">${Security.escapeHtml(item.order_code)}</span>`
+                    : '—';
                 html += `
                     <div class="dup-group">
                         <div class="dup-group-header">
-                            <span class="dup-order-code">${Security.escapeHtml(item.order_code)}</span>
+                            <span class="dup-order-code">${orderCodeHtml}</span>
                             <span style="color: var(--gray-dark); font-size: 14px;">— один заказ, разные адреса</span>
                         </div>
                         <div class="dup-orders">
@@ -580,6 +610,7 @@
                                         <th>Адрес</th>
                                         <th>Период</th>
                                         <th>Монтажник</th>
+                                        <th>Тип работ</th>
                                         <th>Тип оплаты</th>
                                         <th class="number">Итого</th>
                                     </tr>
@@ -593,6 +624,7 @@
                                                 <td>${Security.escapeHtml(o.address)}<span class="row-link-hint">→</span></td>
                                                 <td>${Security.escapeHtml(o.period_name)}</td>
                                                 <td>${Security.escapeHtml(o.worker)}</td>
+                                                <td><span class="dup-work-type ${getWorkTypeClass(o.work_type)}">${getWorkTypeLabel(o.work_type)}</span></td>
                                                 <td><span class="type-badge ${typeClass}">${o.type}</span></td>
                                                 <td class="number">${formatNumber(o.total)} ₽</td>
                                             </tr>
@@ -609,6 +641,12 @@
 
         // Load on page load
         loadData();
+
+        // Future 1C integration handler
+        function onOrderCodeClick(orderCode) {
+            // TODO: Интеграция с 1С API
+            alert(`🔄 Синхронизация с 1С\n\nЗаказ: ${orderCode}\n\nЭта функция будет доступна после подключения API 1С`);
+        }
 
         // ===== Global Search =====
         (function() {

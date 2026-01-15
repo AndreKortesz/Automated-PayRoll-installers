@@ -4090,9 +4090,9 @@ async def get_duplicates(request: Request):
                             "match_type": "exact",
                             "orders": [
                                 {"id": o1["id"], "upload_id": o1["upload_id"], "order_code": o1["order_code"], "period_name": o1["period_name"],
-                                 "worker": o1["worker"], "total": o1["total"], "type": o1["type_label"]},
+                                 "worker": o1["worker"], "total": o1["total"], "type": o1["type_label"], "work_type": o1["work_type"]},
                                 {"id": o2["id"], "upload_id": o2["upload_id"], "order_code": o2["order_code"], "period_name": o2["period_name"],
-                                 "worker": o2["worker"], "total": o2["total"], "type": o2["type_label"]}
+                                 "worker": o2["worker"], "total": o2["total"], "type": o2["type_label"], "work_type": o2["work_type"]}
                             ]
                         })
                 else:
@@ -4105,9 +4105,9 @@ async def get_duplicates(request: Request):
                             "match_type": "partial",
                             "orders": [
                                 {"id": o1["id"], "upload_id": o1["upload_id"], "order_code": o1["order_code"], "period_name": o1["period_name"],
-                                 "worker": o1["worker"], "total": o1["total"], "type": o1["type_label"]},
+                                 "worker": o1["worker"], "total": o1["total"], "type": o1["type_label"], "work_type": o1["work_type"]},
                                 {"id": o2["id"], "upload_id": o2["upload_id"], "order_code": o2["order_code"], "period_name": o2["period_name"],
-                                 "worker": o2["worker"], "total": o2["total"], "type": o2["type_label"]}
+                                 "worker": o2["worker"], "total": o2["total"], "type": o2["type_label"], "work_type": o2["work_type"]}
                             ]
                         })
         
@@ -4144,7 +4144,8 @@ async def get_duplicates(request: Request):
                             "period_name": o["period_name"],
                             "worker": o["worker"],
                             "total": o["total"],
-                            "type": o["type_label"]
+                            "type": o["type_label"],
+                            "work_type": o["work_type"]
                         } for o in orders_list]
                     })
         
