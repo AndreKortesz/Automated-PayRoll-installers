@@ -4054,6 +4054,7 @@ async def get_duplicates(request: Request):
         exact_duplicates = []
         partial_duplicates = []
         needs_review = []
+        seen_review = set()
         
         # Step 1: Group orders by normalized address + work_type
         from collections import defaultdict
