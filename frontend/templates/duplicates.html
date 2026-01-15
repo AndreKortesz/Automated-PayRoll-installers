@@ -247,6 +247,34 @@
             color: var(--black);
         }
         .warning-banner-text strong { color: #E65100; }
+        
+        /* Info Banner */
+        .info-banner {
+            background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%);
+            border-radius: 12px;
+            padding: 14px 20px;
+            margin-bottom: 24px;
+            font-size: 14px;
+            color: #1565C0;
+        }
+        .info-banner strong { color: #0D47A1; }
+        
+        /* Cross-period highlight */
+        .dup-group.cross-period {
+            border: 2px solid #EF5350;
+            position: relative;
+        }
+        .cross-period-badge {
+            position: absolute;
+            top: -12px;
+            right: 16px;
+            background: #EF5350;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 700;
+        }
     </style>
 </head>
 <body>
@@ -369,22 +397,22 @@
         }
 
         function renderResults(data) {
-            const { hard_duplicates, combos, needs_review, stats } = data;
+            const { exact_duplicates, partial_duplicates, needs_review, stats } = data;
 
             let html = `
                 <div class="stats-row">
                     <div class="stat-card">
                         <div class="stat-icon hard">🔴</div>
                         <div>
-                            <div class="stat-value">${stats.hard_count}</div>
-                            <div class="stat-label">Жёстких дублей</div>
+                            <div class="stat-value">${stats.exact_count}</div>
+                            <div class="stat-label">Точных дублей</div>
                         </div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-icon combo">🟡</div>
                         <div>
-                            <div class="stat-value">${stats.combo_count}</div>
-                            <div class="stat-label">Комбо</div>
+                            <div class="stat-value">${stats.partial_count}</div>
+                            <div class="stat-label">Частичных совпадений</div>
                         </div>
                     </div>
                     <div class="stat-card">
@@ -395,28 +423,36 @@
                         </div>
                     </div>
                 </div>
+                
+                <div class="info-banner">
+                    📊 Проанализировано <strong>${stats.total_orders}</strong> заказов из <strong>${stats.total_periods}</strong> периодов
+                </div>
             `;
 
-            // Hard Duplicates Section
+            // Exact Duplicates Section (was hard_duplicates)
             html += `
-                <div class="section ${hard_duplicates.length === 0 ? 'collapsed' : ''}">
+                <div class="section ${exact_duplicates.length === 0 ? 'collapsed' : ''}">
                     <div class="section-header hard" onclick="toggleSection(this)">
                         <span class="section-icon">🔴</span>
-                        <span class="section-title">Жёсткие дубли</span>
-                        <span class="section-count">${hard_duplicates.length}</span>
+                        <span class="section-title">Точные дубли (адрес + работа + сумма ±10%)</span>
+                        <span class="section-count">${exact_duplicates.length}</span>
                         <span class="section-toggle">▼</span>
                     </div>
                     <div class="section-content">
             `;
 
-            if (hard_duplicates.length === 0) {
-                html += `<div class="empty-section"><div class="empty-icon">✅</div><p>Жёстких дублей не найдено</p></div>`;
+            if (exact_duplicates.length === 0) {
+                html += `<div class="empty-section"><div class="empty-icon">✅</div><p>Точных дублей не найдено</p></div>`;
             } else {
-                hard_duplicates.forEach(dup => {
+                exact_duplicates.forEach(dup => {
+                    // Check if cross-period
+                    const periods = [...new Set(dup.orders.map(o => o.period_name))];
+                    const crossPeriod = periods.length > 1;
+                    
                     html += `
-                        <div class="dup-group">
+                        <div class="dup-group ${crossPeriod ? 'cross-period' : ''}">
+                            ${crossPeriod ? '<div class="cross-period-badge">⚠️ КРОСС-ПЕРИОД</div>' : ''}
                             <div class="dup-group-header">
-                                <span class="dup-order-code">${Security.escapeHtml(dup.order_code)}</span>
                                 <span class="dup-address">📍 ${Security.escapeHtml(dup.address)}</span>
                                 <span class="dup-work-type ${getWorkTypeClass(dup.work_type)}">${getWorkTypeLabel(dup.work_type)}</span>
                             </div>
@@ -424,6 +460,7 @@
                                 <table>
                                     <thead>
                                         <tr>
+                                            <th>Заказ</th>
                                             <th>Период</th>
                                             <th>Монтажник</th>
                                             <th>Тип</th>
@@ -436,6 +473,7 @@
                         const typeClass = o.type === 'Клиент' ? 'type-client' : 'type-company';
                         html += `
                             <tr>
+                                <td class="dup-order-code">${Security.escapeHtml(o.order_code) || '—'}</td>
                                 <td>${Security.escapeHtml(o.period_name)}</td>
                                 <td>${Security.escapeHtml(o.worker)}</td>
                                 <td><span class="type-badge ${typeClass}">${o.type}</span></td>
@@ -448,26 +486,31 @@
             }
             html += `</div></div>`;
 
-            // Combo Section
+            // Partial Duplicates Section (was combos)
             html += `
-                <div class="section collapsed">
+                <div class="section ${partial_duplicates.length === 0 ? 'collapsed' : ''}">
                     <div class="section-header combo" onclick="toggleSection(this)">
                         <span class="section-icon">🟡</span>
-                        <span class="section-title">Комбо (один адрес — разные заказы)</span>
-                        <span class="section-count">${combos.length}</span>
+                        <span class="section-title">Частичные совпадения (адрес + работа, но разные суммы)</span>
+                        <span class="section-count">${partial_duplicates.length}</span>
                         <span class="section-toggle">▼</span>
                     </div>
                     <div class="section-content">
             `;
 
-            if (combos.length === 0) {
-                html += `<div class="empty-section"><div class="empty-icon">📋</div><p>Комбо не найдено</p></div>`;
+            if (partial_duplicates.length === 0) {
+                html += `<div class="empty-section"><div class="empty-icon">📋</div><p>Частичных совпадений не найдено</p></div>`;
             } else {
-                combos.forEach(combo => {
+                partial_duplicates.forEach(dup => {
+                    const periods = [...new Set(dup.orders.map(o => o.period_name))];
+                    const crossPeriod = periods.length > 1;
+                    
                     html += `
-                        <div class="dup-group">
+                        <div class="dup-group ${crossPeriod ? 'cross-period' : ''}">
+                            ${crossPeriod ? '<div class="cross-period-badge">⚠️ КРОСС-ПЕРИОД</div>' : ''}
                             <div class="dup-group-header">
-                                <span class="dup-address">📍 ${Security.escapeHtml(combo.address)}</span>
+                                <span class="dup-address">📍 ${Security.escapeHtml(dup.address)}</span>
+                                <span class="dup-work-type ${getWorkTypeClass(dup.work_type)}">${getWorkTypeLabel(dup.work_type)}</span>
                             </div>
                             <div class="dup-orders">
                                 <table>
@@ -476,21 +519,19 @@
                                             <th>Заказ</th>
                                             <th>Период</th>
                                             <th>Монтажник</th>
-                                            <th>Тип работы</th>
                                             <th>Тип</th>
                                             <th class="number">Итого</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                     `;
-                    combo.orders.forEach(o => {
+                    dup.orders.forEach(o => {
                         const typeClass = o.type === 'Клиент' ? 'type-client' : 'type-company';
                         html += `
                             <tr>
-                                <td class="dup-order-code">${Security.escapeHtml(o.order_code)}</td>
+                                <td class="dup-order-code">${Security.escapeHtml(o.order_code) || '—'}</td>
                                 <td>${Security.escapeHtml(o.period_name)}</td>
                                 <td>${Security.escapeHtml(o.worker)}</td>
-                                <td><span class="dup-work-type ${getWorkTypeClass(o.work_type)}">${getWorkTypeLabel(o.work_type)}</span></td>
                                 <td><span class="type-badge ${typeClass}">${o.type}</span></td>
                                 <td class="number">${formatNumber(o.total)} ₽</td>
                             </tr>
