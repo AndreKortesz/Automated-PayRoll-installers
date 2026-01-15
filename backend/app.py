@@ -4072,12 +4072,15 @@ async def get_duplicates(request: Request):
                 
                 # Check if this is a legitimate Client + Company pair
                 # (different payment types AND different amounts)
+                # Skip client+company pairs - this is normal business flow
                 if o1["is_client"] != o2["is_client"]:
-                    if not amounts_similar(o1["total"], o2["total"]):
-                        # This is a normal client+company split, not a duplicate
-                        continue
+                    continue
                 
-                # Found a potential duplicate
+                # Skip if both are client payments - this is also normal
+                if o1["is_client"] and o2["is_client"]:
+                    continue
+                
+                # At this point both are COMPANY payments - potential duplicate
                 pair_id = tuple(sorted([o1["id"], o2["id"]]))
                 
                 if amounts_similar(o1["total"], o2["total"]):
