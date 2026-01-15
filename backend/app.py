@@ -3890,6 +3890,7 @@ async def get_duplicates(request: Request):
         orders_query = f"""
             SELECT 
                 o.id, o.upload_id, o.order_code, o.address, o.worker, o.order_full,
+                o.order_date,
                 o.revenue_total, o.revenue_services, o.diagnostic,
                 o.is_client_payment,
                 c.total,
@@ -4040,6 +4041,7 @@ async def get_duplicates(request: Request):
                 "period_name": o._mapping["period_name"],
                 "period_id": o._mapping["period_id"],
                 "total": o._mapping.get("total") or 0,
+                "order_date": o._mapping.get("order_date"),
                 "work_type": get_work_type(o),
                 "is_client": bool(o._mapping.get("is_client_payment")),
                 "type_label": "Клиент" if o._mapping.get("is_client_payment") else "Компания",
@@ -4079,6 +4081,14 @@ async def get_duplicates(request: Request):
                 # Skip if both are client payments - this is also normal
                 if o1["is_client"] and o2["is_client"]:
                     continue
+                
+                # Skip if dates are different AND total < 4000 (repeat service visit)
+                date1 = o1.get("order_date")
+                date2 = o2.get("order_date")
+                if date1 and date2 and date1 != date2:
+                    max_total = max(o1["total"] or 0, o2["total"] or 0)
+                    if max_total < 4000:
+                        continue
                 
                 # At this point both are COMPANY payments - potential duplicate
                 pair_id = tuple(sorted([o1["id"], o2["id"]]))
