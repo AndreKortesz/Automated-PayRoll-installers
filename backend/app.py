@@ -3857,6 +3857,206 @@ async def search_page(request: Request, q: str = ""):
     })
 
 
+# ===== DUPLICATE CHECK (Admin only) =====
+
+@app.get("/api/duplicates")
+async def get_duplicates(request: Request):
+    """Get duplicate orders analysis (admin only)"""
+    user = get_current_user(request)
+    if not user or user.get("role") != "admin":
+        return {"success": False, "error": "Admin access required"}
+    
+    try:
+        # Get latest upload for each period
+        latest_uploads_query = """
+            SELECT u.id as upload_id, u.period_id, p.name as period_name
+            FROM uploads u
+            JOIN periods p ON u.period_id = p.id
+            WHERE u.version = (
+                SELECT MAX(u2.version) FROM uploads u2 WHERE u2.period_id = u.period_id
+            )
+            ORDER BY p.name DESC
+        """
+        latest_uploads = await database.fetch_all(latest_uploads_query)
+        upload_ids = [u._mapping["upload_id"] for u in latest_uploads]
+        
+        if not upload_ids:
+            return {"success": True, "hard_duplicates": [], "combos": [], "needs_review": []}
+        
+        # Get all orders from latest uploads with calculations
+        orders_query = f"""
+            SELECT 
+                o.id, o.upload_id, o.order_code, o.address, o.worker,
+                o.revenue_total, o.revenue_services, o.diagnostic,
+                o.is_client_payment,
+                c.total,
+                u.period_id, p.name as period_name
+            FROM orders o
+            JOIN uploads u ON o.upload_id = u.id
+            JOIN periods p ON u.period_id = p.id
+            LEFT JOIN calculations c ON c.order_id = o.id
+            WHERE o.upload_id IN ({','.join(map(str, upload_ids))})
+            AND o.order_code IS NOT NULL AND o.order_code != ''
+            ORDER BY o.order_code, p.name
+        """
+        all_orders = await database.fetch_all(orders_query)
+        
+        # Determine work type for each order
+        def get_work_type(order):
+            diag = order._mapping.get("diagnostic") or 0
+            revenue = order._mapping.get("revenue_services") or 0
+            total = order._mapping.get("total") or 0
+            
+            if diag > 0:
+                return "diagnostic"
+            elif revenue > 0 and total <= 5000:
+                return "inspection"
+            elif total > 5000:
+                return "installation"
+            else:
+                return "other"
+        
+        # Normalize address for comparison
+        def normalize_addr(addr):
+            if not addr:
+                return ""
+            return addr.lower().strip().replace("  ", " ")
+        
+        # Group orders for analysis
+        hard_duplicates = []
+        combos = []
+        needs_review = []
+        
+        # Group by order_code
+        from collections import defaultdict
+        by_order_code = defaultdict(list)
+        for o in all_orders:
+            code = o._mapping["order_code"]
+            if code:
+                by_order_code[code].append(o)
+        
+        # Group by normalized address
+        by_address = defaultdict(list)
+        for o in all_orders:
+            addr = normalize_addr(o._mapping.get("address"))
+            if addr:
+                by_address[addr].append(o)
+        
+        seen_hard = set()
+        seen_combo = set()
+        seen_review = set()
+        
+        # Find hard duplicates: same order_code + same address + same work_type
+        for code, orders_list in by_order_code.items():
+            if len(orders_list) < 2:
+                continue
+            
+            # Group by address + work_type
+            by_addr_type = defaultdict(list)
+            for o in orders_list:
+                addr = normalize_addr(o._mapping.get("address"))
+                wtype = get_work_type(o)
+                key = (addr, wtype)
+                by_addr_type[key].append(o)
+            
+            for (addr, wtype), group in by_addr_type.items():
+                if len(group) >= 2:
+                    # Hard duplicate found
+                    ids = tuple(sorted([o._mapping["id"] for o in group]))
+                    if ids not in seen_hard:
+                        seen_hard.add(ids)
+                        hard_duplicates.append({
+                            "order_code": code,
+                            "address": group[0]._mapping.get("address") or "",
+                            "work_type": wtype,
+                            "orders": [{
+                                "id": o._mapping["id"],
+                                "period_name": o._mapping["period_name"],
+                                "worker": o._mapping["worker"],
+                                "total": o._mapping.get("total") or 0,
+                                "type": "Клиент" if o._mapping.get("is_client_payment") else "Компания"
+                            } for o in group]
+                        })
+        
+        # Find combos: same address, different order_codes
+        for addr, orders_list in by_address.items():
+            if len(orders_list) < 2 or not addr:
+                continue
+            
+            codes = set(o._mapping["order_code"] for o in orders_list)
+            if len(codes) >= 2:
+                # Check if not already in hard duplicates
+                ids = tuple(sorted([o._mapping["id"] for o in orders_list]))
+                if ids not in seen_hard and ids not in seen_combo:
+                    seen_combo.add(ids)
+                    combos.append({
+                        "address": orders_list[0]._mapping.get("address") or "",
+                        "orders": [{
+                            "id": o._mapping["id"],
+                            "order_code": o._mapping["order_code"],
+                            "period_name": o._mapping["period_name"],
+                            "worker": o._mapping["worker"],
+                            "work_type": get_work_type(o),
+                            "total": o._mapping.get("total") or 0,
+                            "type": "Клиент" if o._mapping.get("is_client_payment") else "Компания"
+                        } for o in orders_list]
+                    })
+        
+        # Find needs_review: same order_code, different addresses
+        for code, orders_list in by_order_code.items():
+            if len(orders_list) < 2:
+                continue
+            
+            addresses = set(normalize_addr(o._mapping.get("address")) for o in orders_list)
+            if len(addresses) >= 2:
+                ids = tuple(sorted([o._mapping["id"] for o in orders_list]))
+                if ids not in seen_hard and ids not in seen_review:
+                    seen_review.add(ids)
+                    needs_review.append({
+                        "order_code": code,
+                        "orders": [{
+                            "id": o._mapping["id"],
+                            "address": o._mapping.get("address") or "",
+                            "period_name": o._mapping["period_name"],
+                            "worker": o._mapping["worker"],
+                            "total": o._mapping.get("total") or 0,
+                            "type": "Клиент" if o._mapping.get("is_client_payment") else "Компания"
+                        } for o in orders_list]
+                    })
+        
+        return {
+            "success": True,
+            "hard_duplicates": hard_duplicates,
+            "combos": combos,
+            "needs_review": needs_review,
+            "stats": {
+                "hard_count": len(hard_duplicates),
+                "combo_count": len(combos),
+                "review_count": len(needs_review)
+            }
+        }
+        
+    except Exception as e:
+        print(f"❌ Duplicates API error: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "error": str(e)}
+
+
+@app.get("/duplicates")
+async def duplicates_page(request: Request):
+    """Duplicate check page (admin only)"""
+    user = get_current_user(request)
+    if not user or user.get("role") != "admin":
+        return RedirectResponse(url="/", status_code=302)
+    
+    return templates.TemplateResponse("duplicates.html", {
+        "request": request,
+        "user": user,
+        "csrf_token": request.state.csrf_token if hasattr(request.state, 'csrf_token') else ''
+    })
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -100,6 +100,7 @@
             <a href="/" class="nav-link active">Главная</a>
             <a href="/history" class="nav-link">История</a>
             <a href="/comparison" class="nav-link">Сравнение</a>
+            {% if user and user.role == 'admin' %}<a href="/duplicates" class="nav-link">Дубли</a>{% endif %}
         </nav>
         
         <!-- Search Component -->

@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <title>Проверка дублей | Mos-GSM</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto+Condensed:wght@300;400;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="/static/security.js"></script>
+    <style>
+        .duplicates-page {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 32px;
+        }
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+        }
+        .page-title {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 42px;
+            color: var(--black);
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .title-icon {
+            width: 56px;
+            height: 56px;
+            background: linear-gradient(135deg, #EF5350 0%, #C62828 100%);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+        }
+        
+        /* Stats Cards */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-bottom: 32px;
+        }
+        .stat-card {
+            background: var(--white);
+            border-radius: 20px;
+            padding: 24px;
+            box-shadow: var(--shadow-soft);
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        .stat-icon {
+            width: 64px;
+            height: 64px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+        }
+        .stat-icon.hard { background: linear-gradient(135deg, #FFCDD2 0%, #EF9A9A 100%); }
+        .stat-icon.combo { background: linear-gradient(135deg, #FFF9C4 0%, #FFF176 100%); }
+        .stat-icon.review { background: linear-gradient(135deg, #BBDEFB 0%, #90CAF9 100%); }
+        .stat-value {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 48px;
+            color: var(--black);
+            line-height: 1;
+        }
+        .stat-label {
+            font-size: 14px;
+            color: var(--gray-dark);
+            margin-top: 4px;
+        }
+        
+        /* Sections */
+        .section {
+            background: var(--white);
+            border-radius: 20px;
+            box-shadow: var(--shadow-soft);
+            margin-bottom: 24px;
+            overflow: hidden;
+        }
+        .section-header {
+            padding: 20px 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .section-header:hover { background: var(--gray-light); }
+        .section-header.hard { border-left: 4px solid #EF5350; }
+        .section-header.combo { border-left: 4px solid #FFC107; }
+        .section-header.review { border-left: 4px solid #2196F3; }
+        .section-icon {
+            font-size: 24px;
+        }
+        .section-title {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 24px;
+            color: var(--black);
+            flex: 1;
+        }
+        .section-count {
+            background: var(--gray-light);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        .section-toggle {
+            font-size: 20px;
+            color: var(--gray-dark);
+            transition: transform 0.2s;
+        }
+        .section.collapsed .section-toggle { transform: rotate(-90deg); }
+        .section.collapsed .section-content { display: none; }
+        
+        .section-content {
+            padding: 0 24px 24px;
+        }
+        
+        /* Duplicate Groups */
+        .dup-group {
+            background: var(--gray-light);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+        .dup-group:last-child { margin-bottom: 0; }
+        .dup-group-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        .dup-order-code {
+            font-weight: 700;
+            color: var(--orange);
+            font-size: 16px;
+        }
+        .dup-address {
+            color: var(--gray-dark);
+            font-size: 14px;
+            flex: 1;
+            min-width: 200px;
+        }
+        .dup-work-type {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .work-diagnostic { background: #E1BEE7; color: #6A1B9A; }
+        .work-inspection { background: #C8E6C9; color: #2E7D32; }
+        .work-installation { background: #BBDEFB; color: #1565C0; }
+        .work-other { background: #E0E0E0; color: #424242; }
+        
+        /* Orders Table */
+        .dup-orders {
+            background: var(--white);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .dup-orders table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .dup-orders th {
+            background: var(--black);
+            color: var(--white);
+            padding: 12px 14px;
+            text-align: left;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .dup-orders td {
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--gray-light);
+            font-size: 14px;
+        }
+        .dup-orders tr:last-child td { border-bottom: none; }
+        .dup-orders tr:hover { background: rgba(243, 192, 77, 0.08); }
+        .dup-orders .number { text-align: right; font-weight: 600; }
+        .type-badge {
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .type-company { background: #E3F2FD; color: #1565C0; }
+        .type-client { background: #FFF3E0; color: #E65100; }
+        
+        /* Empty State */
+        .empty-section {
+            text-align: center;
+            padding: 40px;
+            color: var(--gray-dark);
+        }
+        .empty-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+        
+        /* Loading */
+        .loading-state {
+            text-align: center;
+            padding: 80px 20px;
+        }
+        .spinner-large {
+            width: 48px;
+            height: 48px;
+            border: 4px solid var(--gray);
+            border-top-color: var(--yellow);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        /* Warning Banner */
+        .warning-banner {
+            background: linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 100%);
+            border-radius: 16px;
+            padding: 20px 24px;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .warning-banner-icon { font-size: 32px; }
+        .warning-banner-text {
+            flex: 1;
+            font-size: 14px;
+            color: var(--black);
+        }
+        .warning-banner-text strong { color: #E65100; }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <a href="/" class="logo">
+            <div class="logo-icon"><div class="logo-bar"></div><div class="logo-bar"></div><div class="logo-bar"></div><div class="logo-bar"></div><div class="logo-bar"></div></div>
+            <span class="logo-text">Mos-GSM</span>
+        </a>
+        <nav class="nav">
+            <a href="/" class="nav-link">Главная</a>
+            <a href="/history" class="nav-link">История</a>
+            <a href="/comparison" class="nav-link">Сравнение</a>
+            <a href="/duplicates" class="nav-link active">Дубли</a>
+        </nav>
+        
+        <!-- Search Component -->
+        <div class="search-wrapper">
+            <div class="search-input-wrapper">
+                <svg class="search-icon" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+                <input type="text" id="globalSearch" placeholder="Поиск заказов..." autocomplete="off">
+            </div>
+            <div class="search-dropdown" id="searchDropdown"></div>
+        </div>
+        
+        {% if user %}
+        <div class="user-info">
+            <span class="user-name">👑 {{ user.name | e }}</span>
+            <a href="/auth/logout" class="logout-btn" title="Выйти">
+                <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>
+            </a>
+        </div>
+        {% endif %}
+    </header>
+
+    <main class="duplicates-page">
+        <div class="page-header">
+            <h1 class="page-title">
+                <div class="title-icon">🔍</div>
+                Проверка дублей
+            </h1>
+            <button class="btn btn-primary" onclick="loadData()">🔄 Обновить</button>
+        </div>
+
+        <div class="warning-banner">
+            <div class="warning-banner-icon">⚠️</div>
+            <div class="warning-banner-text">
+                <strong>Внимание!</strong> Анализ проводится только по последним версиям загрузок каждого периода. 
+                Проверяйте жёсткие дубли перед отправкой зарплат — это может привести к двойной оплате.
+            </div>
+        </div>
+
+        <div id="content">
+            <div class="loading-state">
+                <div class="spinner-large"></div>
+                <p>Анализ данных...</p>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        function formatNumber(num) {
+            if (!num) return '0';
+            return Math.round(num).toLocaleString('ru-RU');
+        }
+
+        function getWorkTypeLabel(type) {
+            const labels = {
+                'diagnostic': 'Диагностика',
+                'inspection': 'Осмотр',
+                'installation': 'Монтаж',
+                'other': 'Прочее'
+            };
+            return labels[type] || type;
+        }
+
+        function getWorkTypeClass(type) {
+            return 'work-' + type;
+        }
+
+        function toggleSection(el) {
+            el.closest('.section').classList.toggle('collapsed');
+        }
+
+        async function loadData() {
+            document.getElementById('content').innerHTML = `
+                <div class="loading-state">
+                    <div class="spinner-large"></div>
+                    <p>Анализ данных...</p>
+                </div>
+            `;
+
+            try {
+                const response = await Security.fetch('/api/duplicates');
+                const data = await response.json();
+
+                if (!data.success) {
+                    document.getElementById('content').innerHTML = `
+                        <div class="section">
+                            <div class="empty-section">
+                                <div class="empty-icon">❌</div>
+                                <p>Ошибка: ${Security.escapeHtml(data.error)}</p>
+                            </div>
+                        </div>
+                    `;
+                    return;
+                }
+
+                renderResults(data);
+
+            } catch (error) {
+                document.getElementById('content').innerHTML = `
+                    <div class="section">
+                        <div class="empty-section">
+                            <div class="empty-icon">❌</div>
+                            <p>Ошибка загрузки: ${Security.escapeHtml(error.message)}</p>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        function renderResults(data) {
+            const { hard_duplicates, combos, needs_review, stats } = data;
+
+            let html = `
+                <div class="stats-row">
+                    <div class="stat-card">
+                        <div class="stat-icon hard">🔴</div>
+                        <div>
+                            <div class="stat-value">${stats.hard_count}</div>
+                            <div class="stat-label">Жёстких дублей</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon combo">🟡</div>
+                        <div>
+                            <div class="stat-value">${stats.combo_count}</div>
+                            <div class="stat-label">Комбо</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon review">🔵</div>
+                        <div>
+                            <div class="stat-value">${stats.review_count}</div>
+                            <div class="stat-label">Требует проверки</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Hard Duplicates Section
+            html += `
+                <div class="section ${hard_duplicates.length === 0 ? 'collapsed' : ''}">
+                    <div class="section-header hard" onclick="toggleSection(this)">
+                        <span class="section-icon">🔴</span>
+                        <span class="section-title">Жёсткие дубли</span>
+                        <span class="section-count">${hard_duplicates.length}</span>
+                        <span class="section-toggle">▼</span>
+                    </div>
+                    <div class="section-content">
+            `;
+
+            if (hard_duplicates.length === 0) {
+                html += `<div class="empty-section"><div class="empty-icon">✅</div><p>Жёстких дублей не найдено</p></div>`;
+            } else {
+                hard_duplicates.forEach(dup => {
+                    html += `
+                        <div class="dup-group">
+                            <div class="dup-group-header">
+                                <span class="dup-order-code">${Security.escapeHtml(dup.order_code)}</span>
+                                <span class="dup-address">📍 ${Security.escapeHtml(dup.address)}</span>
+                                <span class="dup-work-type ${getWorkTypeClass(dup.work_type)}">${getWorkTypeLabel(dup.work_type)}</span>
+                            </div>
+                            <div class="dup-orders">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Период</th>
+                                            <th>Монтажник</th>
+                                            <th>Тип</th>
+                                            <th class="number">Итого</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                    `;
+                    dup.orders.forEach(o => {
+                        const typeClass = o.type === 'Клиент' ? 'type-client' : 'type-company';
+                        html += `
+                            <tr>
+                                <td>${Security.escapeHtml(o.period_name)}</td>
+                                <td>${Security.escapeHtml(o.worker)}</td>
+                                <td><span class="type-badge ${typeClass}">${o.type}</span></td>
+                                <td class="number">${formatNumber(o.total)} ₽</td>
+                            </tr>
+                        `;
+                    });
+                    html += `</tbody></table></div></div>`;
+                });
+            }
+            html += `</div></div>`;
+
+            // Combo Section
+            html += `
+                <div class="section collapsed">
+                    <div class="section-header combo" onclick="toggleSection(this)">
+                        <span class="section-icon">🟡</span>
+                        <span class="section-title">Комбо (один адрес — разные заказы)</span>
+                        <span class="section-count">${combos.length}</span>
+                        <span class="section-toggle">▼</span>
+                    </div>
+                    <div class="section-content">
+            `;
+
+            if (combos.length === 0) {
+                html += `<div class="empty-section"><div class="empty-icon">📋</div><p>Комбо не найдено</p></div>`;
+            } else {
+                combos.forEach(combo => {
+                    html += `
+                        <div class="dup-group">
+                            <div class="dup-group-header">
+                                <span class="dup-address">📍 ${Security.escapeHtml(combo.address)}</span>
+                            </div>
+                            <div class="dup-orders">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Заказ</th>
+                                            <th>Период</th>
+                                            <th>Монтажник</th>
+                                            <th>Тип работы</th>
+                                            <th>Тип</th>
+                                            <th class="number">Итого</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                    `;
+                    combo.orders.forEach(o => {
+                        const typeClass = o.type === 'Клиент' ? 'type-client' : 'type-company';
+                        html += `
+                            <tr>
+                                <td class="dup-order-code">${Security.escapeHtml(o.order_code)}</td>
+                                <td>${Security.escapeHtml(o.period_name)}</td>
+                                <td>${Security.escapeHtml(o.worker)}</td>
+                                <td><span class="dup-work-type ${getWorkTypeClass(o.work_type)}">${getWorkTypeLabel(o.work_type)}</span></td>
+                                <td><span class="type-badge ${typeClass}">${o.type}</span></td>
+                                <td class="number">${formatNumber(o.total)} ₽</td>
+                            </tr>
+                        `;
+                    });
+                    html += `</tbody></table></div></div>`;
+                });
+            }
+            html += `</div></div>`;
+
+            // Needs Review Section
+            html += `
+                <div class="section collapsed">
+                    <div class="section-header review" onclick="toggleSection(this)">
+                        <span class="section-icon">🔵</span>
+                        <span class="section-title">Требует проверки (один заказ — разные адреса)</span>
+                        <span class="section-count">${needs_review.length}</span>
+                        <span class="section-toggle">▼</span>
+                    </div>
+                    <div class="section-content">
+            `;
+
+            if (needs_review.length === 0) {
+                html += `<div class="empty-section"><div class="empty-icon">✅</div><p>Проблем не найдено</p></div>`;
+            } else {
+                needs_review.forEach(item => {
+                    html += `
+                        <div class="dup-group">
+                            <div class="dup-group-header">
+                                <span class="dup-order-code">${Security.escapeHtml(item.order_code)}</span>
+                            </div>
+                            <div class="dup-orders">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Адрес</th>
+                                            <th>Период</th>
+                                            <th>Монтажник</th>
+                                            <th>Тип</th>
+                                            <th class="number">Итого</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                    `;
+                    item.orders.forEach(o => {
+                        const typeClass = o.type === 'Клиент' ? 'type-client' : 'type-company';
+                        html += `
+                            <tr>
+                                <td>${Security.escapeHtml(o.address)}</td>
+                                <td>${Security.escapeHtml(o.period_name)}</td>
+                                <td>${Security.escapeHtml(o.worker)}</td>
+                                <td><span class="type-badge ${typeClass}">${o.type}</span></td>
+                                <td class="number">${formatNumber(o.total)} ₽</td>
+                            </tr>
+                        `;
+                    });
+                    html += `</tbody></table></div></div>`;
+                });
+            }
+            html += `</div></div>`;
+
+            document.getElementById('content').innerHTML = html;
+        }
+
+        // Load on page load
+        loadData();
+
+        // ===== Global Search =====
+        (function() {
+            const searchInput = document.getElementById('globalSearch');
+            const searchDropdown = document.getElementById('searchDropdown');
+            if (!searchInput || !searchDropdown) return;
+
+            let searchTimeout = null;
+            let currentQuery = '';
+
+            function highlightMatch(text, query) {
+                if (!text || !query) return Security.escapeHtml(text);
+                const escaped = Security.escapeHtml(text);
+                const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+                return escaped.replace(regex, '<span class="search-highlight">$1</span>');
+            }
+
+            function formatNum(num) { return num ? Math.round(num).toLocaleString('ru-RU') : '0'; }
+            function truncate(str, len) { return str && str.length > len ? str.substring(0, len) + '...' : (str || ''); }
+
+            async function doSearch(query) {
+                if (query.length < 2) { searchDropdown.classList.remove('active'); return; }
+                searchDropdown.innerHTML = '<div class="search-loading"><div class="search-loading-spinner"></div></div>';
+                searchDropdown.classList.add('active');
+
+                try {
+                    const response = await Security.fetch(`/api/search?q=${encodeURIComponent(query)}&limit=6`);
+                    const data = await response.json();
+                    if (!data.success || currentQuery !== query) return;
+
+                    const results = data.results || [];
+                    if (results.length === 0) {
+                        searchDropdown.innerHTML = `<div class="search-empty"><div class="search-empty-text">Ничего не найдено</div></div>`;
+                        return;
+                    }
+
+                    let html = '<div class="search-dropdown-header">Найденные заказы</div>';
+                    results.forEach(r => {
+                        const typeClass = r.type === 'Клиент' ? 'client' : 'company';
+                        const icon = r.type === 'Клиент' ? '👤' : '🏢';
+                        html += `<a href="/upload/${r.upload_id}?worker=${encodeURIComponent(r.worker)}&highlight=${encodeURIComponent(r.order_code)}" class="search-result-item">
+                            <div class="search-result-icon ${typeClass}">${icon}</div>
+                            <div class="search-result-content">
+                                <div class="search-result-title"><span class="search-result-order">${highlightMatch(r.order_code, query)}</span><span class="search-result-period">${Security.escapeHtml(r.period_name)}</span></div>
+                                <div class="search-result-meta"><span class="search-result-worker">${highlightMatch(r.worker, query)}</span><span>•</span><span class="search-result-address">${highlightMatch(truncate(r.address, 40), query)}</span></div>
+                            </div>
+                            <div class="search-result-right"><div class="search-result-total">${formatNum(r.total)} ₽</div><span class="search-result-type ${typeClass}">${r.type}</span></div>
+                        </a>`;
+                    });
+                    html += `<a href="/search?q=${encodeURIComponent(query)}" class="search-all-link"><svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>Показать все результаты</a>`;
+                    searchDropdown.innerHTML = html;
+                } catch (error) {
+                    searchDropdown.innerHTML = '<div class="search-empty"><div class="search-empty-text">Ошибка поиска</div></div>';
+                }
+            }
+
+            searchInput.addEventListener('input', (e) => {
+                currentQuery = e.target.value.trim();
+                clearTimeout(searchTimeout);
+                if (currentQuery.length < 2) { searchDropdown.classList.remove('active'); return; }
+                searchTimeout = setTimeout(() => doSearch(currentQuery), 300);
+            });
+            searchInput.addEventListener('keypress', (e) => { if (e.key === 'Enter' && currentQuery.length >= 2) window.location.href = `/search?q=${encodeURIComponent(currentQuery)}`; });
+            searchInput.addEventListener('focus', () => { if (currentQuery.length >= 2) searchDropdown.classList.add('active'); });
+            document.addEventListener('click', (e) => { if (!e.target.closest('.search-wrapper')) searchDropdown.classList.remove('active'); });
+        })();
+    </script>
+</body>
+</html>
