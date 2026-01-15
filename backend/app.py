@@ -4091,9 +4091,16 @@ async def get_duplicates(request: Request):
             """Create hash for database storage"""
             return hashlib.md5(addr_key.encode()).hexdigest()
         
-        # Load existing exclusions
+        # Load existing exclusions - map by (address_hash, work_type) to set of excluded order_ids
         exclusions = await get_duplicate_exclusions()
-        excluded_set = {(e["address_hash"], e["work_type"]) for e in exclusions}
+        exclusions_map = {}
+        for e in exclusions:
+            key = (e["address_hash"], e["work_type"])
+            excluded_ids = set(e.get("order_ids") or [])
+            if key in exclusions_map:
+                exclusions_map[key].update(excluded_ids)
+            else:
+                exclusions_map[key] = excluded_ids
         
         address_groups = defaultdict(list)
         for o in processed_orders:
@@ -4132,8 +4139,16 @@ async def get_duplicates(request: Request):
             
             # Check if this cluster is excluded
             address_hash = get_address_hash(addr_key)
-            if (address_hash, work_type) in excluded_set:
+            
+            # Get current order IDs in this cluster
+            current_order_ids = set(o["id"] for o in orders)
+            
+            # Check if ALL current orders were already marked as "not a duplicate"
+            excluded_ids = exclusions_map.get((address_hash, work_type), set())
+            if excluded_ids and current_order_ids.issubset(excluded_ids):
+                # All orders in this cluster were already checked - skip
                 continue
+            # If there are new orders not in exclusion - show the cluster
             
             # Check if addresses actually match (verify with addresses_match)
             # Use first order's address as reference
