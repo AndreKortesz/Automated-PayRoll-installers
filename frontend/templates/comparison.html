@@ -44,8 +44,22 @@
 </head>
 <body>
     <header class="header">
-        <a href="/" class="logo"><div class="logo-icon"><div class="logo-bar"></div><div class="logo-bar"></div><div class="logo-bar"></div><div class="logo-bar"></div><div class="logo-bar"></div></div><span class="logo-text">Mos-GSM</span></a>
-        <nav class="nav"><a href="/" class="nav-link">Главная</a><a href="/history" class="nav-link">История</a><a href="/comparison" class="nav-link active">Сравнение</a></nav>
+        <a href="/" class="logo">
+            <div class="logo-icon">
+                <div class="logo-bar"></div>
+                <div class="logo-bar"></div>
+                <div class="logo-bar"></div>
+                <div class="logo-bar"></div>
+                <div class="logo-bar"></div>
+            </div>
+            <span class="logo-text">Mos-GSM</span>
+        </a>
+        <nav class="nav">
+            <a href="/" class="nav-link">Главная</a>
+            <a href="/history" class="nav-link">История</a>
+            <a href="/comparison" class="nav-link active">Сравнение</a>
+            {% if user and user.role == 'admin' %}<a href="/duplicates" class="nav-link">Дубли</a>{% endif %}
+        </nav>
         
         <!-- Search Component -->
         <div class="search-wrapper">
@@ -58,8 +72,16 @@
         
         {% if user %}
         <div class="user-info">
-            <span class="user-name">{% if user.role == 'admin' %}👑{% else %}👤{% endif %} {{ user.name | e }}</span>
-            <a href="/auth/logout" class="logout-btn" title="Выйти"><svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg></a>
+            <span class="user-name">
+                {% if user.role == 'admin' %}👑{% else %}👤{% endif %}
+                {{ user.name | e }}
+            </span>
+            <span class="user-role {% if user.role == 'admin' %}role-admin{% else %}role-employee{% endif %}">
+                {{ 'Администратор' if user.role == 'admin' else 'Сотрудник' }}
+            </span>
+            <a href="/auth/logout" class="logout-btn" title="Выйти">
+                <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>
+            </a>
         </div>
         {% endif %}
     </header>
