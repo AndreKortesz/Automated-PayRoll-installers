@@ -4047,82 +4047,86 @@ async def get_duplicates(request: Request):
                 "type_label": "Клиент" if o._mapping.get("is_client_payment") else "Компания",
             })
         
-        # === FIND DUPLICATES ===
+        # === FIND DUPLICATES (CLUSTER-BASED) ===
         
         exact_duplicates = []
         partial_duplicates = []
         needs_review = []
         
-        seen_exact = set()
-        seen_partial = set()
-        seen_review = set()
+        # Step 1: Group orders by normalized address + work_type
+        from collections import defaultdict
         
-        # Compare all pairs of orders
-        n = len(processed_orders)
-        for i in range(n):
-            for j in range(i + 1, n):
-                o1 = processed_orders[i]
-                o2 = processed_orders[j]
-                
-                # Skip if addresses don't match
-                if not addresses_match(o1["address"], o2["address"]):
-                    continue
-                
-                # Skip if work types don't match
-                if o1["work_type"] != o2["work_type"]:
-                    continue
-                
-                # Check if this is a legitimate Client + Company pair
-                # (different payment types AND different amounts)
-                # Skip client+company pairs - this is normal business flow
-                if o1["is_client"] != o2["is_client"]:
-                    continue
-                
-                # Skip if both are client payments - this is also normal
-                if o1["is_client"] and o2["is_client"]:
-                    continue
-                
-                # Skip if dates are different AND total < 4000 (repeat service visit)
-                date1 = o1.get("order_date")
-                date2 = o2.get("order_date")
-                if date1 and date2 and date1 != date2:
-                    max_total = max(o1["total"] or 0, o2["total"] or 0)
-                    if max_total < 4000:
-                        continue
-                
-                # At this point both are COMPANY payments - potential duplicate
-                pair_id = tuple(sorted([o1["id"], o2["id"]]))
-                
-                if amounts_similar(o1["total"], o2["total"]):
-                    # Exact duplicate
-                    if pair_id not in seen_exact:
-                        seen_exact.add(pair_id)
-                        exact_duplicates.append({
-                            "address": o1["address"],
-                            "work_type": o1["work_type"],
-                            "match_type": "exact",
-                            "orders": [
-                                {"id": o1["id"], "upload_id": o1["upload_id"], "order_code": o1["order_code"], "period_name": o1["period_name"],
-                                 "worker": o1["worker"], "total": o1["total"], "type": o1["type_label"], "work_type": o1["work_type"]},
-                                {"id": o2["id"], "upload_id": o2["upload_id"], "order_code": o2["order_code"], "period_name": o2["period_name"],
-                                 "worker": o2["worker"], "total": o2["total"], "type": o2["type_label"], "work_type": o2["work_type"]}
-                            ]
-                        })
-                else:
-                    # Partial duplicate (same address, different amounts)
-                    if pair_id not in seen_partial and pair_id not in seen_exact:
-                        seen_partial.add(pair_id)
-                        partial_duplicates.append({
-                            "address": o1["address"],
-                            "work_type": o1["work_type"],
-                            "match_type": "partial",
-                            "orders": [
-                                {"id": o1["id"], "upload_id": o1["upload_id"], "order_code": o1["order_code"], "period_name": o1["period_name"],
-                                 "worker": o1["worker"], "total": o1["total"], "type": o1["type_label"], "work_type": o1["work_type"]},
-                                {"id": o2["id"], "upload_id": o2["upload_id"], "order_code": o2["order_code"], "period_name": o2["period_name"],
-                                 "worker": o2["worker"], "total": o2["total"], "type": o2["type_label"], "work_type": o2["work_type"]}
-                            ]
-                        })
+        def get_address_key(addr):
+            """Create a key for grouping by address"""
+            street, number = extract_street_and_number(addr)
+            return f"{street}|{number}".lower()
+        
+        address_groups = defaultdict(list)
+        for o in processed_orders:
+            # Only consider COMPANY payments for duplicates
+            if o["is_client"]:
+                continue
+            
+            key = (get_address_key(o["address"]), o["work_type"])
+            address_groups[key].append(o)
+        
+        # Step 2: Process each group
+        for (addr_key, work_type), orders in address_groups.items():
+            if len(orders) < 2:
+                continue
+            
+            # Check if ALL orders in group qualify for "repeat visit" exclusion
+            # (all have different dates AND all totals < 4000)
+            dates = [o.get("order_date") for o in orders]
+            totals = [o.get("total") or 0 for o in orders]
+            
+            all_different_dates = len(set(d for d in dates if d)) == len([d for d in dates if d])
+            all_small_amounts = all(t < 4000 for t in totals)
+            
+            if all_different_dates and all_small_amounts and len(set(d for d in dates if d)) > 1:
+                # This is likely repeat service visits, not duplicates
+                continue
+            
+            # Check if addresses actually match (verify with addresses_match)
+            # Use first order's address as reference
+            matching_orders = [orders[0]]
+            for o in orders[1:]:
+                if addresses_match(orders[0]["address"], o["address"]):
+                    matching_orders.append(o)
+            
+            if len(matching_orders) < 2:
+                continue
+            
+            # Determine if exact or partial based on amounts
+            amounts = [o["total"] for o in matching_orders]
+            all_similar = all(amounts_similar(amounts[0], a) for a in amounts[1:])
+            
+            # Format orders for output
+            formatted_orders = [{
+                "id": o["id"],
+                "upload_id": o["upload_id"],
+                "order_code": o["order_code"],
+                "period_name": o["period_name"],
+                "worker": o["worker"],
+                "total": o["total"],
+                "type": o["type_label"],
+                "work_type": o["work_type"]
+            } for o in matching_orders]
+            
+            # Sort by period (newest first)
+            formatted_orders.sort(key=lambda x: x["period_name"], reverse=True)
+            
+            cluster = {
+                "address": matching_orders[0]["address"],
+                "work_type": work_type,
+                "match_type": "exact" if all_similar else "partial",
+                "orders": formatted_orders
+            }
+            
+            if all_similar:
+                exact_duplicates.append(cluster)
+            else:
+                partial_duplicates.append(cluster)
         
         # Find needs_review: same order_code, different addresses
         by_order_code = defaultdict(list)
