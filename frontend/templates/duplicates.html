@@ -210,6 +210,28 @@
             font-family: 'Roboto Mono', monospace;
         }
         
+        /* Clickable rows */
+        .dup-orders tr.clickable-row {
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .dup-orders tr.clickable-row:hover {
+            background: #FFF8E1;
+        }
+        .dup-orders tr.clickable-row:active {
+            background: #FFECB3;
+        }
+        .row-link-hint {
+            opacity: 0;
+            margin-left: 8px;
+            font-size: 12px;
+            color: var(--gray-dark);
+            transition: opacity 0.15s;
+        }
+        .dup-orders tr.clickable-row:hover .row-link-hint {
+            opacity: 1;
+        }
+        
         /* Type Badges */
         .type-badge {
             padding: 4px 10px;
@@ -457,9 +479,10 @@
                                 <tbody>
                                     ${dup.orders.map(o => {
                                         const typeClass = o.type === 'Клиент' ? 'type-client' : 'type-company';
+                                        const url = `/upload/${o.upload_id}?worker=${encodeURIComponent(o.worker)}&highlight=${encodeURIComponent(o.order_code || o.id)}`;
                                         return `
-                                            <tr>
-                                                <td class="dup-order-code">${Security.escapeHtml(o.order_code) || '—'}</td>
+                                            <tr class="clickable-row" onclick="window.location.href='${url}'" title="Перейти к заказу">
+                                                <td class="dup-order-code">${Security.escapeHtml(o.order_code) || '—'}<span class="row-link-hint">→</span></td>
                                                 <td>${Security.escapeHtml(o.period_name)}</td>
                                                 <td>${Security.escapeHtml(o.worker)}</td>
                                                 <td><span class="type-badge ${typeClass}">${o.type}</span></td>
@@ -512,9 +535,10 @@
                                 <tbody>
                                     ${dup.orders.map(o => {
                                         const typeClass = o.type === 'Клиент' ? 'type-client' : 'type-company';
+                                        const url = `/upload/${o.upload_id}?worker=${encodeURIComponent(o.worker)}&highlight=${encodeURIComponent(o.order_code || o.id)}`;
                                         return `
-                                            <tr>
-                                                <td class="dup-order-code">${Security.escapeHtml(o.order_code) || '—'}</td>
+                                            <tr class="clickable-row" onclick="window.location.href='${url}'" title="Перейти к заказу">
+                                                <td class="dup-order-code">${Security.escapeHtml(o.order_code) || '—'}<span class="row-link-hint">→</span></td>
                                                 <td>${Security.escapeHtml(o.period_name)}</td>
                                                 <td>${Security.escapeHtml(o.worker)}</td>
                                                 <td><span class="type-badge ${typeClass}">${o.type}</span></td>
@@ -563,9 +587,10 @@
                                 <tbody>
                                     ${item.orders.map(o => {
                                         const typeClass = o.type === 'Клиент' ? 'type-client' : 'type-company';
+                                        const url = `/upload/${o.upload_id}?worker=${encodeURIComponent(o.worker)}&highlight=${encodeURIComponent(item.order_code || o.id)}`;
                                         return `
-                                            <tr>
-                                                <td>${Security.escapeHtml(o.address)}</td>
+                                            <tr class="clickable-row" onclick="window.location.href='${url}'" title="Перейти к заказу">
+                                                <td>${Security.escapeHtml(o.address)}<span class="row-link-hint">→</span></td>
                                                 <td>${Security.escapeHtml(o.period_name)}</td>
                                                 <td>${Security.escapeHtml(o.worker)}</td>
                                                 <td><span class="type-badge ${typeClass}">${o.type}</span></td>
