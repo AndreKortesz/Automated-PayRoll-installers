@@ -4092,10 +4092,19 @@ async def get_duplicates(request: Request):
             dates = [o.get("order_date") for o in orders]
             totals = [o.get("total") or 0 for o in orders]
             
-            all_different_dates = len(set(d for d in dates if d)) == len([d for d in dates if d])
+            # Get unique non-null dates
+            unique_dates = set(d for d in dates if d)
+            non_null_dates = [d for d in dates if d]
+            
+            # Debug: log dates for Люберцы
+            if "люберц" in orders[0]["address"].lower() or "октябрьский" in orders[0]["address"].lower():
+                print(f"🔍 DEBUG Люберцы: dates={dates}, unique={unique_dates}, totals={totals}")
+            
+            # All dates are different (each order on different day)
+            all_different_dates = len(unique_dates) == len(non_null_dates) and len(unique_dates) >= 2
             all_small_amounts = all(t < 4000 for t in totals)
             
-            if all_different_dates and all_small_amounts and len(set(d for d in dates if d)) > 1:
+            if all_different_dates and all_small_amounts:
                 # This is likely repeat service visits, not duplicates
                 continue
             
