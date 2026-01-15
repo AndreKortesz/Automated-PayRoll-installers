@@ -251,6 +251,41 @@
             transform: scale(0.95);
         }
         
+        /* Exclude button */
+        .dup-group-actions {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid var(--gray-medium);
+        }
+        .btn-exclude {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 18px;
+            background: linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%);
+            border: none;
+            border-radius: 10px;
+            color: #2E7D32;
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-exclude:hover {
+            background: linear-gradient(135deg, #C8E6C9 0%, #A5D6A7 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(46, 125, 50, 0.2);
+        }
+        .btn-exclude:active {
+            transform: translateY(0);
+        }
+        .btn-exclude.loading {
+            opacity: 0.7;
+            pointer-events: none;
+        }
+        
         /* Type Badges */
         .type-badge {
             padding: 4px 10px;
@@ -473,12 +508,13 @@
             }
 
             let html = '';
-            duplicates.forEach(dup => {
+            duplicates.forEach((dup, idx) => {
                 const periods = [...new Set(dup.orders.map(o => o.period_name))];
                 const crossPeriod = periods.length > 1;
+                const orderIds = dup.orders.map(o => o.id);
                 
                 html += `
-                    <div class="dup-group ${crossPeriod ? 'cross-period' : ''}">
+                    <div class="dup-group ${crossPeriod ? 'cross-period' : ''}" data-hash="${dup.address_hash}" data-worktype="${dup.work_type}">
                         ${crossPeriod ? '<div class="cross-period-badge">⚠️ КРОСС-ПЕРИОД</div>' : ''}
                         <div class="dup-group-header">
                             <span class="dup-address">📍 ${Security.escapeHtml(dup.address)}</span>
@@ -515,6 +551,11 @@
                                     }).join('')}
                                 </tbody>
                             </table>
+                        </div>
+                        <div class="dup-group-actions">
+                            <button class="btn-exclude" onclick="excludeDuplicate('${dup.address_hash}', '${dup.work_type}', '${Security.escapeHtml(dup.address).replace(/'/g, "\\'")}', ${JSON.stringify(orderIds)}, this)">
+                                ✓ Я проверил — это не дубль
+                            </button>
                         </div>
                     </div>
                 `;
@@ -533,12 +574,13 @@
             }
 
             let html = '';
-            duplicates.forEach(dup => {
+            duplicates.forEach((dup, idx) => {
                 const periods = [...new Set(dup.orders.map(o => o.period_name))];
                 const crossPeriod = periods.length > 1;
+                const orderIds = dup.orders.map(o => o.id);
                 
                 html += `
-                    <div class="dup-group ${crossPeriod ? 'cross-period' : ''}">
+                    <div class="dup-group ${crossPeriod ? 'cross-period' : ''}" data-hash="${dup.address_hash}" data-worktype="${dup.work_type}">
                         ${crossPeriod ? '<div class="cross-period-badge">⚠️ КРОСС-ПЕРИОД</div>' : ''}
                         <div class="dup-group-header">
                             <span class="dup-address">📍 ${Security.escapeHtml(dup.address)}</span>
@@ -575,6 +617,11 @@
                                     }).join('')}
                                 </tbody>
                             </table>
+                        </div>
+                        <div class="dup-group-actions">
+                            <button class="btn-exclude" onclick="excludeDuplicate('${dup.address_hash}', '${dup.work_type}', '${Security.escapeHtml(dup.address).replace(/'/g, "\\'")}', ${JSON.stringify(orderIds)}, this)">
+                                ✓ Я проверил — это не дубль
+                            </button>
                         </div>
                     </div>
                 `;
@@ -646,6 +693,80 @@
         function onOrderCodeClick(orderCode) {
             // TODO: Интеграция с 1С API
             alert(`🔄 Синхронизация с 1С\n\nЗаказ: ${orderCode}\n\nЭта функция будет доступна после подключения API 1С`);
+        }
+
+        // Exclude duplicate cluster
+        async function excludeDuplicate(addressHash, workType, addressDisplay, orderIds, btn) {
+            if (!confirm(`Вы уверены, что это не дубль?\n\nАдрес: ${addressDisplay}\n\nКластер будет скрыт из списка дублей.`)) {
+                return;
+            }
+            
+            btn.classList.add('loading');
+            btn.textContent = '⏳ Сохранение...';
+            
+            try {
+                const response = await Security.fetch('/api/duplicates/exclude', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        address_hash: addressHash,
+                        work_type: workType,
+                        address_display: addressDisplay,
+                        order_ids: orderIds
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Remove the cluster from UI with animation
+                    const group = btn.closest('.dup-group');
+                    group.style.transition = 'all 0.3s ease-out';
+                    group.style.opacity = '0';
+                    group.style.transform = 'translateX(50px)';
+                    
+                    setTimeout(() => {
+                        group.remove();
+                        // Update counts
+                        updateTabCounts();
+                    }, 300);
+                } else {
+                    alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
+                    btn.classList.remove('loading');
+                    btn.textContent = '✓ Я проверил — это не дубль';
+                }
+            } catch (error) {
+                alert('Ошибка сети: ' + error.message);
+                btn.classList.remove('loading');
+                btn.textContent = '✓ Я проверил — это не дубль';
+            }
+        }
+        
+        // Update tab counts after exclusion
+        function updateTabCounts() {
+            const exactCount = document.querySelectorAll('#panel-exact .dup-group').length;
+            const partialCount = document.querySelectorAll('#panel-partial .dup-group').length;
+            
+            document.querySelector('.tab-btn.tab-exact .tab-count').textContent = exactCount;
+            document.querySelector('.tab-btn.tab-partial .tab-count').textContent = partialCount;
+            
+            // Show empty state if needed
+            if (exactCount === 0) {
+                document.getElementById('panel-exact').innerHTML = `
+                    <div class="empty-section">
+                        <div class="empty-icon">✅</div>
+                        <p>Точных дублей не найдено</p>
+                    </div>
+                `;
+            }
+            if (partialCount === 0) {
+                document.getElementById('panel-partial').innerHTML = `
+                    <div class="empty-section">
+                        <div class="empty-icon">📋</div>
+                        <p>Частичных совпадений не найдено</p>
+                    </div>
+                `;
+            }
         }
 
         // ===== Global Search =====

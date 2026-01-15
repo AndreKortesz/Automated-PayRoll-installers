@@ -46,7 +46,9 @@ from database import (
     get_orders_by_upload, get_all_periods, get_period_details,
     get_upload_details, get_worker_orders, get_months_summary,
     get_user_by_bitrix_id, create_or_update_user, update_period_status,
-    get_period_status, is_latest_period, PeriodStatus, log_action
+    get_period_status, is_latest_period, PeriodStatus, log_action,
+    add_duplicate_exclusion, remove_duplicate_exclusion, 
+    get_duplicate_exclusions, is_duplicate_excluded
 )
 
 # ============================================================================
@@ -4055,11 +4057,20 @@ async def get_duplicates(request: Request):
         
         # Step 1: Group orders by normalized address + work_type
         from collections import defaultdict
+        import hashlib
         
         def get_address_key(addr):
             """Create a key for grouping by address"""
             street, number = extract_street_and_number(addr)
             return f"{street}|{number}".lower()
+        
+        def get_address_hash(addr_key):
+            """Create hash for database storage"""
+            return hashlib.md5(addr_key.encode()).hexdigest()
+        
+        # Load existing exclusions
+        exclusions = await get_duplicate_exclusions()
+        excluded_set = {(e["address_hash"], e["work_type"]) for e in exclusions}
         
         address_groups = defaultdict(list)
         for o in processed_orders:
@@ -4085,6 +4096,11 @@ async def get_duplicates(request: Request):
             
             if all_different_dates and all_small_amounts and len(set(d for d in dates if d)) > 1:
                 # This is likely repeat service visits, not duplicates
+                continue
+            
+            # Check if this cluster is excluded
+            address_hash = get_address_hash(addr_key)
+            if (address_hash, work_type) in excluded_set:
                 continue
             
             # Check if addresses actually match (verify with addresses_match)
@@ -4118,6 +4134,7 @@ async def get_duplicates(request: Request):
             
             cluster = {
                 "address": matching_orders[0]["address"],
+                "address_hash": address_hash,
                 "work_type": work_type,
                 "match_type": "exact" if all_similar else "partial",
                 "orders": formatted_orders
@@ -4201,6 +4218,71 @@ async def duplicates_page(request: Request):
         "user": user,
         "csrf_token": request.state.csrf_token if hasattr(request.state, 'csrf_token') else ''
     })
+
+
+@app.post("/api/duplicates/exclude")
+async def exclude_duplicate(request: Request):
+    """Mark a duplicate cluster as 'not a duplicate'"""
+    user = get_current_user(request)
+    if not user or user.get("role") != "admin":
+        return {"success": False, "error": "Доступ запрещён"}
+    
+    try:
+        data = await request.json()
+        address_hash = data.get("address_hash")
+        work_type = data.get("work_type")
+        address_display = data.get("address_display", "")
+        order_ids = data.get("order_ids", [])
+        reason = data.get("reason", "")
+        
+        if not address_hash or not work_type:
+            return {"success": False, "error": "Не указан адрес или тип работ"}
+        
+        exclusion_id = await add_duplicate_exclusion(
+            address_hash=address_hash,
+            work_type=work_type,
+            address_display=address_display,
+            order_ids=order_ids,
+            excluded_by=user.get("id"),
+            excluded_by_name=user.get("display_name", user.get("name", "")),
+            reason=reason
+        )
+        
+        return {"success": True, "exclusion_id": exclusion_id}
+        
+    except Exception as e:
+        print(f"❌ Exclude duplicate error: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@app.delete("/api/duplicates/exclude/{exclusion_id}")
+async def restore_duplicate(request: Request, exclusion_id: int):
+    """Remove exclusion and show duplicate again"""
+    user = get_current_user(request)
+    if not user or user.get("role") != "admin":
+        return {"success": False, "error": "Доступ запрещён"}
+    
+    try:
+        await remove_duplicate_exclusion(exclusion_id)
+        return {"success": True}
+    except Exception as e:
+        print(f"❌ Restore duplicate error: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@app.get("/api/duplicates/exclusions")
+async def list_exclusions(request: Request):
+    """Get list of all excluded duplicates"""
+    user = get_current_user(request)
+    if not user or user.get("role") != "admin":
+        return {"success": False, "error": "Доступ запрещён"}
+    
+    try:
+        exclusions = await get_duplicate_exclusions()
+        return {"success": True, "exclusions": exclusions}
+    except Exception as e:
+        print(f"❌ List exclusions error: {e}")
+        return {"success": False, "error": str(e)}
 
 
 if __name__ == "__main__":

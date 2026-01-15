@@ -278,6 +278,21 @@ version_changes = Table(
     Column("created_at", DateTime, default=datetime.utcnow),
 )
 
+# Duplicate exclusions table (исключения дублей - "Я проверил, это не дубль")
+duplicate_exclusions = Table(
+    "duplicate_exclusions",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("address_hash", String(64), nullable=False),  # Хеш нормализованного адреса
+    Column("work_type", String(20), nullable=False),     # diagnostic, inspection, installation, other
+    Column("address_display", Text),                      # Оригинальный адрес для отображения
+    Column("order_ids", JSON),                            # Список ID заказов в кластере на момент исключения
+    Column("reason", Text),                               # Причина исключения (опционально)
+    Column("excluded_by", Integer, ForeignKey("users.id"), nullable=True),
+    Column("excluded_by_name", String(200)),
+    Column("created_at", DateTime, default=datetime.utcnow),
+)
+
 
 # ============== DATABASE FUNCTIONS ==============
 
@@ -1254,3 +1269,69 @@ async def get_version_changes(upload_id: int) -> List[dict]:
     
     rows = await database.fetch_all(query)
     return [dict(row._mapping) for row in rows]
+
+
+# ============== DUPLICATE EXCLUSIONS FUNCTIONS ==============
+
+async def add_duplicate_exclusion(
+    address_hash: str,
+    work_type: str,
+    address_display: str,
+    order_ids: List[int],
+    excluded_by: int = None,
+    excluded_by_name: str = None,
+    reason: str = None
+) -> int:
+    """Add a duplicate exclusion (mark cluster as 'not a duplicate')"""
+    if not database or not database.is_connected:
+        return None
+    
+    query = duplicate_exclusions.insert().values(
+        address_hash=address_hash,
+        work_type=work_type,
+        address_display=address_display,
+        order_ids=order_ids,
+        excluded_by=excluded_by,
+        excluded_by_name=excluded_by_name,
+        reason=reason
+    )
+    return await database.execute(query)
+
+
+async def remove_duplicate_exclusion(exclusion_id: int) -> bool:
+    """Remove a duplicate exclusion"""
+    if not database or not database.is_connected:
+        return False
+    
+    query = duplicate_exclusions.delete().where(
+        duplicate_exclusions.c.id == exclusion_id
+    )
+    await database.execute(query)
+    return True
+
+
+async def get_duplicate_exclusions() -> List[dict]:
+    """Get all duplicate exclusions"""
+    if not database or not database.is_connected:
+        return []
+    
+    query = duplicate_exclusions.select().order_by(
+        duplicate_exclusions.c.created_at.desc()
+    )
+    rows = await database.fetch_all(query)
+    return [dict(row._mapping) for row in rows]
+
+
+async def is_duplicate_excluded(address_hash: str, work_type: str) -> bool:
+    """Check if a duplicate cluster is excluded"""
+    if not database or not database.is_connected:
+        return False
+    
+    query = duplicate_exclusions.select().where(
+        and_(
+            duplicate_exclusions.c.address_hash == address_hash,
+            duplicate_exclusions.c.work_type == work_type
+        )
+    )
+    row = await database.fetch_one(query)
+    return row is not None
