@@ -823,7 +823,7 @@ async def save_order(upload_id: int, order_data: dict) -> int:
     
     # Only include fields that exist in orders table
     allowed_fields = {
-        'worker', 'order_code', 'order_full', 'address',
+        'worker', 'order_code', 'order_full', 'order_date', 'address',
         'revenue_total', 'revenue_services', 'diagnostic', 'diagnostic_payment',
         'specialist_fee', 'additional_expenses', 'service_payment', 'percent',
         'is_client_payment', 'is_over_10k', 'is_extra_row', 'manager_comment'

@@ -1328,6 +1328,16 @@ async def apply_review_changes(request: Request):
                 if match:
                     order_code = match.group(0)
 
+
+            # Extract order date from text (format: "КАУТ-001904, 21.12.2025, ...")
+            order_date = None
+            date_match = re.search(r'(\d{2})\.(\d{2})\.(\d{4})', order_text)
+            if date_match:
+                try:
+                    day, month, year = date_match.groups()
+                    order_date = datetime(int(year), int(month), int(day))
+                except ValueError:
+                    pass  # Invalid date
             # Use address from record if exists (for restored rows)
             # Otherwise extract from order text
             address = row.get("address", "")
@@ -1345,6 +1355,7 @@ async def apply_review_changes(request: Request):
                 "worker": base_worker,
                 "order_code": order_code,
                 "order": order_text[:500],
+                "order_date": order_date,
                 "address": address,
                 "is_client_payment": is_client,
                 "is_extra_row": is_extra,
@@ -1520,6 +1531,16 @@ async def process_first_upload(request: Request):
                 if match:
                     order_code = match.group(0)
 
+
+            # Extract order date from text (format: "КАУТ-001904, 21.12.2025, ...")
+            order_date = None
+            date_match = re.search(r'(\d{2})\.(\d{2})\.(\d{4})', order_text)
+            if date_match:
+                try:
+                    day, month, year = date_match.groups()
+                    order_date = datetime(int(year), int(month), int(day))
+                except ValueError:
+                    pass  # Invalid date
             # Use address from record if exists (for restored rows)
             # Otherwise extract from order text
             address = row.get("address", "")
@@ -1537,6 +1558,7 @@ async def process_first_upload(request: Request):
                 "worker": base_worker,
                 "order_code": order_code,
                 "order": order_text[:500],
+                "order_date": order_date,
                 "address": address,
                 "is_client_payment": is_client,
                 "is_extra_row": is_extra,
