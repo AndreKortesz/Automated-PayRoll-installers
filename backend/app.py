@@ -4093,10 +4093,12 @@ async def get_duplicates(request: Request):
         
         # Load existing exclusions - map by (address_hash, work_type) to set of excluded order_ids
         exclusions = await get_duplicate_exclusions()
+        print(f"🔍 DEBUG exclusions from DB: {exclusions}")
         exclusions_map = {}
         for e in exclusions:
             key = (e["address_hash"], e["work_type"])
             excluded_ids = set(e.get("order_ids") or [])
+            print(f"🔍 DEBUG exclusion: key={key}, order_ids={e.get('order_ids')}, excluded_ids={excluded_ids}")
             if key in exclusions_map:
                 exclusions_map[key].update(excluded_ids)
             else:
@@ -4145,8 +4147,12 @@ async def get_duplicates(request: Request):
             
             # Check if ALL current orders were already marked as "not a duplicate"
             excluded_ids = exclusions_map.get((address_hash, work_type), set())
+            print(f"🔍 DEBUG cluster check: addr_key={addr_key}, hash={address_hash}, work_type={work_type}")
+            print(f"🔍 DEBUG cluster check: current_ids={current_order_ids}, excluded_ids={excluded_ids}")
+            print(f"🔍 DEBUG cluster check: issubset={current_order_ids.issubset(excluded_ids)}")
             if excluded_ids and current_order_ids.issubset(excluded_ids):
                 # All orders in this cluster were already checked - skip
+                print(f"🔍 DEBUG cluster SKIPPED")
                 continue
             # If there are new orders not in exclusion - show the cluster
             
