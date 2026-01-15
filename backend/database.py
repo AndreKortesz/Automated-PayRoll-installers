@@ -1286,11 +1286,13 @@ async def add_duplicate_exclusion(
     if not database or not database.is_connected:
         return None
     
+    import json
+    
     query = duplicate_exclusions.insert().values(
         address_hash=address_hash,
         work_type=work_type,
         address_display=address_display,
-        order_ids=order_ids,
+        order_ids=json.dumps(order_ids),  # Explicitly serialize to JSON string
         excluded_by=excluded_by,
         excluded_by_name=excluded_by_name,
         reason=reason
@@ -1315,11 +1317,25 @@ async def get_duplicate_exclusions() -> List[dict]:
     if not database or not database.is_connected:
         return []
     
+    import json
+    
     query = duplicate_exclusions.select().order_by(
         duplicate_exclusions.c.created_at.desc()
     )
     rows = await database.fetch_all(query)
-    return [dict(row._mapping) for row in rows]
+    
+    result = []
+    for row in rows:
+        item = dict(row._mapping)
+        # Deserialize order_ids from JSON string
+        if item.get("order_ids") and isinstance(item["order_ids"], str):
+            try:
+                item["order_ids"] = json.loads(item["order_ids"])
+            except json.JSONDecodeError:
+                item["order_ids"] = []
+        result.append(item)
+    
+    return result
 
 
 async def is_duplicate_excluded(address_hash: str, work_type: str) -> bool:
