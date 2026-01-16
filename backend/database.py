@@ -1328,10 +1328,15 @@ async def get_duplicate_exclusions() -> List[dict]:
     for row in rows:
         item = dict(row._mapping)
         # Deserialize order_ids from JSON string
-        if item.get("order_ids") and isinstance(item["order_ids"], str):
+        raw_order_ids = item.get("order_ids")
+        print(f"🔍 DB RAW order_ids: {repr(raw_order_ids)}, type={type(raw_order_ids)}")
+        if raw_order_ids and isinstance(raw_order_ids, str):
             try:
-                item["order_ids"] = json.loads(item["order_ids"])
-            except json.JSONDecodeError:
+                parsed = json.loads(raw_order_ids)
+                print(f"🔍 DB PARSED order_ids: {parsed}, type={type(parsed)}")
+                item["order_ids"] = parsed
+            except json.JSONDecodeError as e:
+                print(f"🔍 DB JSON ERROR: {e}")
                 item["order_ids"] = []
         result.append(item)
     
@@ -1351,8 +1356,3 @@ async def is_duplicate_excluded(address_hash: str, work_type: str) -> bool:
     )
     row = await database.fetch_one(query)
     return row is not None
-
-
-
-
-
