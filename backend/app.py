@@ -4288,12 +4288,15 @@ async def duplicates_page(request: Request):
 @app.post("/api/duplicates/exclude")
 async def exclude_duplicate(request: Request):
     """Mark a duplicate cluster as 'not a duplicate'"""
+    print("🔍 exclude_duplicate called")
     user = get_current_user(request)
     if not user or user.get("role") != "admin":
+        print("🔍 exclude_duplicate: access denied")
         return {"success": False, "error": "Доступ запрещён"}
     
     try:
         data = await request.json()
+        print(f"🔍 exclude_duplicate data: {data}")
         address_hash = data.get("address_hash")
         work_type = data.get("work_type")
         address_display = data.get("address_display", "")
@@ -4303,6 +4306,7 @@ async def exclude_duplicate(request: Request):
         if not address_hash or not work_type:
             return {"success": False, "error": "Не указан адрес или тип работ"}
         
+        print(f"🔍 Calling add_duplicate_exclusion with order_ids={order_ids}, type={type(order_ids)}")
         exclusion_id = await add_duplicate_exclusion(
             address_hash=address_hash,
             work_type=work_type,
@@ -4312,11 +4316,14 @@ async def exclude_duplicate(request: Request):
             excluded_by_name=user.get("display_name", user.get("name", "")),
             reason=reason
         )
+        print(f"🔍 add_duplicate_exclusion returned: {exclusion_id}")
         
         return {"success": True, "exclusion_id": exclusion_id}
         
     except Exception as e:
         print(f"❌ Exclude duplicate error: {e}")
+        import traceback
+        traceback.print_exc()
         return {"success": False, "error": str(e)}
 
 
