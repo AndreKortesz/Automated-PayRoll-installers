@@ -313,11 +313,13 @@ def create_excel_report(data: List[dict], period: str, config: dict, for_workers
         
         # Get Yandex Fuel deduction for this worker (from config)
         yandex_fuel_dict = config.get("yandex_fuel", {})
-        yandex_fuel_deduction = yandex_fuel_dict.get(worker, 0)
+        # Normalize worker name for lookup (yandex_fuel keys are normalized)
+        worker_normalized = normalize_worker_name(worker)
+        yandex_fuel_deduction = yandex_fuel_dict.get(worker_normalized, 0) or yandex_fuel_dict.get(worker, 0)
         
         # Debug: if we have yandex_fuel data but didn't find this worker
         if yandex_fuel_dict and not yandex_fuel_deduction:
-            print(f"⚠️ Yandex fuel: worker '{worker}' not found in keys: {list(yandex_fuel_dict.keys())[:5]}")
+            print(f"⚠️ Yandex fuel: worker '{worker}' (normalized: '{worker_normalized}') not found in keys: {list(yandex_fuel_dict.keys())[:5]}")
         
         if regular_end >= regular_start:
             if client_name_row:

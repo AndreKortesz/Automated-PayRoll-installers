@@ -2300,6 +2300,12 @@ async def api_worker_report(upload_id: int, worker: str):
         period_details = await get_period_details(period_id)
         period_name = period_details.get("name", "") if period_details else ""
         
+        # Load config from DB (includes yandex_fuel if saved)
+        saved_config = upload_details.get("config_json", {}) or {}
+        if isinstance(saved_config, str):
+            saved_config = json.loads(saved_config)
+        report_config = {**DEFAULT_CONFIG, **saved_config}
+        
         # Get ALL orders for this upload (needed for proper report generation)
         worker_totals_list = upload_details.get("worker_totals", [])
         
@@ -2339,7 +2345,7 @@ async def api_worker_report(upload_id: int, worker: str):
             calculated_data.append(row)
         
         # Generate worker report using same function as archive
-        report_bytes = create_worker_report(calculated_data, worker_decoded, period_name, DEFAULT_CONFIG, for_workers=True)
+        report_bytes = create_worker_report(calculated_data, worker_decoded, period_name, report_config, for_workers=True)
         
         # Create safe filename
         worker_surname = worker_decoded.split()[0] if worker_decoded else "worker"
