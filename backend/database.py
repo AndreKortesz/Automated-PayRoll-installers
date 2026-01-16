@@ -1286,13 +1286,13 @@ async def add_duplicate_exclusion(
     if not database or not database.is_connected:
         return None
     
-    import json
-    
+    # PostgreSQL JSON column handles serialization automatically
+    # Do NOT use json.dumps() - it causes double-encoding
     query = duplicate_exclusions.insert().values(
         address_hash=address_hash,
         work_type=work_type,
         address_display=address_display,
-        order_ids=json.dumps(order_ids),  # Explicitly serialize to JSON string
+        order_ids=order_ids,  # Pass list directly, PostgreSQL JSON handles it
         excluded_by=excluded_by,
         excluded_by_name=excluded_by_name,
         reason=reason
@@ -1327,17 +1327,29 @@ async def get_duplicate_exclusions() -> List[dict]:
     result = []
     for row in rows:
         item = dict(row._mapping)
-        # Deserialize order_ids from JSON string
         raw_order_ids = item.get("order_ids")
         print(f"🔍 DB RAW order_ids: {repr(raw_order_ids)}, type={type(raw_order_ids)}")
-        if raw_order_ids and isinstance(raw_order_ids, str):
+        
+        # Handle different formats for backward compatibility
+        if raw_order_ids is None:
+            item["order_ids"] = []
+        elif isinstance(raw_order_ids, list):
+            # Already a list (PostgreSQL JSON returned it correctly)
+            item["order_ids"] = raw_order_ids
+        elif isinstance(raw_order_ids, str):
+            # String - need to parse (old double-encoded data)
             try:
                 parsed = json.loads(raw_order_ids)
-                print(f"🔍 DB PARSED order_ids: {parsed}, type={type(parsed)}")
-                item["order_ids"] = parsed
-            except json.JSONDecodeError as e:
-                print(f"🔍 DB JSON ERROR: {e}")
+                # If it's still a string after parsing, parse again (double-encoded)
+                if isinstance(parsed, str):
+                    parsed = json.loads(parsed)
+                item["order_ids"] = parsed if isinstance(parsed, list) else []
+                print(f"🔍 DB PARSED order_ids: {item['order_ids']}")
+            except (json.JSONDecodeError, TypeError):
                 item["order_ids"] = []
+        else:
+            item["order_ids"] = []
+            
         result.append(item)
     
     return result
