@@ -998,7 +998,8 @@ async def upload_files(
 @app.get("/review")
 async def review_page(request: Request):
     """Render the review changes page"""
-    return templates.TemplateResponse("review.html", {"request": request})
+    user = get_current_user(request)
+    return templates.TemplateResponse("review.html", {"request": request, "user": user})
 
 
 @app.get("/api/review/{session_id}")
@@ -2110,7 +2111,8 @@ async def download_report(session_id: str, archive_type: str):
 @app.get("/history")
 async def history_page(request: Request):
     """History page - view all periods by month"""
-    response = templates.TemplateResponse("history.html", {"request": request})
+    user = get_current_user(request)
+    response = templates.TemplateResponse("history.html", {"request": request, "user": user})
     # Prevent browser caching so back button shows fresh data
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     response.headers["Pragma"] = "no-cache"
@@ -2669,7 +2671,8 @@ async def download_period_archive(period_id: int, archive_type: str):
 @app.get("/comparison")
 async def comparison_page(request: Request):
     """Comparison table page"""
-    return templates.TemplateResponse("comparison.html", {"request": request})
+    user = get_current_user(request)
+    return templates.TemplateResponse("comparison.html", {"request": request, "user": user})
 
 
 @app.post("/api/order/{order_id}/calculation")
@@ -3275,7 +3278,8 @@ async def update_order_info(order_id: int, request: Request):
 @app.get("/period/{period_id}")
 async def period_page(request: Request, period_id: int):
     """Period details page"""
-    response = templates.TemplateResponse("period.html", {"request": request, "period_id": period_id})
+    user = get_current_user(request)
+    response = templates.TemplateResponse("period.html", {"request": request, "period_id": period_id, "user": user})
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
@@ -3287,10 +3291,12 @@ async def upload_page(request: Request, upload_id: int, worker: str = ""):
     """Upload details page"""
     # Get worker from query parameter
     worker_name = worker or request.query_params.get("worker", "")
+    user = get_current_user(request)
     response = templates.TemplateResponse("upload.html", {
         "request": request, 
         "upload_id": upload_id,
-        "worker_name": worker_name
+        "worker_name": worker_name,
+        "user": user
     })
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     response.headers["Pragma"] = "no-cache"
