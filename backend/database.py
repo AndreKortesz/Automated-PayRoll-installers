@@ -1070,7 +1070,16 @@ async def get_worker_orders(upload_id: int, worker: str) -> List[dict]:
         "upload_id": upload_id,
         "worker": f"%{worker}%"
     })
-    return [dict(row._mapping) for row in rows]
+    
+    # Convert datetime objects to ISO strings for JSON serialization
+    result = []
+    for row in rows:
+        item = dict(row._mapping)
+        for key, value in item.items():
+            if isinstance(value, datetime):
+                item[key] = value.isoformat() if value else None
+        result.append(item)
+    return result
 
 
 async def get_months_summary() -> List[dict]:
