@@ -5,6 +5,7 @@ Parser for Yandex Fuel (Яндекс Заправки) reports
 import pandas as pd
 from io import BytesIO
 from typing import Dict, Optional
+from config import logger, DEBUG_MODE
 from utils.workers import normalize_worker_name
 
 
@@ -39,7 +40,7 @@ def parse_yandex_fuel_file(file_content: bytes, name_map: dict = None) -> Dict[s
                 break
         
         if header_row is None:
-            print("⚠️ Yandex Fuel: Could not find header row with 'Имя пользователя'")
+            logger.warning("⚠️ Yandex Fuel: Could not find header row with 'Имя пользователя'")
             return {}
         
         # Re-read with correct header
@@ -48,14 +49,14 @@ def parse_yandex_fuel_file(file_content: bytes, name_map: dict = None) -> Dict[s
         
         # Check required columns exist
         if 'Имя пользователя' not in df.columns or 'Стоимость' not in df.columns:
-            print(f"⚠️ Yandex Fuel: Missing required columns. Found: {list(df.columns)}")
+            logger.warning(f"⚠️ Yandex Fuel: Missing required columns. Found: {list(df.columns)}")
             return {}
         
         # Filter only rows with valid numeric Стоимость
         df_clean = df[pd.to_numeric(df['Стоимость'], errors='coerce').notna()].copy()
         
         if df_clean.empty:
-            print("⚠️ Yandex Fuel: No valid data rows found")
+            logger.warning("⚠️ Yandex Fuel: No valid data rows found")
             return {}
         
         # Group by worker and sum amounts
@@ -74,12 +75,13 @@ def parse_yandex_fuel_file(file_content: bytes, name_map: dict = None) -> Dict[s
             deduction = round(total * 0.9, 2)
             
             result[normalized_name] = deduction
-            print(f"⛽ Яндекс Заправки: {name} -> {normalized_name}: {total:.2f} руб, вычет: {deduction:.2f} руб")
+            if DEBUG_MODE:
+                logger.debug(f"⛽ Яндекс Заправки: {name} -> {normalized_name}: {total:.2f} руб, вычет: {deduction:.2f} руб")
         
         return result
         
     except Exception as e:
-        print(f"❌ Error parsing Yandex Fuel file: {e}")
+        logger.error(f"❌ Error parsing Yandex Fuel file: {e}")
         import traceback
         traceback.print_exc()
         return {}
@@ -122,7 +124,7 @@ def detect_yandex_fuel_file(file_content: bytes) -> bool:
         return False
         
     except Exception as e:
-        print(f"Error detecting Yandex Fuel file: {e}")
+        logger.error(f"Error detecting Yandex Fuel file: {e}")
         return False
 
 
@@ -179,14 +181,15 @@ def extract_month_from_yandex_file(file_content: bytes) -> Optional[tuple]:
                 if date_match:
                     month = int(date_match.group(1))
                     year = int(date_match.group(2))
-                    print(f"⛽ Яндекс Заправки: обнаружен период {month:02d}.{year}")
+                    if DEBUG_MODE:
+                        logger.debug(f"⛽ Яндекс Заправки: обнаружен период {month:02d}.{year}")
                     return (month, year)
         
-        print("⚠️ Yandex Fuel: Could not find period in file")
+        logger.warning("⚠️ Yandex Fuel: Could not find period in file")
         return None
         
     except Exception as e:
-        print(f"❌ Error extracting month from Yandex Fuel file: {e}")
+        logger.error(f"❌ Error extracting month from Yandex Fuel file: {e}")
         return None
 
 
@@ -213,7 +216,7 @@ def extract_month_from_period(period: str) -> Optional[tuple]:
             year = 2000 + year_short  # Convert 25 -> 2025
             return (month, year)
     except Exception as e:
-        print(f"Error extracting month from period: {e}")
+        logger.error(f"Error extracting month from period: {e}")
     
     return None
 
@@ -248,7 +251,7 @@ def validate_yandex_fuel_period(file_content: bytes, period: str) -> tuple:
         upload_month_name = month_names.get(upload_month, str(upload_month))
         
         error_msg = f"Файл Яндекс заправок за {file_month_name} {file_year}, а период загрузки — {upload_month_name} {upload_year}"
-        print(f"⚠️ {error_msg}")
+        logger.warning(f"⚠️ {error_msg}")
         return (False, error_msg)
     
     return (True, None)

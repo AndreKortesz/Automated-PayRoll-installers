@@ -8,6 +8,7 @@ from typing import List
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
+from config import logger, DEBUG_MODE
 from utils.helpers import format_order_for_workers
 from utils.workers import normalize_worker_name
 
@@ -123,7 +124,7 @@ def create_excel_report(data: List[dict], period: str, config: dict, for_workers
             return ""
         try:
             return int(round(float(val)))
-        except:
+        except (ValueError, TypeError):
             return ""
     
     for worker in sorted(workers_data.keys()):
@@ -319,7 +320,8 @@ def create_excel_report(data: List[dict], period: str, config: dict, for_workers
         
         # Debug: if we have yandex_fuel data but didn't find this worker
         if yandex_fuel_dict and not yandex_fuel_deduction:
-            print(f"⚠️ Yandex fuel: worker '{worker}' (normalized: '{worker_normalized}') not found in keys: {list(yandex_fuel_dict.keys())[:5]}")
+            if DEBUG_MODE:
+                logger.debug(f"⚠️ Yandex fuel: worker '{worker}' (normalized: '{worker_normalized}') not found in keys: {list(yandex_fuel_dict.keys())[:5]}")
         
         if regular_end >= regular_start:
             if client_name_row:

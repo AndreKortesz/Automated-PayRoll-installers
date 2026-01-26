@@ -4,6 +4,57 @@ Mos-GSM Salary Service
 """
 
 import os
+import logging
+
+# ============================================================================
+# DEBUG MODE
+# ============================================================================
+# Set DEBUG_MODE=true in environment for verbose logging
+# In production, leave it unset or set to false
+
+DEBUG_MODE = os.getenv("DEBUG_MODE", "false").lower() in ("true", "1", "yes")
+
+# ============================================================================
+# LOGGING CONFIGURATION
+# ============================================================================
+
+def setup_logging():
+    """Configure application logging"""
+    log_level = logging.DEBUG if DEBUG_MODE else logging.INFO
+    
+    # Create formatter
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    
+    # Configure root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(log_level)
+    
+    # Remove existing handlers to avoid duplicates
+    root_logger.handlers = []
+    
+    # Console handler
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(log_level)
+    console_handler.setFormatter(formatter)
+    root_logger.addHandler(console_handler)
+    
+    # Create app logger
+    app_logger = logging.getLogger('mosgsm')
+    app_logger.setLevel(log_level)
+    
+    return app_logger
+
+# Initialize logger
+logger = setup_logging()
+
+# Log startup mode
+if DEBUG_MODE:
+    logger.debug("🔧 Debug mode enabled - verbose logging active")
+else:
+    logger.info("🚀 Production mode - minimal logging")
 
 # ============================================================================
 # DEFAULT CONFIGURATION
@@ -28,7 +79,7 @@ DEFAULT_CONFIG = {
 
 # Warn if Yandex API key is not configured
 if not DEFAULT_CONFIG["yandex_api_key"]:
-    print("⚠️  WARNING: YANDEX_GEOCODER_API_KEY not set in environment. Geocoding will not work.")
+    logger.warning("⚠️ YANDEX_GEOCODER_API_KEY not set in environment. Geocoding will not work.")
 
 
 # ============================================================================

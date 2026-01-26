@@ -3,6 +3,7 @@ Database module for PostgreSQL connection and models
 """
 import os
 from datetime import datetime
+from config import logger, DEBUG_MODE
 from typing import Optional, List, Dict, Any
 from databases import Database
 from sqlalchemy import (
@@ -52,46 +53,8 @@ EXCLUDED_GROUPS = {
     "заказ, комментарий",
 }
 
-
-def is_valid_worker_name(name: str) -> bool:
-    """Check if name looks like a real person name (ФИО)
-    
-    Valid: "Ветренко Дмитрий", "Романюк Алексей Юрьевич"
-    Invalid: "Доставка", "Помощник", "Итого"
-    """
-    if not name:
-        return False
-        
-    # Remove "(оплата клиентом)" suffix for checking
-    clean_name = name.replace(" (оплата клиентом)", "").strip().lower()
-    
-    # Check against blacklist
-    if clean_name in EXCLUDED_GROUPS:
-        return False
-    
-    # Check if starts with any excluded word
-    for excluded in EXCLUDED_GROUPS:
-        if clean_name.startswith(excluded):
-            return False
-    
-    # Additional check: real name should have at least 2 words (Фамилия Имя)
-    original_clean = name.replace(" (оплата клиентом)", "").strip()
-    words = original_clean.split()
-    
-    if len(words) < 2:
-        return False
-    
-    # Check that first word looks like a surname (starts with uppercase, mostly letters)
-    first_word = words[0]
-    if not first_word or not first_word[0].isupper():
-        return False
-    
-    # Check that it contains mostly Cyrillic or Latin letters
-    letter_count = sum(1 for c in first_word if c.isalpha())
-    if letter_count < len(first_word) * 0.8:
-        return False
-    
-    return True
+# NOTE: is_valid_worker_name moved to utils/workers.py to avoid duplication
+# Import it from there if needed: from utils.workers import is_valid_worker_name
 
 # ============== TABLES ==============
 
@@ -300,20 +263,20 @@ async def connect_db():
     """Connect to database"""
     if database:
         await database.connect()
-        print("✅ Connected to PostgreSQL")
+        logger.info("✅ Connected to PostgreSQL")
 
 async def disconnect_db():
     """Disconnect from database"""
     if database:
         await database.disconnect()
-        print("🔌 Disconnected from PostgreSQL")
+        logger.info("🔌 Disconnected from PostgreSQL")
 
 def create_tables():
     """Create all tables (sync, for initial setup)"""
     if DATABASE_URL:
         engine = create_engine(DATABASE_URL)
         metadata.create_all(engine)
-        print("✅ Tables created")
+        logger.info("✅ Tables created")
         
         # Run migrations for new columns
         try:
@@ -422,13 +385,13 @@ def create_tables():
                     conn.commit()
                 except Exception as e:
                     conn.rollback()
-                    print(f"Migration skipped (may already exist): {e}")
+                    logger.debug("Migration skipped (may already exist): {e}")
             
             cur.close()
             conn.close()
-            print("✅ Migrations completed")
+            logger.info("✅ Migrations completed")
         except Exception as e:
-            print(f"⚠️ Migration error (non-critical): {e}")
+            logger.warning("⚠️ Migration error (non-critical): {e}")
 
 
 # ============== AUDIT LOG FUNCTIONS ==============
@@ -782,7 +745,7 @@ async def create_upload(period_id: int, config: dict = None, user: dict = None) 
     if config:
         yandex_fuel = config.get("yandex_fuel", {})
         if yandex_fuel:
-            print(f"💾 Saving upload with yandex_fuel: {list(yandex_fuel.keys())}")
+            if DEBUG_MODE: logger.debug("💾 Saving upload with yandex_fuel: {list(yandex_fuel.keys())}")
     
     # Get next version number
     query = uploads.select().where(uploads.c.period_id == period_id).order_by(uploads.c.version.desc())
@@ -1337,7 +1300,7 @@ async def get_duplicate_exclusions() -> List[dict]:
     for row in rows:
         item = dict(row._mapping)
         raw_order_ids = item.get("order_ids")
-        print(f"🔍 DB RAW order_ids: {repr(raw_order_ids)}, type={type(raw_order_ids)}")
+        if DEBUG_MODE: logger.debug("🔍 DB RAW order_ids: {repr(raw_order_ids)}, type={type(raw_order_ids)}")
         
         # Handle different formats for backward compatibility
         if raw_order_ids is None:
@@ -1353,7 +1316,7 @@ async def get_duplicate_exclusions() -> List[dict]:
                 if isinstance(parsed, str):
                     parsed = json.loads(parsed)
                 item["order_ids"] = parsed if isinstance(parsed, list) else []
-                print(f"🔍 DB PARSED order_ids: {item['order_ids']}")
+                if DEBUG_MODE: logger.debug("🔍 DB PARSED order_ids: {item['order_ids']}")
             except (json.JSONDecodeError, TypeError):
                 item["order_ids"] = []
         else:

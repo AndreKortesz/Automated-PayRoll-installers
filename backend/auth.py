@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import Request, HTTPException
 from fastapi.responses import RedirectResponse
+from config import logger, DEBUG_MODE
 
 # Bitrix24 OAuth2 Configuration
 BITRIX_DOMAIN = os.getenv("BITRIX_DOMAIN", "")  # e.g., "yourcompany.bitrix24.ru"
@@ -38,7 +39,7 @@ def get_auth_url() -> str:
 async def exchange_code_for_token(code: str, server_domain: str = None) -> Optional[dict]:
     """Exchange authorization code for access token"""
     if not BITRIX_CLIENT_ID or not BITRIX_CLIENT_SECRET:
-        print("❌ Missing BITRIX_CLIENT_ID or BITRIX_CLIENT_SECRET")
+        logger.error("❌ Missing BITRIX_CLIENT_ID or BITRIX_CLIENT_SECRET")
         return None
 
     # IMPORTANT: Use the server_domain from callback, or default to oauth.bitrix.info
@@ -46,8 +47,8 @@ async def exchange_code_for_token(code: str, server_domain: str = None) -> Optio
     oauth_server = server_domain or "oauth.bitrix.info"
     token_url = f"https://{oauth_server}/oauth/token/"
 
-    print(f"🔐 Exchanging code at: {token_url}")
-    print(f"🔐 Using redirect_uri: {BITRIX_REDIRECT_URI}")
+    logger.info(f"🔐 Exchanging code at: {token_url}")
+    logger.info(f"🔐 Using redirect_uri: {BITRIX_REDIRECT_URI}")
 
     try:
         async with httpx.AsyncClient() as client:
@@ -65,19 +66,20 @@ async def exchange_code_for_token(code: str, server_domain: str = None) -> Optio
                 timeout=30
             )
 
-            print(f"🔐 Token response status: {response.status_code}")
+            logger.info(f"🔐 Token response status: {response.status_code}")
             
             if response.status_code == 200:
                 data = response.json()
-                print(f"✅ Token exchange successful")
-                print(f"🔐 Token data keys: {list(data.keys())}")
-                print(f"🔐 Domain from token: {data.get('domain', 'NOT FOUND')}")
+                logger.info(f"✅ Token exchange successful")
+                logger.info(f"🔐 Token data keys: {list(data.keys())}")
+                logger.info(f"🔐 Domain from token: {data.get('domain', 'NOT FOUND')}")
                 return data
             else:
-                print(f"❌ Token exchange failed: {response.status_code} - {response.text}")
+                logger.error(f"❌ Token exchange failed: {response.status_code} - {response.text}")
                 
                 # Try alternative: GET method (some Bitrix versions use GET)
-                print(f"🔄 Trying GET method...")
+                if DEBUG_MODE:
+                    logger.debug(f"🔄 Trying GET method...")
                 response = await client.get(
                     token_url,
                     params={
@@ -92,16 +94,16 @@ async def exchange_code_for_token(code: str, server_domain: str = None) -> Optio
                 
                 if response.status_code == 200:
                     data = response.json()
-                    print(f"✅ Token exchange successful (GET)")
-                    print(f"🔐 Token data keys: {list(data.keys())}")
-                    print(f"🔐 Domain from token: {data.get('domain', 'NOT FOUND')}")
+                    logger.info(f"✅ Token exchange successful (GET)")
+                    logger.info(f"🔐 Token data keys: {list(data.keys())}")
+                    logger.info(f"🔐 Domain from token: {data.get('domain', 'NOT FOUND')}")
                     return data
                 else:
-                    print(f"❌ GET also failed: {response.status_code} - {response.text}")
+                    logger.error(f"❌ GET also failed: {response.status_code} - {response.text}")
                     return None
                     
     except Exception as e:
-        print(f"❌ Token exchange error: {e}")
+        logger.error(f"❌ Token exchange error: {e}")
         return None
 
 
@@ -126,10 +128,10 @@ async def refresh_access_token(refresh_token: str) -> Optional[dict]:
             if response.status_code == 200:
                 return response.json()
             else:
-                print(f"❌ Token refresh failed: {response.status_code}")
+                logger.error(f"❌ Token refresh failed: {response.status_code}")
                 return None
     except Exception as e:
-        print(f"❌ Token refresh error: {e}")
+        logger.error(f"❌ Token refresh error: {e}")
         return None
 
 
@@ -143,7 +145,7 @@ async def get_bitrix_user(access_token: str, domain: str) -> Optional[dict]:
     domain = domain.rstrip("/")
     
     url = f"https://{domain}/rest/user.current"
-    print(f"🔐 Getting user info from: {url}")
+    logger.info(f"🔐 Getting user info from: {url}")
     
     try:
         async with httpx.AsyncClient() as client:
@@ -154,11 +156,11 @@ async def get_bitrix_user(access_token: str, domain: str) -> Optional[dict]:
                 timeout=30
             )
             
-            print(f"🔐 User info response: {response.status_code}")
+            logger.info(f"🔐 User info response: {response.status_code}")
             
             if response.status_code == 200:
                 data = response.json()
-                print(f"🔐 User data: {data}")
+                logger.info(f"🔐 User data: {data}")
                 if "result" in data:
                     return data["result"]
                 # Some endpoints return data directly
@@ -166,7 +168,8 @@ async def get_bitrix_user(access_token: str, domain: str) -> Optional[dict]:
                     return data
 
             # Try GET method as fallback
-            print(f"🔄 Trying GET method for user info...")
+            if DEBUG_MODE:
+                logger.debug(f"🔄 Trying GET method for user info...")
             response = await client.get(
                 url,
                 params={"auth": access_token},
@@ -180,10 +183,10 @@ async def get_bitrix_user(access_token: str, domain: str) -> Optional[dict]:
                 if "ID" in data:
                     return data
 
-            print(f"❌ Get user failed: {response.status_code} - {response.text[:200]}")
+            logger.error(f"❌ Get user failed: {response.status_code} - {response.text[:200]}")
             return None
     except Exception as e:
-        print(f"❌ Get user error: {e}")
+        logger.error(f"❌ Get user error: {e}")
         return None
 
 
