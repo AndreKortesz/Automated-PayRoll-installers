@@ -13,7 +13,6 @@ from functools import wraps
 from fastapi import Request, Response, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
-from config import logger
 
 
 # Configuration
@@ -21,7 +20,7 @@ from config import logger
 CSRF_SECRET_KEY = os.getenv("CSRF_SECRET_KEY", None)
 if not CSRF_SECRET_KEY:
     CSRF_SECRET_KEY = secrets.token_hex(32)
-    logger.warning("⚠️ CSRF_SECRET_KEY not set in environment. Using random key (sessions will reset on restart).")
+    print("⚠️ WARNING: CSRF_SECRET_KEY not set in environment. Using random key (sessions will reset on restart).")
 
 CSRF_TOKEN_LENGTH = 64
 CSRF_COOKIE_NAME = "csrf_token"
@@ -147,8 +146,9 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                     try:
                         form = await request.form()
                         request_token = form.get(CSRF_FORM_FIELD)
-                    except Exception:
-                        pass  # Form parsing failed, request_token remains None
+                    except Exception as e:
+                        # Form parsing failed, will check header token
+                        logger.debug(f"Form parsing failed for CSRF: {e}")
             
             # Validate token
             if not request_token or not validate_csrf_token(request_token):
