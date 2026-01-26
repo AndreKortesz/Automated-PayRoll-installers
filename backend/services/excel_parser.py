@@ -96,16 +96,23 @@ def parse_excel_file(file_bytes: bytes, is_over_10k: bool, name_map: dict = None
     # Detect column layout by checking subheader row
     subheader_row = header_row + 1
     has_manager_column = False
+    has_comment_column = False  # NEW: detect "Комментарий" column
     manager_col_idx = 5  # Default position
+    comment_col_idx = 3  # Position for "Комментарий" in new format
     
     if subheader_row < len(df):
         subheader = df.iloc[subheader_row]
         for idx, val in enumerate(subheader.values):
-            if pd.notna(val) and 'ЗП от менеджера' in str(val):
-                has_manager_column = True
-                manager_col_idx = idx
-                print(f"📋 Обнаружена колонка 'ЗП от менеджера' в позиции {idx}")
-                break
+            if pd.notna(val):
+                val_str = str(val).strip()
+                if 'ЗП от менеджера' in val_str:
+                    has_manager_column = True
+                    manager_col_idx = idx
+                    print(f"📋 Обнаружена колонка 'ЗП от менеджера' в позиции {idx}")
+                elif val_str == 'Комментарий':
+                    has_comment_column = True
+                    comment_col_idx = idx
+                    print(f"📋 Обнаружена колонка 'Комментарий' в позиции {idx} (новый формат 1С)")
     
     # Define column indices based on layout
     # New format (with manager column): col 5 is manager, data starts at col 6
@@ -136,7 +143,7 @@ def parse_excel_file(file_bytes: bytes, is_over_10k: bool, name_map: dict = None
         first_col = row.iloc[0] if pd.notna(row.iloc[0]) else ""
         first_col_str = str(first_col).strip()
         
-        if not first_col_str or first_col_str == "Итого" or first_col_str == "Заказ, Комментарий":
+        if not first_col_str or first_col_str == "Итого" or first_col_str == "Заказ, Комментарий" or first_col_str == "Заказ":
             continue
         
         is_order = (first_col_str.startswith("Заказ") or 
@@ -166,7 +173,7 @@ def parse_excel_file(file_bytes: bytes, is_over_10k: bool, name_map: dict = None
         first_col = row.iloc[0] if pd.notna(row.iloc[0]) else ""
         first_col_str = str(first_col).strip()
         
-        if not first_col_str or first_col_str == "Итого" or first_col_str == "Заказ, Комментарий":
+        if not first_col_str or first_col_str == "Итого" or first_col_str == "Заказ, Комментарий" or first_col_str == "Заказ":
             continue
         
         is_order = (first_col_str.startswith("Заказ") or 
@@ -208,9 +215,32 @@ def parse_excel_file(file_bytes: bytes, is_over_10k: bool, name_map: dict = None
                         manager_comment_raw = str(manager_val).strip()
                         manager_comment_parsed = parse_manager_comment(manager_comment_raw)
                 
+                # NEW: Handle separate "Комментарий" column (new 1C format)
+                # In new format: col0 = "Заказ клиента ТДУТ-000072 от 24.12.2025 14:43:44"
+                #                col3 = "Смоленская д.7\nКлипсы д20-2уп" (address + comment)
+                order_comment = ""
+                if has_comment_column:
+                    comment_val = row.iloc[comment_col_idx] if comment_col_idx < len(row) else None
+                    if pd.notna(comment_val) and str(comment_val).strip():
+                        order_comment = str(comment_val).strip()
+                        # Clean newlines for storage
+                        order_comment = order_comment.replace('\n', ' | ')
+                
+                # Build full order text:
+                # - For new format: combine order + comment
+                # - For old format: order already contains address
+                if has_comment_column and order_comment:
+                    # New format: "Заказ клиента ТДУТ-000072 от 24.12.2025 14:43:44, Смоленская д.7 | Клипсы"
+                    order_full = f"{first_col_str}, {order_comment}"
+                else:
+                    # Old format: order already contains address
+                    order_full = first_col_str
+                
                 record = {
                     "worker": normalize_worker_name(current_worker, name_map),
-                    "order": first_col_str,
+                    "order": order_full,  # Combined order + comment for old system compatibility
+                    "order_raw": first_col_str,  # Original order column (for full report)
+                    "order_comment": order_comment,  # Separate comment (for full report)
                     "revenue_total": row.iloc[col_revenue_total] if col_revenue_total < len(row) and pd.notna(row.iloc[col_revenue_total]) else 0,
                     "revenue_services": row.iloc[col_revenue_services] if col_revenue_services < len(row) and pd.notna(row.iloc[col_revenue_services]) else 0,
                     "diagnostic": row.iloc[col_diagnostic] if col_diagnostic < len(row) and pd.notna(row.iloc[col_diagnostic]) else 0,
@@ -231,7 +261,7 @@ def parse_excel_file(file_bytes: bytes, is_over_10k: bool, name_map: dict = None
                 if manager_comment_parsed and manager_comment_parsed["type"] in ["percent", "fixed", "info"]:
                     manager_comments.append({
                         "worker": record["worker"],
-                        "order": first_col_str,
+                        "order": order_full,
                         "comment": manager_comment_raw,
                         "parsed": manager_comment_parsed,
                         "revenue_services": record["revenue_services"],

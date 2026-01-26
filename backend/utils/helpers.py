@@ -46,8 +46,26 @@ def format_order_for_workers(order_text: str) -> str:
     if any(p in text for p in ["ОБУЧЕНИЕ", "В прошлом расчете"]):
         return text
     
-    # Pattern: "Заказ клиента КАУТ-001658 от 05.11.2025 23:59:59, адрес, комментарий"
-    # Result: "КАУТ-001658, 05.11.2025, адрес, комментарий"
+    # NEW FORMAT: "Заказ клиента ТДУТ-000072 от 24.12.2025 14:43:44, Смоленская д.7 | Клипсы"
+    # Pattern: code, date, time, then address/comment after comma
+    # Result: "ТДУТ-000072, 24.12.2025, Смоленская д.7 | Клипсы"
+    match = re.search(r'(?:Заказ клиента\s+)?((?:КАУТ|ИБУТ|ТДУТ)-\d+)\s+от\s+(\d{2}\.\d{2}\.\d{4})\s+\d{1,2}:\d{2}:\d{2},?\s*(.*)', text)
+    if match:
+        code = match.group(1)
+        date = match.group(2)
+        address_and_comment = match.group(3).strip()
+        
+        # Clean up: remove extra pipes/spaces, limit length
+        address_and_comment = re.sub(r'\s*\|\s*\|\s*', ' | ', address_and_comment)  # Remove empty pipes
+        address_and_comment = re.sub(r'\s*\|\s*$', '', address_and_comment)  # Remove trailing pipe
+        address_and_comment = address_and_comment.strip(' |,')
+        
+        if address_and_comment:
+            return f"{code}, {date}, {address_and_comment}"
+        return f"{code}, {date}"
+    
+    # OLD FORMAT: "Заказ клиента КАУТ-001658 от 05.11.2025 23:59:59, адрес в одной строке"
+    # (same pattern but address is in same column, not separate)
     match = re.search(r'((?:КАУТ|ИБУТ|ТДУТ)-\d+)\s+от\s+(\d{2}\.\d{2}\.\d{4})\s+\d{1,2}:\d{2}:\d{2},?\s*(.*)', text)
     if match:
         code = match.group(1)
