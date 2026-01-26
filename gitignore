@@ -58,3 +58,7 @@ node_modules/
 # Database
 *.db
 *.sqlite3
+
+# Uploads and generated files
+uploads/
+reports/

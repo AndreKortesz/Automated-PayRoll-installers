@@ -3,8 +3,6 @@ Permission checking utilities for Salary Service
 """
 
 from fastapi import Request, HTTPException
-from functools import wraps
-from typing import Optional
 
 from database import (
     PeriodStatus,

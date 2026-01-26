@@ -5,23 +5,17 @@ Mos-GSM Salary Service
 
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import JSONResponse
-import httpx
-from datetime import datetime
-from typing import List, Optional
+from typing import List
 
 from database import (
     database, PeriodStatus, 
     get_period_status, update_period_status, is_latest_period,
-    log_action, save_notification, get_period_notifications,
-    get_upload_details, get_audit_log
+    save_notification, get_period_notifications, get_audit_log
 )
 from auth import get_current_user
 from permissions import (
-    check_edit_permission, check_upload_permission,
-    check_delete_row_permission, check_delete_period_permission,
     check_send_permission, check_send_to_accountant_permission,
-    check_unlock_permission, get_user_permissions, get_client_ip,
-    log_user_action
+    check_unlock_permission, get_user_permissions, log_user_action
 )
 
 router = APIRouter(prefix="/api", tags=["status"])
@@ -193,7 +187,8 @@ async def api_send_to_accountant(request: Request, period_id: int):
         
         message = "\n".join(message_lines)
         
-        # TODO: Actually send message via Bitrix24 API
+        # STUB: Bitrix24 messaging integration not yet implemented
+        # When ready, uncomment and implement:
         # await send_bitrix_message(access_token, accountant_bitrix_id, message)
         
         # Update period status to PAID
@@ -351,15 +346,18 @@ async def api_get_period_notifications(request: Request, period_id: int):
 async def api_get_bitrix_workers(request: Request):
     """
     Get list of workers from Bitrix24.
-    TODO: Implement actual Bitrix24 API call.
+    
+    NOTE: This is a stub endpoint. Bitrix24 API integration is not yet implemented.
+    Returns empty list until integration is complete.
     """
     try:
         user = get_current_user(request)
         if not user:
             return JSONResponse({"success": False, "error": "Необходима авторизация"}, status_code=401)
         
-        # TODO: Get workers from Bitrix24 API using user's access token
-        # For now, return mock data or empty list
+        # STUB: Bitrix24 workers list integration not implemented
+        # Implementation would use: user's access_token to call Bitrix24 REST API
+        # Endpoint: https://{domain}/rest/user.get with department filter
         
         workers = []
         
@@ -379,15 +377,17 @@ async def api_get_bitrix_workers(request: Request):
 async def api_get_bitrix_accountants(request: Request):
     """
     Get list of accountants from Bitrix24.
-    TODO: Implement actual Bitrix24 API call with department filter.
+    
+    NOTE: This is a stub endpoint. Bitrix24 API integration is not yet implemented.
+    Returns empty list until integration is complete.
     """
     try:
         user = get_current_user(request)
         if not user:
             return JSONResponse({"success": False, "error": "Необходима авторизация"}, status_code=401)
         
-        # TODO: Get accountants from Bitrix24 API
-        # Filter by department or position
+        # STUB: Bitrix24 accountants list integration not implemented
+        # Implementation would filter by department (e.g., "Бухгалтерия")
         
         accountants = []
         

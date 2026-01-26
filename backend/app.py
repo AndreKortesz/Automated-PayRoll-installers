@@ -16,12 +16,9 @@ from starlette.requests import Request
 from contextlib import asynccontextmanager
 from urllib.parse import quote
 import pandas as pd
-import numpy as np
-from openpyxl import Workbook, load_workbook
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-from openpyxl.utils import get_column_letter
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill
 import httpx
-import asyncio
 import json
 import os
 import re
@@ -34,7 +31,7 @@ import pathlib
 # ============================================================================
 # CONFIGURATION (from config.py)
 # ============================================================================
-from config import DEFAULT_CONFIG, session_data, distance_cache, logger, DEBUG_MODE
+from config import DEFAULT_CONFIG, session_data, logger, DEBUG_MODE
 
 # ============================================================================
 # DATABASE IMPORTS
@@ -45,10 +42,9 @@ from database import (
     save_worker_total, save_change, get_previous_upload, compare_uploads,
     get_orders_by_upload, get_all_periods, get_period_details,
     get_upload_details, get_worker_orders, get_months_summary,
-    get_user_by_bitrix_id, create_or_update_user, update_period_status,
-    get_period_status, is_latest_period, PeriodStatus, log_action,
+    create_or_update_user, log_action,
     add_duplicate_exclusion, remove_duplicate_exclusion, 
-    get_duplicate_exclusions, is_duplicate_excluded
+    get_duplicate_exclusions
 )
 
 # ============================================================================
@@ -56,20 +52,21 @@ from database import (
 # ============================================================================
 from auth import (
     get_auth_url, exchange_code_for_token, get_bitrix_user,
-    determine_role, is_auth_configured, create_session, get_session,
-    delete_session, get_current_user, require_auth, require_admin,
-    SESSION_COOKIE, refresh_access_token
+    determine_role, is_auth_configured, create_session,
+    delete_session, get_current_user, SESSION_COOKIE
 )
 
 # ============================================================================
 # PERMISSIONS IMPORTS
 # ============================================================================
-from permissions import (
-    check_edit_permission, check_upload_permission,
-    check_delete_row_permission, check_delete_period_permission,
-    check_send_permission, check_send_to_accountant_permission,
-    get_user_permissions, log_user_action, get_client_ip
-)
+# Note: Permission checks are done inline in endpoints via request.session
+# These imports are available for future use if needed:
+# from permissions import (
+#     check_edit_permission, check_upload_permission,
+#     check_delete_row_permission, check_delete_period_permission,
+#     check_send_permission, check_send_to_accountant_permission,
+#     get_user_permissions, log_user_action, get_client_ip
+# )
 
 # ============================================================================
 # UTILS IMPORTS (helper functions)
