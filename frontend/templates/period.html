@@ -423,80 +423,169 @@
                 changesHtml += '</div></div></div>';
             }
 
+            // Load full history for all versions (only for latest version tab)
             let editsHtml = '';
-            if (manualEdits.length > 0) {
-                editsHtml = '<div class="card" style="margin-top:24px"><div class="card-header"><h3 class="card-title">📝 История изменений</h3></div><div class="card-body"><div class="changes-list">';
-                manualEdits.forEach(edit => {
-                    const fieldLabels = { 
-                        fuel_payment: 'Бензин', 
-                        transport: 'Транспортные', 
-                        total: 'Итого',
-                        DELETED: 'Удалено',
-                        ADDED: 'Добавлено'
-                    };
-                    const statusLabels = {
-                        'DRAFT': 'Черновик',
-                        'draft': 'Черновик',
-                        'SENT': 'Отправлено',
-                        'sent': 'Отправлено',
-                        'PAID': 'Оплачено',
-                        'paid': 'Оплачено'
-                    };
-                    const statusColors = {
-                        'DRAFT': '#6c757d',
-                        'draft': '#6c757d',
-                        'SENT': '#0d6efd',
-                        'sent': '#0d6efd',
-                        'PAID': '#198754',
-                        'paid': '#198754'
-                    };
-                    const statusBgColors = {
-                        'DRAFT': '#f8f9fa',
-                        'draft': '#f8f9fa',
-                        'SENT': '#e7f1ff',
-                        'sent': '#e7f1ff',
-                        'PAID': '#d1e7dd',
-                        'paid': '#d1e7dd'
-                    };
+            const isLatestVersion = uploadsData.length > 0 && currentUploadId === uploadsData[0].id;
+            
+            if (isLatestVersion) {
+                // Load full history from all versions
+                const historyResponse = await Security.fetch(`/api/period/${periodId}/history`);
+                const historyData = await historyResponse.json();
+                
+                if (historyData.success && historyData.data && historyData.data.length > 0) {
+                    editsHtml = '<div class="card" style="margin-top:24px"><div class="card-header"><h3 class="card-title">📝 Полная история изменений периода</h3></div><div class="card-body">';
                     
-                    const isDeleted = edit.field_name === 'DELETED';
-                    const isAdded = edit.field_name === 'ADDED';
-                    const icon = isDeleted ? '🗑️' : (isAdded ? '➕' : '✏️');
-                    const status = edit.period_status || 'DRAFT';
-                    const bgColor = statusBgColors[status] || '#f8f9fa';
-                    const statusColor = statusColors[status] || '#6c757d';
-                    const statusLabel = statusLabels[status] || status;
+                    historyData.data.forEach(versionGroup => {
+                        const version = versionGroup.version;
+                        const edits = versionGroup.manual_edits || [];
+                        const versionChanges = versionGroup.version_changes || [];
+                        const oldChanges = versionGroup.changes || [];
+                        const totalInVersion = edits.length + versionChanges.length + oldChanges.length;
+                        
+                        if (totalInVersion === 0) return;
+                        
+                        const versionDate = versionGroup.created_at ? new Date(versionGroup.created_at).toLocaleString('ru-RU') : '';
+                        
+                        // Version group header
+                        editsHtml += `
+                            <div class="version-history-group" style="margin-bottom:24px;border:2px solid #e0e0e0;border-radius:12px;overflow:hidden;">
+                                <div class="version-history-header" style="background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);color:white;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;">
+                                    <div style="display:flex;align-items:center;gap:12px;">
+                                        <span style="font-size:20px;">📋</span>
+                                        <span style="font-weight:700;font-size:16px;">Версия ${version}</span>
+                                        <span style="background:rgba(255,255,255,0.2);padding:4px 12px;border-radius:20px;font-size:13px;">${totalInVersion} ${totalInVersion === 1 ? 'изменение' : (totalInVersion < 5 ? 'изменения' : 'изменений')}</span>
+                                    </div>
+                                    <span style="font-size:13px;opacity:0.9;">🕐 ${versionDate}</span>
+                                </div>
+                                <div class="version-history-content" style="padding:16px;">
+                        `;
+                        
+                        // Render manual edits
+                        edits.forEach(edit => {
+                            editsHtml += renderEditItem(edit);
+                        });
+                        
+                        // Render version changes (added/deleted/modified from file upload)
+                        versionChanges.forEach(change => {
+                            editsHtml += renderVersionChange(change);
+                        });
+                        
+                        // Render old changes (backward compatibility)
+                        oldChanges.forEach(change => {
+                            editsHtml += renderOldChange(change);
+                        });
+                        
+                        editsHtml += '</div></div>';
+                    });
                     
-                    let changeText = '';
-                    if (isDeleted) {
-                        changeText = `<span style="color: #dc3545; font-weight: 500">Строка удалена (было: ${Math.round(edit.old_value || 0).toLocaleString('ru-RU')} ₽)</span>`;
-                    } else if (isAdded) {
-                        changeText = `<span style="color: #198754; font-weight: 500">Строка добавлена: ${Math.round(edit.new_value || 0).toLocaleString('ru-RU')} ₽</span>`;
-                    } else {
-                        changeText = `${escapeHtml(fieldLabels[edit.field_name] || edit.field_name)}: <span style="text-decoration: line-through; color: #999">${Math.round(edit.old_value || 0).toLocaleString('ru-RU')}</span> → <span style="font-weight: 500; color: #198754">${Math.round(edit.new_value || 0).toLocaleString('ru-RU')} ₽</span>`;
-                    }
-                    
-                    const editorName = edit.edited_by_name || 'Неизвестно';
-                    
-                    editsHtml += `<div class="manual-edit-item" style="display:flex;gap:12px;padding:16px;border-bottom:1px solid #eee;background:${bgColor};border-radius:8px;margin-bottom:8px;">
-                        <span style="font-size:24px">${icon}</span>
-                        <div class="edit-content" style="flex:1">
-                            <div class="edit-header" style="font-weight:600;font-size:15px;margin-bottom:4px">${escapeHtml(edit.order_code || edit.address || 'Заказ')} — ${escapeHtml(edit.worker)}</div>
-                            <div class="edit-change" style="margin-bottom:8px">${changeText}</div>
-                            <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
-                                <span style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:${statusColor};color:white;border-radius:12px;font-size:12px;font-weight:500">
-                                    ${statusLabel}
-                                </span>
-                                <span style="color:#666;font-size:13px">👤 ${escapeHtml(editorName)}</span>
-                                ${edit.created_at ? `<span style="color:#999;font-size:12px">🕐 ${new Date(edit.created_at).toLocaleString('ru-RU')}</span>` : ''}
-                            </div>
-                        </div>
-                    </div>`;
-                });
-                editsHtml += '</div></div></div>';
+                    editsHtml += '</div></div>';
+                }
+            } else {
+                // For non-latest versions, show only current version edits
+                if (manualEdits.length > 0) {
+                    editsHtml = '<div class="card" style="margin-top:24px"><div class="card-header"><h3 class="card-title">📝 История изменений этой версии</h3></div><div class="card-body"><div class="changes-list">';
+                    manualEdits.forEach(edit => {
+                        editsHtml += renderEditItem(edit);
+                    });
+                    editsHtml += '</div></div></div>';
+                }
             }
 
             document.getElementById('content').innerHTML = `${tabsHtml}${statsHtml}<div class="card"><div class="card-header"><h3 class="card-title">👥 Монтажники</h3></div><div class="card-body">${downloadHtml}${workersHtml}</div></div>${changesHtml}${editsHtml}`;
+        }
+        
+        // Helper function to render a manual edit item
+        function renderEditItem(edit) {
+            const fieldLabels = { 
+                fuel_payment: 'Бензин', 
+                transport: 'Транспортные', 
+                total: 'Итого',
+                DELETED: 'Удалено',
+                ADDED: 'Добавлено'
+            };
+            const statusLabels = {
+                'DRAFT': 'Черновик', 'draft': 'Черновик',
+                'SENT': 'Отправлено', 'sent': 'Отправлено',
+                'PAID': 'Оплачено', 'paid': 'Оплачено'
+            };
+            const statusColors = {
+                'DRAFT': '#6c757d', 'draft': '#6c757d',
+                'SENT': '#0d6efd', 'sent': '#0d6efd',
+                'PAID': '#198754', 'paid': '#198754'
+            };
+            
+            const isDeleted = edit.field_name === 'DELETED';
+            const isAdded = edit.field_name === 'ADDED';
+            const icon = isDeleted ? '🗑️' : (isAdded ? '➕' : '✏️');
+            const status = edit.period_status || 'DRAFT';
+            const statusColor = statusColors[status] || '#6c757d';
+            const statusLabel = statusLabels[status] || status;
+            
+            let changeText = '';
+            if (isDeleted) {
+                changeText = `<span style="color: #dc3545; font-weight: 500">Строка удалена (было: ${Math.round(edit.old_value || 0).toLocaleString('ru-RU')} ₽)</span>`;
+            } else if (isAdded) {
+                changeText = `<span style="color: #198754; font-weight: 500">Строка добавлена: ${Math.round(edit.new_value || 0).toLocaleString('ru-RU')} ₽</span>`;
+            } else {
+                changeText = `${escapeHtml(fieldLabels[edit.field_name] || edit.field_name)}: <span style="text-decoration: line-through; color: #999">${Math.round(edit.old_value || 0).toLocaleString('ru-RU')}</span> → <span style="font-weight: 500; color: #198754">${Math.round(edit.new_value || 0).toLocaleString('ru-RU')} ₽</span>`;
+            }
+            
+            const editorName = edit.edited_by_name || 'Система';
+            const editTime = edit.created_at ? new Date(edit.created_at).toLocaleString('ru-RU') : '';
+            
+            return `<div class="manual-edit-item" style="display:flex;gap:12px;padding:14px;background:#fafafa;border-radius:8px;margin-bottom:8px;border-left:4px solid ${statusColor};">
+                <span style="font-size:22px">${icon}</span>
+                <div class="edit-content" style="flex:1">
+                    <div class="edit-header" style="font-weight:600;font-size:14px;margin-bottom:4px">${escapeHtml(edit.order_code || edit.address || 'Заказ')} — ${escapeHtml(edit.worker || '')}</div>
+                    <div class="edit-change" style="margin-bottom:6px;font-size:13px">${changeText}</div>
+                    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:12px">
+                        <span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;background:${statusColor};color:white;border-radius:10px;font-weight:500">${statusLabel}</span>
+                        <span style="color:#666">👤 ${escapeHtml(editorName)}</span>
+                        ${editTime ? `<span style="color:#999">🕐 ${editTime}</span>` : ''}
+                    </div>
+                </div>
+            </div>`;
+        }
+        
+        // Helper function to render version change (from file upload comparison)
+        function renderVersionChange(change) {
+            const icons = { added: '➕', deleted: '➖', modified: '✏️', restored: '🔄' };
+            const bgColors = { added: '#d4edda', deleted: '#f8d7da', modified: '#fff3cd', restored: '#cce5ff' };
+            const labels = { added: 'Добавлено из файла', deleted: 'Удалено из файла', modified: 'Изменено в файле', restored: 'Восстановлено' };
+            const borderColors = { added: '#28a745', deleted: '#dc3545', modified: '#ffc107', restored: '#007bff' };
+            
+            const type = change.change_type || 'modified';
+            let detailText = '';
+            if (change.old_total !== null && change.new_total !== null && change.old_total !== change.new_total) {
+                detailText = `<div style="color:#666;font-size:12px;margin-top:4px">Сумма: ${Math.round(change.old_total || 0).toLocaleString('ru-RU')} → ${Math.round(change.new_total || 0).toLocaleString('ru-RU')} ₽</div>`;
+            }
+            
+            return `<div style="display:flex;gap:12px;padding:14px;background:${bgColors[type]};border-radius:8px;margin-bottom:8px;border-left:4px solid ${borderColors[type]};">
+                <span style="font-size:22px">${icons[type] || '•'}</span>
+                <div style="flex:1">
+                    <div style="font-weight:600;font-size:14px">${escapeHtml(change.order_code || 'Заказ')} — ${escapeHtml(change.worker || '')}</div>
+                    ${detailText}
+                </div>
+                <span style="font-size:11px;color:#666;white-space:nowrap">${labels[type]}</span>
+            </div>`;
+        }
+        
+        // Helper function to render old change format (backward compatibility)
+        function renderOldChange(change) {
+            const icons = { added: '➕', deleted: '➖', modified: '✏️' };
+            const bgColors = { added: '#d4edda', deleted: '#f8d7da', modified: '#fff3cd' };
+            const labels = { added: 'Добавлено', deleted: 'Удалено', modified: 'Изменено' };
+            const borderColors = { added: '#28a745', deleted: '#dc3545', modified: '#ffc107' };
+            
+            const type = change.change_type || 'modified';
+            
+            return `<div style="display:flex;gap:12px;padding:14px;background:${bgColors[type]};border-radius:8px;margin-bottom:8px;border-left:4px solid ${borderColors[type]};">
+                <span style="font-size:22px">${icons[type] || '•'}</span>
+                <div style="flex:1">
+                    <div style="font-weight:600;font-size:14px">${escapeHtml(change.order_code || 'Заказ')} — ${escapeHtml(change.worker || '')}</div>
+                </div>
+                <span style="font-size:11px;color:#666">${labels[type]}</span>
+            </div>`;
         }
         
         // Modal functions

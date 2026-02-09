@@ -1340,3 +1340,67 @@ async def is_duplicate_excluded(address_hash: str, work_type: str) -> bool:
     )
     row = await database.fetch_one(query)
     return row is not None
+
+
+async def get_period_full_history(period_id: int) -> List[dict]:
+    """
+    Get full history of all changes for a period across all versions.
+    Returns list of version groups with their manual_edits.
+    """
+    if not database or not database.is_connected:
+        return []
+    
+    # Get all uploads (versions) for this period, ordered by version desc
+    query = uploads.select().where(
+        uploads.c.period_id == period_id
+    ).order_by(uploads.c.version.desc())
+    upload_rows = await database.fetch_all(query)
+    
+    if not upload_rows:
+        return []
+    
+    result = []
+    
+    for upload_row in upload_rows:
+        upload = dict(upload_row._mapping)
+        upload_id = upload["id"]
+        version = upload["version"]
+        created_at = upload.get("created_at")
+        
+        # Get manual edits for this version (excluding YANDEX_FUEL)
+        query = manual_edits.select().where(
+            and_(
+                manual_edits.c.upload_id == upload_id,
+                manual_edits.c.field_name != "YANDEX_FUEL"
+            )
+        ).order_by(manual_edits.c.created_at.desc())
+        edit_rows = await database.fetch_all(query)
+        edits = [dict(row._mapping) for row in edit_rows]
+        
+        # Get version changes (added/deleted/modified compared to previous)
+        query = version_changes.select().where(
+            version_changes.c.upload_id == upload_id
+        ).order_by(version_changes.c.change_type, version_changes.c.worker)
+        change_rows = await database.fetch_all(query)
+        version_changes_list = [dict(row._mapping) for row in change_rows]
+        
+        # Also get old changes table data (backward compatibility)
+        query = changes.select().where(
+            changes.c.upload_id == upload_id
+        ).order_by(changes.c.change_type, changes.c.worker)
+        old_change_rows = await database.fetch_all(query)
+        old_changes = [dict(row._mapping) for row in old_change_rows]
+        
+        # Only include versions that have changes
+        if edits or version_changes_list or old_changes:
+            result.append({
+                "version": version,
+                "upload_id": upload_id,
+                "created_at": created_at.isoformat() if created_at else None,
+                "manual_edits": edits,
+                "version_changes": version_changes_list,
+                "changes": old_changes,
+                "total_changes": len(edits) + len(version_changes_list) + len(old_changes)
+            })
+    
+    return result

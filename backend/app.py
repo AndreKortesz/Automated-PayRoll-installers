@@ -2216,6 +2216,36 @@ async def api_get_period(period_id: int):
         return JSONResponse({"success": False, "error": str(e)})
 
 
+@app.get("/api/period/{period_id}/history")
+async def api_get_period_history(period_id: int):
+    """Get full history of all changes for a period across all versions"""
+    try:
+        from database import get_period_full_history
+        
+        history = await get_period_full_history(period_id)
+        
+        # Convert datetime fields to strings
+        def serialize_datetime(obj):
+            if isinstance(obj, dict):
+                return {k: serialize_datetime(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [serialize_datetime(item) for item in obj]
+            elif hasattr(obj, 'isoformat'):  # datetime object
+                return obj.isoformat()
+            return obj
+        
+        serialized = serialize_datetime(history)
+        
+        return JSONResponse({
+            "success": True,
+            "data": serialized
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JSONResponse({"success": False, "error": str(e)})
+
+
 @app.get("/api/upload/{upload_id}")
 async def api_get_upload(upload_id: int):
     """Get upload details with worker totals"""
