@@ -4234,6 +4234,15 @@ async def get_duplicates(request: Request):
                 ids = tuple(sorted([o["id"] for o in orders_list]))
                 if ids not in seen_review:
                     seen_review.add(ids)
+                    
+                    # Check if this review item is excluded
+                    review_hash = 'review_' + code
+                    excluded_ids = exclusions_map.get((review_hash, 'review'), set())
+                    current_order_ids = set([o["id"] for o in orders_list])
+                    
+                    if excluded_ids and current_order_ids.issubset(excluded_ids):
+                        continue  # Skip excluded review items
+                    
                     needs_review.append({
                         "order_code": code,
                         "orders": [{

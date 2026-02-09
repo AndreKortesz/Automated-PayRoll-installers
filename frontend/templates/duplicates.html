@@ -664,11 +664,12 @@
 
             let html = '';
             items.forEach(item => {
+                const orderIds = item.orders.map(o => o.id);
                 const orderCodeHtml = item.order_code 
                     ? `<span class="order-code-link" onclick="onOrderCodeClick('${Security.escapeHtml(item.order_code)}')" title="Синхронизация с 1С (скоро)">${Security.escapeHtml(item.order_code)}</span>`
                     : '—';
                 html += `
-                    <div class="dup-group">
+                    <div class="dup-group" data-ordercode="${Security.escapeHtml(item.order_code || '')}">
                         <div class="dup-group-header">
                             <span class="dup-order-code">${orderCodeHtml}</span>
                             <span style="color: var(--gray-dark); font-size: 14px;">— один заказ, разные адреса</span>
@@ -702,6 +703,11 @@
                                     }).join('')}
                                 </tbody>
                             </table>
+                        </div>
+                        <div class="dup-group-actions">
+                            <button class="btn-exclude" onclick="excludeReviewItem('${Security.escapeHtml(item.order_code || '').replace(/'/g, "\\'")}', ${JSON.stringify(orderIds)}, this)">
+                                ✓ Проверено — это корректно
+                            </button>
                         </div>
                     </div>
                 `;
@@ -769,9 +775,11 @@
         function updateTabCounts() {
             const exactCount = document.querySelectorAll('#panel-exact .dup-group').length;
             const partialCount = document.querySelectorAll('#panel-partial .dup-group').length;
+            const reviewCount = document.querySelectorAll('#panel-review .dup-group').length;
             
             document.querySelector('.tab-btn.tab-exact .tab-count').textContent = exactCount;
             document.querySelector('.tab-btn.tab-partial .tab-count').textContent = partialCount;
+            document.querySelector('.tab-btn.tab-review .tab-count').textContent = reviewCount;
             
             // Show empty state if needed
             if (exactCount === 0) {
@@ -789,6 +797,61 @@
                         <p>Частичных совпадений не найдено</p>
                     </div>
                 `;
+            }
+            if (reviewCount === 0) {
+                document.getElementById('panel-review').innerHTML = `
+                    <div class="empty-section">
+                        <div class="empty-icon">✅</div>
+                        <p>Проблем не найдено</p>
+                    </div>
+                `;
+            }
+        }
+
+        // Exclude review item (same order_code, different addresses)
+        async function excludeReviewItem(orderCode, orderIds, btn) {
+            if (!confirm(`Вы уверены, что проверили этот заказ?\n\nКод заказа: ${orderCode}\n\nЗапись будет скрыта из списка.`)) {
+                return;
+            }
+            
+            btn.classList.add('loading');
+            btn.textContent = '⏳ Сохранение...';
+            
+            try {
+                const response = await Security.fetch('/api/duplicates/exclude', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        address_hash: 'review_' + orderCode,  // Уникальный идентификатор для review
+                        work_type: 'review',                   // Специальный тип для review
+                        address_display: 'Заказ ' + orderCode + ' (разные адреса)',
+                        order_ids: orderIds
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Remove the item from UI with animation
+                    const group = btn.closest('.dup-group');
+                    group.style.transition = 'all 0.3s ease-out';
+                    group.style.opacity = '0';
+                    group.style.transform = 'translateX(50px)';
+                    
+                    setTimeout(() => {
+                        group.remove();
+                        // Update counts
+                        updateTabCounts();
+                    }, 300);
+                } else {
+                    alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
+                    btn.classList.remove('loading');
+                    btn.textContent = '✓ Проверено — это корректно';
+                }
+            } catch (error) {
+                alert('Ошибка сети: ' + error.message);
+                btn.classList.remove('loading');
+                btn.textContent = '✓ Проверено — это корректно';
             }
         }
 
