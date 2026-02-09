@@ -4257,9 +4257,56 @@ async def get_duplicates(request: Request):
                         } for o in orders_list]
                     })
         
-        # Sort by period (newest first)
-        exact_duplicates.sort(key=lambda x: x["orders"][0]["period_name"], reverse=True)
-        partial_duplicates.sort(key=lambda x: x["orders"][0]["period_name"], reverse=True)
+        # === SORTING ===
+        
+        # Find the latest (most recent) upload_id across all orders
+        latest_upload_id = max(o["upload_id"] for o in processed_orders) if processed_orders else 0
+        
+        # Helper function to parse period date for sorting
+        def get_period_sort_key(period_name):
+            """Convert period name like '16-30.11.25' to sortable tuple (year, month, day)"""
+            try:
+                # Extract end date from period (e.g., "16-30.11.25" -> "30.11.25")
+                parts = period_name.split('-')
+                if len(parts) >= 2:
+                    date_part = parts[1]  # "30.11.25"
+                    day, month, year = date_part.split('.')
+                    # Convert to full year for proper sorting
+                    full_year = 2000 + int(year) if int(year) < 100 else int(year)
+                    return (full_year, int(month), int(day))
+            except:
+                pass
+            return (0, 0, 0)  # Fallback for unparseable dates
+        
+        # Sort function: 
+        # 1. Groups containing orders from latest upload come FIRST
+        # 2. Then by period date (newest first)
+        # 3. Then by total sum (highest first)
+        def sort_key(group):
+            # Check if any order in the group is from the latest upload
+            has_latest_upload = any(o.get("upload_id") == latest_upload_id for o in group["orders"])
+            
+            # Get the newest period in the group
+            period = group["orders"][0]["period_name"]
+            period_tuple = get_period_sort_key(period)
+            
+            # Total sum for secondary sort
+            total_sum = sum(o.get("total", 0) for o in group["orders"])
+            
+            # Sort key: (not has_latest first, then by date desc, then by sum desc)
+            # 0 = has latest (comes first), 1 = no latest (comes after)
+            return (
+                0 if has_latest_upload else 1,  # Latest upload first
+                -period_tuple[0],                # Year desc
+                -period_tuple[1],                # Month desc  
+                -period_tuple[2],                # Day desc
+                -total_sum                       # Sum desc
+            )
+        
+        # Sort all three lists
+        exact_duplicates.sort(key=sort_key)
+        partial_duplicates.sort(key=sort_key)
+        needs_review.sort(key=sort_key)
         
         return {
             "success": True,
