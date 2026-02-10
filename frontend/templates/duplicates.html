@@ -345,6 +345,54 @@
             background: var(--gray-light);
             transform: translateY(-2px);
         }
+        
+        /* Sort Controls */
+        .sort-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            background: var(--white);
+            border-radius: 12px;
+            margin-bottom: 16px;
+            box-shadow: var(--shadow-soft);
+        }
+        .sort-label {
+            font-size: 14px;
+            color: var(--gray-dark);
+            font-weight: 500;
+        }
+        .sort-select {
+            padding: 8px 32px 8px 12px;
+            border: 2px solid var(--gray);
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: 'Roboto', sans-serif;
+            background: var(--white);
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24'%3E%3Cpath fill='%234D4D4D' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 10px center;
+            min-width: 200px;
+        }
+        .sort-select:focus {
+            outline: none;
+            border-color: var(--orange);
+        }
+        .sort-select:hover {
+            border-color: var(--orange);
+        }
+        .sort-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: #E3F2FD;
+            border-radius: 8px;
+            font-size: 12px;
+            color: #1565C0;
+        }
     </style>
 </head>
 <body>
@@ -473,10 +521,29 @@
 
         function renderTabs(data) {
             const { exact_duplicates, partial_duplicates, needs_review, stats } = data;
-
+            
+            // Get current sort option
+            const currentSort = localStorage.getItem('duplicates_sort') || 'latest';
+            
             let html = `
                 <div class="info-banner">
                     📊 Проанализировано <strong>${stats.total_orders}</strong> заказов из <strong>${stats.total_periods}</strong> периодов
+                </div>
+                
+                <div class="sort-controls">
+                    <span class="sort-label">🔀 Сортировка:</span>
+                    <select class="sort-select" id="sortSelect" onchange="changeSort(this.value)">
+                        <option value="latest" ${currentSort === 'latest' ? 'selected' : ''}>📥 Новые загрузки сверху</option>
+                        <option value="period" ${currentSort === 'period' ? 'selected' : ''}>📅 По дате периода</option>
+                        <option value="sum_desc" ${currentSort === 'sum_desc' ? 'selected' : ''}>💰 По сумме (больше → меньше)</option>
+                        <option value="sum_asc" ${currentSort === 'sum_asc' ? 'selected' : ''}>💰 По сумме (меньше → больше)</option>
+                    </select>
+                    <span class="sort-indicator">
+                        ${currentSort === 'latest' ? '📥 Новые загрузки первыми' : 
+                          currentSort === 'period' ? '📅 Новые периоды первыми' :
+                          currentSort === 'sum_desc' ? '💰 Большие суммы первыми' :
+                          '💰 Малые суммы первыми'}
+                    </span>
                 </div>
                 
                 <div class="tabs-container">
@@ -501,23 +568,102 @@
                     <div class="tabs-content">
                         <!-- Exact Duplicates Panel -->
                         <div id="panel-exact" class="tab-panel active">
-                            ${renderExactDuplicates(exact_duplicates)}
+                            ${renderExactDuplicates(sortData(exact_duplicates, currentSort))}
                         </div>
                         
                         <!-- Partial Duplicates Panel -->
                         <div id="panel-partial" class="tab-panel">
-                            ${renderPartialDuplicates(partial_duplicates)}
+                            ${renderPartialDuplicates(sortData(partial_duplicates, currentSort))}
                         </div>
                         
                         <!-- Needs Review Panel -->
                         <div id="panel-review" class="tab-panel">
-                            ${renderNeedsReview(needs_review)}
+                            ${renderNeedsReview(sortData(needs_review, currentSort))}
                         </div>
                     </div>
                 </div>
             `;
 
             document.getElementById('content').innerHTML = html;
+        }
+        
+        function sortData(items, sortType) {
+            if (!items || items.length === 0) return items;
+            
+            const sorted = [...items];
+            
+            // Helper to get max upload_id from a group
+            const getMaxUploadId = (group) => {
+                return Math.max(...group.orders.map(o => o.upload_id || 0));
+            };
+            
+            // Helper to parse period date
+            const getPeriodDate = (periodName) => {
+                try {
+                    const parts = periodName.split('-');
+                    if (parts.length >= 2) {
+                        const datePart = parts[1]; // "30.11.25"
+                        const [day, month, year] = datePart.split('.');
+                        const fullYear = parseInt(year) < 100 ? 2000 + parseInt(year) : parseInt(year);
+                        return new Date(fullYear, parseInt(month) - 1, parseInt(day));
+                    }
+                } catch (e) {}
+                return new Date(0);
+            };
+            
+            // Helper to get total sum
+            const getTotalSum = (group) => {
+                return group.orders.reduce((sum, o) => sum + (o.total || 0), 0);
+            };
+            
+            // Find latest upload_id across all data
+            const latestUploadId = globalData ? 
+                Math.max(
+                    ...globalData.exact_duplicates.flatMap(g => g.orders.map(o => o.upload_id || 0)),
+                    ...globalData.partial_duplicates.flatMap(g => g.orders.map(o => o.upload_id || 0)),
+                    ...globalData.needs_review.flatMap(g => g.orders.map(o => o.upload_id || 0))
+                ) : 0;
+            
+            sorted.sort((a, b) => {
+                switch (sortType) {
+                    case 'latest':
+                        // Groups with latest upload first, then by period, then by sum
+                        const aHasLatest = a.orders.some(o => o.upload_id === latestUploadId);
+                        const bHasLatest = b.orders.some(o => o.upload_id === latestUploadId);
+                        if (aHasLatest !== bHasLatest) return bHasLatest - aHasLatest;
+                        // Then by period
+                        const periodDiff = getPeriodDate(b.orders[0]?.period_name || '') - getPeriodDate(a.orders[0]?.period_name || '');
+                        if (periodDiff !== 0) return periodDiff;
+                        // Then by sum
+                        return getTotalSum(b) - getTotalSum(a);
+                        
+                    case 'period':
+                        // By period date (newest first), then by sum
+                        const pDiff = getPeriodDate(b.orders[0]?.period_name || '') - getPeriodDate(a.orders[0]?.period_name || '');
+                        if (pDiff !== 0) return pDiff;
+                        return getTotalSum(b) - getTotalSum(a);
+                        
+                    case 'sum_desc':
+                        // By sum descending
+                        return getTotalSum(b) - getTotalSum(a);
+                        
+                    case 'sum_asc':
+                        // By sum ascending
+                        return getTotalSum(a) - getTotalSum(b);
+                        
+                    default:
+                        return 0;
+                }
+            });
+            
+            return sorted;
+        }
+        
+        function changeSort(sortType) {
+            localStorage.setItem('duplicates_sort', sortType);
+            if (globalData) {
+                renderTabs(globalData);
+            }
         }
 
         function renderExactDuplicates(duplicates) {
@@ -664,12 +810,11 @@
 
             let html = '';
             items.forEach(item => {
-                const orderIds = item.orders.map(o => o.id);
                 const orderCodeHtml = item.order_code 
                     ? `<span class="order-code-link" onclick="onOrderCodeClick('${Security.escapeHtml(item.order_code)}')" title="Синхронизация с 1С (скоро)">${Security.escapeHtml(item.order_code)}</span>`
                     : '—';
                 html += `
-                    <div class="dup-group" data-ordercode="${Security.escapeHtml(item.order_code || '')}">
+                    <div class="dup-group">
                         <div class="dup-group-header">
                             <span class="dup-order-code">${orderCodeHtml}</span>
                             <span style="color: var(--gray-dark); font-size: 14px;">— один заказ, разные адреса</span>
@@ -703,11 +848,6 @@
                                     }).join('')}
                                 </tbody>
                             </table>
-                        </div>
-                        <div class="dup-group-actions">
-                            <button class="btn-exclude" onclick="excludeReviewItem('${Security.escapeHtml(item.order_code || '').replace(/'/g, "\\'")}', ${JSON.stringify(orderIds)}, this)">
-                                ✓ Проверено — это корректно
-                            </button>
                         </div>
                     </div>
                 `;
@@ -775,11 +915,9 @@
         function updateTabCounts() {
             const exactCount = document.querySelectorAll('#panel-exact .dup-group').length;
             const partialCount = document.querySelectorAll('#panel-partial .dup-group').length;
-            const reviewCount = document.querySelectorAll('#panel-review .dup-group').length;
             
             document.querySelector('.tab-btn.tab-exact .tab-count').textContent = exactCount;
             document.querySelector('.tab-btn.tab-partial .tab-count').textContent = partialCount;
-            document.querySelector('.tab-btn.tab-review .tab-count').textContent = reviewCount;
             
             // Show empty state if needed
             if (exactCount === 0) {
@@ -797,61 +935,6 @@
                         <p>Частичных совпадений не найдено</p>
                     </div>
                 `;
-            }
-            if (reviewCount === 0) {
-                document.getElementById('panel-review').innerHTML = `
-                    <div class="empty-section">
-                        <div class="empty-icon">✅</div>
-                        <p>Проблем не найдено</p>
-                    </div>
-                `;
-            }
-        }
-
-        // Exclude review item (same order_code, different addresses)
-        async function excludeReviewItem(orderCode, orderIds, btn) {
-            if (!confirm(`Вы уверены, что проверили этот заказ?\n\nКод заказа: ${orderCode}\n\nЗапись будет скрыта из списка.`)) {
-                return;
-            }
-            
-            btn.classList.add('loading');
-            btn.textContent = '⏳ Сохранение...';
-            
-            try {
-                const response = await Security.fetch('/api/duplicates/exclude', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        address_hash: 'review_' + orderCode,  // Уникальный идентификатор для review
-                        work_type: 'review',                   // Специальный тип для review
-                        address_display: 'Заказ ' + orderCode + ' (разные адреса)',
-                        order_ids: orderIds
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    // Remove the item from UI with animation
-                    const group = btn.closest('.dup-group');
-                    group.style.transition = 'all 0.3s ease-out';
-                    group.style.opacity = '0';
-                    group.style.transform = 'translateX(50px)';
-                    
-                    setTimeout(() => {
-                        group.remove();
-                        // Update counts
-                        updateTabCounts();
-                    }, 300);
-                } else {
-                    alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
-                    btn.classList.remove('loading');
-                    btn.textContent = '✓ Проверено — это корректно';
-                }
-            } catch (error) {
-                alert('Ошибка сети: ' + error.message);
-                btn.classList.remove('loading');
-                btn.textContent = '✓ Проверено — это корректно';
             }
         }
 
