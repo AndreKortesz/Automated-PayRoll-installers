@@ -343,18 +343,43 @@
             workerTotalsData = upload.worker_totals || [];
             const changes = upload.changes || [];
             const manualEdits = upload.manual_edits || [];
+            const workerAdjustments = upload.worker_adjustments || {};
+
+            // Calculate totals with adjustments
+            let grandTotalFinal = 0;
+            let grandCompanyFinal = 0;
+            let grandClientFinal = 0;
+            
+            workerTotalsData.forEach(wt => {
+                const adj = workerAdjustments[wt.worker] || { total_adjustment: 0 };
+                grandCompanyFinal += (wt.company_amount || 0) + adj.total_adjustment;
+                grandClientFinal += (wt.client_amount || 0);
+            });
+            grandTotalFinal = grandCompanyFinal + grandClientFinal;
 
             const grandTotal = workerTotalsData.reduce((s, w) => s + (w.total_amount || 0), 0);
             const grandCompany = workerTotalsData.reduce((s, w) => s + (w.company_amount || 0), 0);
             const grandClient = workerTotalsData.reduce((s, w) => s + (w.client_amount || 0), 0);
             const totalOrders = workerTotalsData.reduce((s, w) => s + (w.orders_count || 0), 0);
+            const totalAdjustment = grandTotalFinal - grandTotal;
 
             let statsHtml = `<div class="stats-bar" style="grid-template-columns: repeat(4, 1fr);">
                 <div class="stats-card"><div class="stats-icon yellow"><svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4z"/></svg></div><div class="stats-content"><div class="stats-value">${workerTotalsData.length}</div><div class="stats-label">Монтажников</div></div></div>
-                <div class="stats-card"><div class="stats-icon green"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/></svg></div><div class="stats-content"><div class="stats-value">${formatCurrency(grandCompany)}</div><div class="stats-label">Компания</div></div></div>
+                <div class="stats-card"><div class="stats-icon green"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/></svg></div><div class="stats-content"><div class="stats-value">${formatCurrency(grandCompanyFinal)}</div><div class="stats-label">Компания</div></div></div>
                 <div class="stats-card"><div class="stats-icon orange"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/></svg></div><div class="stats-content"><div class="stats-value">${formatCurrency(grandClient)}</div><div class="stats-label">Клиент</div></div></div>
-                <div class="stats-card"><div class="stats-icon dark"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/></svg></div><div class="stats-content"><div class="stats-value">${formatCurrency(grandTotal)}</div><div class="stats-label">Итого (${totalOrders})</div></div></div>
+                <div class="stats-card"><div class="stats-icon dark"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/></svg></div><div class="stats-content"><div class="stats-value">${formatCurrency(grandTotalFinal)}</div><div class="stats-label">К выплате</div></div></div>
             </div>`;
+            
+            // Show adjustment summary if there are any
+            if (totalAdjustment !== 0) {
+                const adjSign = totalAdjustment >= 0 ? '+' : '';
+                const adjColor = totalAdjustment >= 0 ? '#2E7D32' : '#D32F2F';
+                statsHtml += `<div style="text-align:center;padding:8px;background:#f5f5f5;border-radius:8px;margin-top:-8px;font-size:13px;color:#666;">
+                    Базовая сумма: ${formatCurrency(grandTotal)} ₽ 
+                    <span style="color:${adjColor};font-weight:600;margin-left:8px;">${adjSign}${formatCurrency(totalAdjustment)} ₽</span>
+                    <span style="margin-left:4px;">(корректировки)</span>
+                </div>`;
+            }
 
             let downloadHtml = `<div class="download-section"><div class="download-title">📥 Скачать отчёты</div><div class="download-buttons">
                 <a href="/api/period/${periodId}/download/full" class="btn btn-download">📥 Полный отчёт</a>
@@ -366,21 +391,47 @@
                 const companyAmt = wt.company_amount || 0;
                 const clientAmt = wt.client_amount || 0;
                 const totalAmt = wt.total_amount || 0;
+                
+                // Get adjustments for this worker
+                const adj = workerAdjustments[wt.worker] || { total_adjustment: 0, details: [] };
+                const adjustmentTotal = adj.total_adjustment || 0;
+                const finalCompany = companyAmt + adjustmentTotal;
+                const finalTotal = finalCompany + clientAmt;
+                const hasAdjustments = adjustmentTotal !== 0;
+                
+                // Build adjustment details tooltip
+                let adjDetails = '';
+                if (hasAdjustments && adj.details && adj.details.length > 0) {
+                    adjDetails = adj.details.map(d => {
+                        const sign = d.amount >= 0 ? '+' : '';
+                        return `${d.description}: ${sign}${Math.round(d.amount).toLocaleString('ru-RU')} ₽`;
+                    }).join('&#10;');
+                }
+                
                 workersHtml += `<div class="worker-card" onclick="viewWorker('${escapeAttr(encodeURIComponent(wt.worker))}')">
                     <div class="worker-name">👷 ${escapeHtml(wt.worker)}</div>
                     <div class="worker-amounts">
                         <div class="worker-amount company"><div class="worker-amount-value">${Math.round(companyAmt).toLocaleString('ru-RU')}</div><div class="worker-amount-label">Компания</div></div>
                         <div class="worker-amount client"><div class="worker-amount-value">${Math.round(clientAmt).toLocaleString('ru-RU')}</div><div class="worker-amount-label">Клиент</div></div>
                     </div>
-                    <div class="worker-total-row"><span class="worker-total-label">Итого:</span><span class="worker-total-value">${Math.round(totalAmt).toLocaleString('ru-RU')} ₽</span></div>
+                    ${hasAdjustments ? `
+                        <div class="worker-adjustment" title="${adjDetails}" style="display:flex;justify-content:space-between;align-items:center;padding:6px 12px;margin:8px 0;background:${adjustmentTotal >= 0 ? '#E8F5E9' : '#FFEBEE'};border-radius:8px;font-size:12px;">
+                            <span style="color:#666;">Корректировки:</span>
+                            <span style="font-weight:600;color:${adjustmentTotal >= 0 ? '#2E7D32' : '#D32F2F'};">${adjustmentTotal >= 0 ? '+' : ''}${Math.round(adjustmentTotal).toLocaleString('ru-RU')} ₽</span>
+                        </div>
+                    ` : ''}
+                    <div class="worker-total-row" style="${hasAdjustments ? 'background:#FFF8E1;border-radius:8px;padding:8px 12px;margin-top:4px;' : ''}">
+                        <span class="worker-total-label">${hasAdjustments ? '💰 К выплате:' : 'Итого:'}</span>
+                        <span class="worker-total-value" style="${hasAdjustments ? 'color:#E65100;font-size:18px;' : ''}">${Math.round(finalTotal).toLocaleString('ru-RU')} ₽</span>
+                    </div>
                 </div>`;
             });
             workersHtml += '</div>';
 
             workersHtml += `<div class="grand-totals"><div class="grand-totals-grid">
-                <div class="grand-total-item company"><div class="grand-total-value">${Math.round(grandCompany).toLocaleString('ru-RU')} ₽</div><div class="grand-total-label">🏢 Компания</div></div>
+                <div class="grand-total-item company"><div class="grand-total-value">${Math.round(grandCompanyFinal).toLocaleString('ru-RU')} ₽</div><div class="grand-total-label">🏢 Компания</div></div>
                 <div class="grand-total-item client"><div class="grand-total-value">${Math.round(grandClient).toLocaleString('ru-RU')} ₽</div><div class="grand-total-label">👤 Клиент</div></div>
-                <div class="grand-total-item total"><div class="grand-total-value">${Math.round(grandTotal).toLocaleString('ru-RU')} ₽</div><div class="grand-total-label">💰 Итого</div></div>
+                <div class="grand-total-item total"><div class="grand-total-value">${Math.round(grandTotalFinal).toLocaleString('ru-RU')} ₽</div><div class="grand-total-label">💰 К выплате</div></div>
             </div></div>`;
 
             let changesHtml = '';
@@ -423,169 +474,80 @@
                 changesHtml += '</div></div></div>';
             }
 
-            // Load full history for all versions (only for latest version tab)
             let editsHtml = '';
-            const isLatestVersion = uploadsData.length > 0 && currentUploadId === uploadsData[0].id;
-            
-            if (isLatestVersion) {
-                // Load full history from all versions
-                const historyResponse = await Security.fetch(`/api/period/${periodId}/history`);
-                const historyData = await historyResponse.json();
-                
-                if (historyData.success && historyData.data && historyData.data.length > 0) {
-                    editsHtml = '<div class="card" style="margin-top:24px"><div class="card-header"><h3 class="card-title">📝 Полная история изменений периода</h3></div><div class="card-body">';
+            if (manualEdits.length > 0) {
+                editsHtml = '<div class="card" style="margin-top:24px"><div class="card-header"><h3 class="card-title">📝 История изменений</h3></div><div class="card-body"><div class="changes-list">';
+                manualEdits.forEach(edit => {
+                    const fieldLabels = { 
+                        fuel_payment: 'Бензин', 
+                        transport: 'Транспортные', 
+                        total: 'Итого',
+                        DELETED: 'Удалено',
+                        ADDED: 'Добавлено'
+                    };
+                    const statusLabels = {
+                        'DRAFT': 'Черновик',
+                        'draft': 'Черновик',
+                        'SENT': 'Отправлено',
+                        'sent': 'Отправлено',
+                        'PAID': 'Оплачено',
+                        'paid': 'Оплачено'
+                    };
+                    const statusColors = {
+                        'DRAFT': '#6c757d',
+                        'draft': '#6c757d',
+                        'SENT': '#0d6efd',
+                        'sent': '#0d6efd',
+                        'PAID': '#198754',
+                        'paid': '#198754'
+                    };
+                    const statusBgColors = {
+                        'DRAFT': '#f8f9fa',
+                        'draft': '#f8f9fa',
+                        'SENT': '#e7f1ff',
+                        'sent': '#e7f1ff',
+                        'PAID': '#d1e7dd',
+                        'paid': '#d1e7dd'
+                    };
                     
-                    historyData.data.forEach(versionGroup => {
-                        const version = versionGroup.version;
-                        const edits = versionGroup.manual_edits || [];
-                        const versionChanges = versionGroup.version_changes || [];
-                        const oldChanges = versionGroup.changes || [];
-                        const totalInVersion = edits.length + versionChanges.length + oldChanges.length;
-                        
-                        if (totalInVersion === 0) return;
-                        
-                        const versionDate = versionGroup.created_at ? new Date(versionGroup.created_at).toLocaleString('ru-RU') : '';
-                        
-                        // Version group header
-                        editsHtml += `
-                            <div class="version-history-group" style="margin-bottom:24px;border:2px solid #e0e0e0;border-radius:12px;overflow:hidden;">
-                                <div class="version-history-header" style="background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);color:white;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;">
-                                    <div style="display:flex;align-items:center;gap:12px;">
-                                        <span style="font-size:20px;">📋</span>
-                                        <span style="font-weight:700;font-size:16px;">Версия ${version}</span>
-                                        <span style="background:rgba(255,255,255,0.2);padding:4px 12px;border-radius:20px;font-size:13px;">${totalInVersion} ${totalInVersion === 1 ? 'изменение' : (totalInVersion < 5 ? 'изменения' : 'изменений')}</span>
-                                    </div>
-                                    <span style="font-size:13px;opacity:0.9;">🕐 ${versionDate}</span>
-                                </div>
-                                <div class="version-history-content" style="padding:16px;">
-                        `;
-                        
-                        // Render manual edits
-                        edits.forEach(edit => {
-                            editsHtml += renderEditItem(edit);
-                        });
-                        
-                        // Render version changes (added/deleted/modified from file upload)
-                        versionChanges.forEach(change => {
-                            editsHtml += renderVersionChange(change);
-                        });
-                        
-                        // Render old changes (backward compatibility)
-                        oldChanges.forEach(change => {
-                            editsHtml += renderOldChange(change);
-                        });
-                        
-                        editsHtml += '</div></div>';
-                    });
+                    const isDeleted = edit.field_name === 'DELETED';
+                    const isAdded = edit.field_name === 'ADDED';
+                    const icon = isDeleted ? '🗑️' : (isAdded ? '➕' : '✏️');
+                    const status = edit.period_status || 'DRAFT';
+                    const bgColor = statusBgColors[status] || '#f8f9fa';
+                    const statusColor = statusColors[status] || '#6c757d';
+                    const statusLabel = statusLabels[status] || status;
                     
-                    editsHtml += '</div></div>';
-                }
-            } else {
-                // For non-latest versions, show only current version edits
-                if (manualEdits.length > 0) {
-                    editsHtml = '<div class="card" style="margin-top:24px"><div class="card-header"><h3 class="card-title">📝 История изменений этой версии</h3></div><div class="card-body"><div class="changes-list">';
-                    manualEdits.forEach(edit => {
-                        editsHtml += renderEditItem(edit);
-                    });
-                    editsHtml += '</div></div></div>';
-                }
+                    let changeText = '';
+                    if (isDeleted) {
+                        changeText = `<span style="color: #dc3545; font-weight: 500">Строка удалена (было: ${Math.round(edit.old_value || 0).toLocaleString('ru-RU')} ₽)</span>`;
+                    } else if (isAdded) {
+                        changeText = `<span style="color: #198754; font-weight: 500">Строка добавлена: ${Math.round(edit.new_value || 0).toLocaleString('ru-RU')} ₽</span>`;
+                    } else {
+                        changeText = `${escapeHtml(fieldLabels[edit.field_name] || edit.field_name)}: <span style="text-decoration: line-through; color: #999">${Math.round(edit.old_value || 0).toLocaleString('ru-RU')}</span> → <span style="font-weight: 500; color: #198754">${Math.round(edit.new_value || 0).toLocaleString('ru-RU')} ₽</span>`;
+                    }
+                    
+                    const editorName = edit.edited_by_name || 'Неизвестно';
+                    
+                    editsHtml += `<div class="manual-edit-item" style="display:flex;gap:12px;padding:16px;border-bottom:1px solid #eee;background:${bgColor};border-radius:8px;margin-bottom:8px;">
+                        <span style="font-size:24px">${icon}</span>
+                        <div class="edit-content" style="flex:1">
+                            <div class="edit-header" style="font-weight:600;font-size:15px;margin-bottom:4px">${escapeHtml(edit.order_code || edit.address || 'Заказ')} — ${escapeHtml(edit.worker)}</div>
+                            <div class="edit-change" style="margin-bottom:8px">${changeText}</div>
+                            <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+                                <span style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:${statusColor};color:white;border-radius:12px;font-size:12px;font-weight:500">
+                                    ${statusLabel}
+                                </span>
+                                <span style="color:#666;font-size:13px">👤 ${escapeHtml(editorName)}</span>
+                                ${edit.created_at ? `<span style="color:#999;font-size:12px">🕐 ${new Date(edit.created_at).toLocaleString('ru-RU')}</span>` : ''}
+                            </div>
+                        </div>
+                    </div>`;
+                });
+                editsHtml += '</div></div></div>';
             }
 
             document.getElementById('content').innerHTML = `${tabsHtml}${statsHtml}<div class="card"><div class="card-header"><h3 class="card-title">👥 Монтажники</h3></div><div class="card-body">${downloadHtml}${workersHtml}</div></div>${changesHtml}${editsHtml}`;
-        }
-        
-        // Helper function to render a manual edit item
-        function renderEditItem(edit) {
-            const fieldLabels = { 
-                fuel_payment: 'Бензин', 
-                transport: 'Транспортные', 
-                total: 'Итого',
-                DELETED: 'Удалено',
-                ADDED: 'Добавлено'
-            };
-            const statusLabels = {
-                'DRAFT': 'Черновик', 'draft': 'Черновик',
-                'SENT': 'Отправлено', 'sent': 'Отправлено',
-                'PAID': 'Оплачено', 'paid': 'Оплачено'
-            };
-            const statusColors = {
-                'DRAFT': '#6c757d', 'draft': '#6c757d',
-                'SENT': '#0d6efd', 'sent': '#0d6efd',
-                'PAID': '#198754', 'paid': '#198754'
-            };
-            
-            const isDeleted = edit.field_name === 'DELETED';
-            const isAdded = edit.field_name === 'ADDED';
-            const icon = isDeleted ? '🗑️' : (isAdded ? '➕' : '✏️');
-            const status = edit.period_status || 'DRAFT';
-            const statusColor = statusColors[status] || '#6c757d';
-            const statusLabel = statusLabels[status] || status;
-            
-            let changeText = '';
-            if (isDeleted) {
-                changeText = `<span style="color: #dc3545; font-weight: 500">Строка удалена (было: ${Math.round(edit.old_value || 0).toLocaleString('ru-RU')} ₽)</span>`;
-            } else if (isAdded) {
-                changeText = `<span style="color: #198754; font-weight: 500">Строка добавлена: ${Math.round(edit.new_value || 0).toLocaleString('ru-RU')} ₽</span>`;
-            } else {
-                changeText = `${escapeHtml(fieldLabels[edit.field_name] || edit.field_name)}: <span style="text-decoration: line-through; color: #999">${Math.round(edit.old_value || 0).toLocaleString('ru-RU')}</span> → <span style="font-weight: 500; color: #198754">${Math.round(edit.new_value || 0).toLocaleString('ru-RU')} ₽</span>`;
-            }
-            
-            const editorName = edit.edited_by_name || 'Система';
-            const editTime = edit.created_at ? new Date(edit.created_at).toLocaleString('ru-RU') : '';
-            
-            return `<div class="manual-edit-item" style="display:flex;gap:12px;padding:14px;background:#fafafa;border-radius:8px;margin-bottom:8px;border-left:4px solid ${statusColor};">
-                <span style="font-size:22px">${icon}</span>
-                <div class="edit-content" style="flex:1">
-                    <div class="edit-header" style="font-weight:600;font-size:14px;margin-bottom:4px">${escapeHtml(edit.order_code || edit.address || 'Заказ')} — ${escapeHtml(edit.worker || '')}</div>
-                    <div class="edit-change" style="margin-bottom:6px;font-size:13px">${changeText}</div>
-                    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:12px">
-                        <span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;background:${statusColor};color:white;border-radius:10px;font-weight:500">${statusLabel}</span>
-                        <span style="color:#666">👤 ${escapeHtml(editorName)}</span>
-                        ${editTime ? `<span style="color:#999">🕐 ${editTime}</span>` : ''}
-                    </div>
-                </div>
-            </div>`;
-        }
-        
-        // Helper function to render version change (from file upload comparison)
-        function renderVersionChange(change) {
-            const icons = { added: '➕', deleted: '➖', modified: '✏️', restored: '🔄' };
-            const bgColors = { added: '#d4edda', deleted: '#f8d7da', modified: '#fff3cd', restored: '#cce5ff' };
-            const labels = { added: 'Добавлено из файла', deleted: 'Удалено из файла', modified: 'Изменено в файле', restored: 'Восстановлено' };
-            const borderColors = { added: '#28a745', deleted: '#dc3545', modified: '#ffc107', restored: '#007bff' };
-            
-            const type = change.change_type || 'modified';
-            let detailText = '';
-            if (change.old_total !== null && change.new_total !== null && change.old_total !== change.new_total) {
-                detailText = `<div style="color:#666;font-size:12px;margin-top:4px">Сумма: ${Math.round(change.old_total || 0).toLocaleString('ru-RU')} → ${Math.round(change.new_total || 0).toLocaleString('ru-RU')} ₽</div>`;
-            }
-            
-            return `<div style="display:flex;gap:12px;padding:14px;background:${bgColors[type]};border-radius:8px;margin-bottom:8px;border-left:4px solid ${borderColors[type]};">
-                <span style="font-size:22px">${icons[type] || '•'}</span>
-                <div style="flex:1">
-                    <div style="font-weight:600;font-size:14px">${escapeHtml(change.order_code || 'Заказ')} — ${escapeHtml(change.worker || '')}</div>
-                    ${detailText}
-                </div>
-                <span style="font-size:11px;color:#666;white-space:nowrap">${labels[type]}</span>
-            </div>`;
-        }
-        
-        // Helper function to render old change format (backward compatibility)
-        function renderOldChange(change) {
-            const icons = { added: '➕', deleted: '➖', modified: '✏️' };
-            const bgColors = { added: '#d4edda', deleted: '#f8d7da', modified: '#fff3cd' };
-            const labels = { added: 'Добавлено', deleted: 'Удалено', modified: 'Изменено' };
-            const borderColors = { added: '#28a745', deleted: '#dc3545', modified: '#ffc107' };
-            
-            const type = change.change_type || 'modified';
-            
-            return `<div style="display:flex;gap:12px;padding:14px;background:${bgColors[type]};border-radius:8px;margin-bottom:8px;border-left:4px solid ${borderColors[type]};">
-                <span style="font-size:22px">${icons[type] || '•'}</span>
-                <div style="flex:1">
-                    <div style="font-weight:600;font-size:14px">${escapeHtml(change.order_code || 'Заказ')} — ${escapeHtml(change.worker || '')}</div>
-                </div>
-                <span style="font-size:11px;color:#666">${labels[type]}</span>
-            </div>`;
         }
         
         // Modal functions
