@@ -369,8 +369,30 @@
         }
 
         function extractOrderCode(orderText) {
+            if (!orderText) return '';
             const match = orderText.match(/(КАУТ|ИБУТ|ТДУТ)-\d+/);
             return match ? match[0] : '';
+        }
+
+        function extractAddress(orderText) {
+            if (!orderText) return '';
+            // Address usually comes after "адрес:" or after the date
+            // Pattern: "Заказ клиента КАУТ-001234 от 01.01.2025 12:00:00, адрес: Москва, ул. Примерная, д.1"
+            // Or: "КАУТ-001234 Москва, ул. Примерная, д.1"
+            
+            // Try to find address after "адрес:" or "адрес"
+            let match = orderText.match(/адрес[:\s]+(.+?)(?:\s*$|\s*Комментарий|\s*Оплата)/i);
+            if (match) return match[1].trim();
+            
+            // Try to find address after date pattern (dd.mm.yyyy hh:mm:ss,)
+            match = orderText.match(/\d{2}\.\d{2}\.\d{4}\s+\d{2}:\d{2}:\d{2},?\s*(.+?)(?:\s*$|\s*Комментарий|\s*Оплата)/);
+            if (match) return match[1].trim();
+            
+            // Try to find after order code
+            match = orderText.match(/(КАУТ|ИБУТ|ТДУТ)-\d+\s+(?:от\s+\d{2}\.\d{2}\.\d{4})?\s*(.+?)(?:\s*$|\s*Комментарий|\s*Оплата)/);
+            if (match && match[2]) return match[2].trim();
+            
+            return '';
         }
 
         function renderReview() {
@@ -454,6 +476,7 @@
                     
                     actionableComments.forEach((item, idx) => {
                         const orderCode = extractOrderCode(item.order);
+                        const address = extractAddress(item.order);
                         const key = orderCode + '_' + item.worker;
                         const parsed = item.parsed || {};
                         
@@ -479,6 +502,7 @@
                                         <div class="item-worker">👷 ${item.worker}</div>
                                     </div>
                                 </div>
+                                ${address ? `<div class="item-address" style="color: #666; font-size: 13px; margin-top: 4px; padding: 0 16px;">📍 ${address}</div>` : ''}
                                 <div class="manager-comment-text">
                                     💬 "${item.comment}"
                                 </div>
@@ -505,6 +529,7 @@
                     
                     infoComments.forEach((item) => {
                         const orderCode = extractOrderCode(item.order);
+                        const address = extractAddress(item.order);
                         
                         html += `
                             <div class="item-card" style="border-left-color: #17a2b8; background: #e8f4f8;">
@@ -515,11 +540,13 @@
                                     </div>
                                     <span style="background: #17a2b8; color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px;">Информация</span>
                                 </div>
+                                ${address ? `<div class="item-address" style="color: #666; font-size: 13px; margin-top: 4px; padding: 0 16px;">📍 ${address}</div>` : ''}
                                 <div style="background: #17a2b8; color: white; padding: 8px 12px; border-radius: 8px; margin-top: 8px;">
                                     💬 "${item.comment}"
                                 </div>
-                                <div class="item-details" style="margin-top: 8px; font-style: italic; color: #666;">
-                                    Заметка не влияет на расчёт
+                                <div class="item-details" style="margin-top: 8px;">
+                                    Текущая оплата: <strong>${formatCurrency(item.current_service_payment)} ₽</strong>
+                                    <span style="font-style: italic; color: #888; margin-left: 12px;">• Заметка не влияет на расчёт</span>
                                 </div>
                             </div>
                         `;
