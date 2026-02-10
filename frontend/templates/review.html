@@ -258,6 +258,44 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        
+        /* Payment type badges */
+        .payment-type-badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .payment-type-badge.company {
+            background: #FFF3E0;
+            color: #E65100;
+        }
+        .payment-type-badge.client {
+            background: #E8F5E9;
+            color: #2E7D32;
+        }
+        
+        /* Item details styling */
+        .item-address {
+            color: #666;
+            margin-bottom: 6px;
+        }
+        .item-payment {
+            color: #333;
+            margin-bottom: 6px;
+        }
+        .item-payment strong {
+            color: #2E7D32;
+        }
+        .item-changes {
+            color: #666;
+            font-size: 13px;
+            background: #fff3cd;
+            padding: 6px 10px;
+            border-radius: 6px;
+            margin-top: 6px;
+        }
     </style>
     <script src="/static/security.js"></script>
 </head>
@@ -569,6 +607,10 @@
                 
                 changes.added.forEach((item, idx) => {
                     const key = item.order_code + '_' + item.worker;
+                    const paymentType = item.is_client_payment ? 'Клиент' : 'Компания';
+                    const paymentClass = item.is_client_payment ? 'client' : 'company';
+                    const servicePayment = formatCurrency(item.service_payment || 0);
+                    
                     html += `
                         <div class="item-card added selected-apply" id="added-${idx}">
                             <div class="item-header">
@@ -576,9 +618,11 @@
                                     <div class="item-order">${item.order_code || 'Новый заказ'}</div>
                                     <div class="item-worker">👷 ${item.worker}</div>
                                 </div>
+                                <span class="payment-type-badge ${paymentClass}">${paymentType}</span>
                             </div>
                             <div class="item-details">
-                                ${item.address || ''}
+                                ${item.address ? `<div class="item-address">📍 ${item.address}</div>` : ''}
+                                <div class="item-payment">💰 Оплата услуг: <strong>${servicePayment} ₽</strong></div>
                             </div>
                             <div class="item-actions">
                                 <button class="btn-action btn-apply active" onclick="toggleAdded('${key}', ${idx}, false)">
@@ -611,6 +655,10 @@
                 
                 changes.deleted.forEach((item, idx) => {
                     const key = item.order_code + '_' + item.worker;
+                    const paymentType = item.is_client_payment ? 'Клиент' : 'Компания';
+                    const paymentClass = item.is_client_payment ? 'client' : 'company';
+                    const servicePayment = formatCurrency(item.service_payment || 0);
+                    
                     html += `
                         <div class="item-card deleted selected-reject" id="deleted-${idx}">
                             <div class="item-header">
@@ -618,9 +666,11 @@
                                     <div class="item-order">${item.order_code || 'Заказ'}</div>
                                     <div class="item-worker">👷 ${item.worker}</div>
                                 </div>
+                                <span class="payment-type-badge ${paymentClass}">${paymentType}</span>
                             </div>
                             <div class="item-details">
-                                ${item.address || ''}
+                                ${item.address ? `<div class="item-address">📍 ${item.address}</div>` : ''}
+                                <div class="item-payment">💰 Оплата услуг: <strong>${servicePayment} ₽</strong></div>
                             </div>
                             <div class="item-actions">
                                 <button class="btn-action btn-reject active" onclick="toggleDeleted('${key}', ${idx}, false)">
@@ -650,6 +700,9 @@
                 
                 changes.modified.forEach((item, idx) => {
                     const key = item.order_code + '_' + item.worker;
+                    const paymentType = item.is_client_payment ? 'Клиент' : 'Компания';
+                    const paymentClass = item.is_client_payment ? 'client' : 'company';
+                    const servicePayment = formatCurrency(item.service_payment || 0);
                     let changesText = (item.changes || []).map(c => 
                         `${c.field}: ${c.old} → ${c.new}`
                     ).join(', ');
@@ -661,9 +714,12 @@
                                     <div class="item-order">${item.order_code || 'Заказ'}</div>
                                     <div class="item-worker">👷 ${item.worker}</div>
                                 </div>
+                                <span class="payment-type-badge ${paymentClass}">${paymentType}</span>
                             </div>
                             <div class="item-details">
-                                📝 ${changesText}
+                                ${item.address ? `<div class="item-address">📍 ${item.address}</div>` : ''}
+                                <div class="item-payment">💰 Оплата услуг: <strong>${servicePayment} ₽</strong></div>
+                                <div class="item-changes">📝 ${changesText}</div>
                             </div>
                             <div class="item-actions">
                                 <button class="btn-action btn-apply active" onclick="toggleModified('${key}', ${idx}, false)">
