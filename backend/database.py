@@ -1368,6 +1368,30 @@ async def get_period_full_history(period_id: int) -> List[dict]:
         ).order_by(manual_edits.c.created_at.desc())
         edits_rows = await database.fetch_all(edits_query)
         
+        # Process edits - for ADDED records with new_value=0, get actual total from calculations
+        processed_edits = []
+        for row in edits_rows:
+            edit = dict(row._mapping)
+            
+            # If this is an ADDED record with 0 value, try to get actual value from calculations
+            if edit.get("field_name") == "ADDED" and (edit.get("new_value") or 0) == 0:
+                calc_id = edit.get("calculation_id")
+                if calc_id:
+                    calc_query = calculations.select().where(calculations.c.id == calc_id)
+                    calc_row = await database.fetch_one(calc_query)
+                    if calc_row and calc_row["total"]:
+                        edit["new_value"] = calc_row["total"]
+                
+                # Also try to get address from order if missing
+                order_id = edit.get("order_id")
+                if order_id and not edit.get("address"):
+                    order_query = orders.select().where(orders.c.id == order_id)
+                    order_row = await database.fetch_one(order_query)
+                    if order_row:
+                        edit["address"] = order_row.get("address") or order_row.get("order_full") or ""
+            
+            processed_edits.append(edit)
+        
         # Get version changes
         vc_query = version_changes.select().where(
             version_changes.c.upload_id == upload_id
@@ -1384,7 +1408,7 @@ async def get_period_full_history(period_id: int) -> List[dict]:
             "upload_id": upload_id,
             "version": version,
             "created_at": created_at.isoformat() if created_at else None,
-            "manual_edits": [dict(row._mapping) for row in edits_rows],
+            "manual_edits": processed_edits,
             "version_changes": [dict(row._mapping) for row in vc_rows],
             "changes": [dict(row._mapping) for row in ch_rows]
         })
