@@ -1040,10 +1040,17 @@ async def get_upload_details(upload_id: int) -> Optional[dict]:
                 "amount": amount,
                 "description": "Яндекс Заправки"
             })
-        # ADDED and DELETED are NOT included in adjustments:
-        # - When row is ADDED, worker_totals.company_amount is recalculated to include it
-        # - When row is DELETED, worker_totals.company_amount is recalculated to exclude it
-        # So these are already reflected in company_amount, no adjustment needed
+        elif field_name == "ADDED":
+            # Added rows - include in adjustments as additional payments
+            # new_val can be positive (доплата) or negative (вычет)
+            worker_adjustments[base_worker]["added_rows"] += new_val
+            worker_adjustments[base_worker]["total_adjustment"] += new_val
+            worker_adjustments[base_worker]["details"].append({
+                "type": "added",
+                "amount": new_val,
+                "description": f"Доп.строка: {edit['order_code'] or edit['address'] or 'запись'}"
+            })
+        # NOTE: DELETED is NOT included - when row is deleted, worker_totals is recalculated
     
     # Get diagnostic_50 deductions from calculations
     diag_query = """
