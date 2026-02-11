@@ -2996,47 +2996,41 @@ async def delete_order(order_id: int, request: Request):
         deleted_total = calc["total"] if calc else 0
         calc_id = calc["id"] if calc else None
         
-        # Save deletion as manual_edit with special field_name "DELETED"
-        if calc:
-            await save_manual_edit(
-                upload_id=upload_id,
-                order_id=order_id,
-                calculation_id=calc_id,
-                order_code=order_code,
-                worker=full_worker,
-                address=address,
-                field_name="DELETED",
-                old_value=deleted_total,
-                new_value=0,
-                edited_by=user.get("id") if user else None,
-                edited_by_name=user.get("name") if user else None,
-                period_status=period_status
-            )
-            logger.info(f"📝 Deletion saved to history: {order_code} {full_worker} - total was {deleted_total} by {user.get('name') if user else 'Unknown'} (status: {period_status})")
-        
         # Delete manual_edits first (they reference calculation)
+        # Must do this BEFORE creating DELETED record and deleting calculation
         if calc_id:
-            # Don't delete the DELETED record we just created
             del_edits = delete(manual_edits).where(
-                and_(
-                    manual_edits.c.calculation_id == calc_id,
-                    manual_edits.c.field_name != "DELETED"
-                )
+                manual_edits.c.calculation_id == calc_id
             )
             await database.execute(del_edits)
         
-        # Also delete manual_edits by order_id (but keep DELETED records for history)
+        # Also delete manual_edits by order_id
         del_edits_order = delete(manual_edits).where(
-            and_(
-                manual_edits.c.order_id == order_id,
-                manual_edits.c.field_name != "DELETED"
-            )
+            manual_edits.c.order_id == order_id
         )
         await database.execute(del_edits_order)
         
         # Delete calculation (foreign key to orders)
         del_calc = delete(calculations).where(calculations.c.order_id == order_id)
         await database.execute(del_calc)
+        
+        # Save deletion as manual_edit with special field_name "DELETED" AFTER deleting calc
+        # Use calculation_id=None since calculation is already deleted
+        await save_manual_edit(
+            upload_id=upload_id,
+            order_id=None,  # Order will be deleted too
+            calculation_id=None,
+            order_code=order_code,
+            worker=full_worker,
+            address=address,
+            field_name="DELETED",
+            old_value=deleted_total,
+            new_value=0,
+            edited_by=user.get("id") if user else None,
+            edited_by_name=user.get("name") if user else None,
+            period_status=period_status
+        )
+        logger.info(f"📝 Deletion saved to history: {order_code} {full_worker} - total was {deleted_total} by {user.get('name') if user else 'Unknown'} (status: {period_status})")
         
         # Delete order
         del_order = delete(orders).where(orders.c.id == order_id)
