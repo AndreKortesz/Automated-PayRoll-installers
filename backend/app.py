@@ -2766,8 +2766,8 @@ async def update_calculation(calc_id: int, request: Request):
         total = data.get("total")
         
         # Build update query
-        from sqlalchemy import update
-        from database import calculations, orders, save_manual_edit, uploads, periods
+        from sqlalchemy import update, and_
+        from database import calculations, orders, save_manual_edit, uploads, periods, manual_edits
         
         # First, get current values to record the change
         calc_query = calculations.select().where(calculations.c.id == calc_id)
@@ -2845,6 +2845,27 @@ async def update_calculation(calc_id: int, request: Request):
                 period_status=period_status
             )
             logger.info(f"📝 Manual edit saved: {order_code} {worker} - {edit['field']}: {edit['old_value']} → {edit['new_value']} by {user.get('name') if user else 'Unknown'} (status: {period_status})")
+        
+        # If this is an extra_row (manually added) and total changed, update the ADDED record
+        if order_row and order_row.get("is_extra_row") and "total" in update_values:
+            # Find and update the ADDED record for this order
+            added_query = manual_edits.select().where(
+                and_(
+                    manual_edits.c.order_id == calc_row["order_id"],
+                    manual_edits.c.field_name == "ADDED"
+                )
+            )
+            added_row = await database.fetch_one(added_query)
+            if added_row:
+                # Update the new_value in the ADDED record
+                update_added = update(manual_edits).where(
+                    manual_edits.c.id == added_row["id"]
+                ).values(
+                    new_value=update_values["total"],
+                    address=address or added_row["address"]
+                )
+                await database.execute(update_added)
+                logger.info(f"📝 Updated ADDED record for extra row: {order_code or address} → {update_values['total']}")
         
         # Update worker_totals
         full_worker = calc_row["worker"]
