@@ -1000,6 +1000,96 @@ async def get_upload_details(upload_id: int) -> Optional[dict]:
     edit_rows = await database.fetch_all(query)
     upload["manual_edits"] = [dict(row._mapping) for row in edit_rows]
     
+    # Get ALL manual edits including YANDEX_FUEL for adjustments calculation
+    all_edits_query = manual_edits.select().where(
+        manual_edits.c.upload_id == upload_id
+    )
+    all_edits_rows = await database.fetch_all(all_edits_query)
+    
+    # Calculate adjustments per worker
+    worker_adjustments = {}
+    for edit in all_edits_rows:
+        worker = edit["worker"]
+        if not worker:
+            continue
+        
+        # Remove "(оплата клиентом)" suffix for grouping
+        base_worker = worker.replace(" (оплата клиентом)", "")
+        
+        if base_worker not in worker_adjustments:
+            worker_adjustments[base_worker] = {
+                "yandex_fuel": 0,
+                "added_rows": 0,
+                "deleted_rows": 0,
+                "field_changes": 0,
+                "total_adjustment": 0,
+                "details": []
+            }
+        
+        field_name = edit["field_name"]
+        old_val = edit["old_value"] or 0
+        new_val = edit["new_value"] or 0
+        
+        if field_name == "YANDEX_FUEL":
+            worker_adjustments[base_worker]["yandex_fuel"] -= new_val
+            worker_adjustments[base_worker]["total_adjustment"] -= new_val
+            worker_adjustments[base_worker]["details"].append({
+                "type": "yandex_fuel",
+                "amount": -new_val,
+                "description": "Яндекс Заправки"
+            })
+        elif field_name == "ADDED":
+            worker_adjustments[base_worker]["added_rows"] += new_val
+            worker_adjustments[base_worker]["total_adjustment"] += new_val
+            worker_adjustments[base_worker]["details"].append({
+                "type": "added",
+                "amount": new_val,
+                "description": f"Добавлено: {edit['order_code'] or edit['address'] or 'строка'}"
+            })
+        elif field_name == "DELETED":
+            worker_adjustments[base_worker]["deleted_rows"] -= old_val
+            worker_adjustments[base_worker]["total_adjustment"] -= old_val
+            worker_adjustments[base_worker]["details"].append({
+                "type": "deleted",
+                "amount": -old_val,
+                "description": f"Удалено: {edit['order_code'] or edit['address'] or 'строка'}"
+            })
+    
+    # Get diagnostic_50 deductions from calculations
+    diag_query = """
+        SELECT o.worker, SUM(c.diagnostic_50) as diagnostic_total
+        FROM orders o
+        JOIN calculations c ON o.id = c.order_id
+        WHERE o.upload_id = :upload_id AND c.diagnostic_50 > 0
+        GROUP BY o.worker
+    """
+    diag_rows = await database.fetch_all(diag_query, {"upload_id": upload_id})
+    for row in diag_rows:
+        worker = row["worker"]
+        base_worker = worker.replace(" (оплата клиентом)", "")
+        diag_total = row["diagnostic_total"] or 0
+        
+        if base_worker not in worker_adjustments:
+            worker_adjustments[base_worker] = {
+                "yandex_fuel": 0,
+                "added_rows": 0,
+                "deleted_rows": 0,
+                "field_changes": 0,
+                "diagnostic_50": 0,
+                "total_adjustment": 0,
+                "details": []
+            }
+        
+        worker_adjustments[base_worker]["diagnostic_50"] = -diag_total
+        worker_adjustments[base_worker]["total_adjustment"] -= diag_total
+        worker_adjustments[base_worker]["details"].append({
+            "type": "diagnostic_50",
+            "amount": -diag_total,
+            "description": "Диагностика -50%"
+        })
+    
+    upload["worker_adjustments"] = worker_adjustments
+    
     # Get version changes (changes compared to previous version)
     query = version_changes.select().where(
         version_changes.c.upload_id == upload_id

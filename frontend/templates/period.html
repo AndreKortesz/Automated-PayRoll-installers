@@ -343,18 +343,42 @@
             workerTotalsData = upload.worker_totals || [];
             const changes = upload.changes || [];
             const manualEdits = upload.manual_edits || [];
+            const workerAdjustments = upload.worker_adjustments || {};
+
+            // Calculate totals with adjustments
+            let grandTotalFinal = 0;
+            let grandCompanyFinal = 0;
+            
+            workerTotalsData.forEach(wt => {
+                const adj = workerAdjustments[wt.worker] || { total_adjustment: 0 };
+                grandCompanyFinal += (wt.company_amount || 0) + (adj.total_adjustment || 0);
+            });
+            const grandClientFinal = workerTotalsData.reduce((s, w) => s + (w.client_amount || 0), 0);
+            grandTotalFinal = grandCompanyFinal + grandClientFinal;
 
             const grandTotal = workerTotalsData.reduce((s, w) => s + (w.total_amount || 0), 0);
             const grandCompany = workerTotalsData.reduce((s, w) => s + (w.company_amount || 0), 0);
             const grandClient = workerTotalsData.reduce((s, w) => s + (w.client_amount || 0), 0);
             const totalOrders = workerTotalsData.reduce((s, w) => s + (w.orders_count || 0), 0);
+            const totalAdjustment = grandTotalFinal - grandTotal;
 
             let statsHtml = `<div class="stats-bar" style="grid-template-columns: repeat(4, 1fr);">
                 <div class="stats-card"><div class="stats-icon yellow"><svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4z"/></svg></div><div class="stats-content"><div class="stats-value">${workerTotalsData.length}</div><div class="stats-label">Монтажников</div></div></div>
-                <div class="stats-card"><div class="stats-icon green"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/></svg></div><div class="stats-content"><div class="stats-value">${formatCurrency(grandCompany)}</div><div class="stats-label">Компания</div></div></div>
+                <div class="stats-card"><div class="stats-icon green"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/></svg></div><div class="stats-content"><div class="stats-value">${formatCurrency(grandCompanyFinal)}</div><div class="stats-label">Компания</div></div></div>
                 <div class="stats-card"><div class="stats-icon orange"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/></svg></div><div class="stats-content"><div class="stats-value">${formatCurrency(grandClient)}</div><div class="stats-label">Клиент</div></div></div>
-                <div class="stats-card"><div class="stats-icon dark"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/></svg></div><div class="stats-content"><div class="stats-value">${formatCurrency(grandTotal)}</div><div class="stats-label">Итого (${totalOrders})</div></div></div>
+                <div class="stats-card"><div class="stats-icon dark"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/></svg></div><div class="stats-content"><div class="stats-value">${formatCurrency(grandTotalFinal)}</div><div class="stats-label">💰 К выплате</div></div></div>
             </div>`;
+            
+            // Show adjustment summary if there are any
+            if (totalAdjustment !== 0) {
+                const adjSign = totalAdjustment >= 0 ? '+' : '';
+                const adjColor = totalAdjustment >= 0 ? '#2E7D32' : '#D32F2F';
+                statsHtml += `<div style="text-align:center;padding:10px 16px;background:#f5f5f5;border-radius:8px;margin-top:-8px;font-size:13px;color:#666;">
+                    Базовая сумма: <strong>${formatCurrency(grandTotal)} ₽</strong>
+                    <span style="color:${adjColor};font-weight:600;margin-left:12px;">${adjSign}${formatCurrency(totalAdjustment)} ₽</span>
+                    <span style="margin-left:4px;">(корректировки: Яндекс заправки, диагностика -50%, доплаты)</span>
+                </div>`;
+            }
 
             let downloadHtml = `<div class="download-section"><div class="download-title">📥 Скачать отчёты</div><div class="download-buttons">
                 <a href="/api/period/${periodId}/download/full" class="btn btn-download">📥 Полный отчёт</a>
@@ -366,21 +390,47 @@
                 const companyAmt = wt.company_amount || 0;
                 const clientAmt = wt.client_amount || 0;
                 const totalAmt = wt.total_amount || 0;
+                
+                // Get adjustments for this worker
+                const adj = workerAdjustments[wt.worker] || { total_adjustment: 0, details: [] };
+                const adjustmentTotal = adj.total_adjustment || 0;
+                const finalCompany = companyAmt + adjustmentTotal;
+                const finalTotal = finalCompany + clientAmt;
+                const hasAdjustments = adjustmentTotal !== 0;
+                
+                // Build adjustment details tooltip
+                let adjDetails = '';
+                if (hasAdjustments && adj.details && adj.details.length > 0) {
+                    adjDetails = adj.details.map(d => {
+                        const sign = d.amount >= 0 ? '+' : '';
+                        return `${d.description}: ${sign}${Math.round(d.amount).toLocaleString('ru-RU')} ₽`;
+                    }).join('\n');
+                }
+                
                 workersHtml += `<div class="worker-card" onclick="viewWorker('${escapeAttr(encodeURIComponent(wt.worker))}')">
                     <div class="worker-name">👷 ${escapeHtml(wt.worker)}</div>
                     <div class="worker-amounts">
                         <div class="worker-amount company"><div class="worker-amount-value">${Math.round(companyAmt).toLocaleString('ru-RU')}</div><div class="worker-amount-label">Компания</div></div>
                         <div class="worker-amount client"><div class="worker-amount-value">${Math.round(clientAmt).toLocaleString('ru-RU')}</div><div class="worker-amount-label">Клиент</div></div>
                     </div>
-                    <div class="worker-total-row"><span class="worker-total-label">Итого:</span><span class="worker-total-value">${Math.round(totalAmt).toLocaleString('ru-RU')} ₽</span></div>
+                    ${hasAdjustments ? `
+                        <div class="worker-adjustment" title="${escapeAttr(adjDetails)}" style="display:flex;justify-content:space-between;align-items:center;padding:6px 12px;margin:8px 0;background:${adjustmentTotal >= 0 ? '#E8F5E9' : '#FFEBEE'};border-radius:8px;font-size:12px;cursor:help;">
+                            <span style="color:#666;">Корректировки:</span>
+                            <span style="font-weight:600;color:${adjustmentTotal >= 0 ? '#2E7D32' : '#D32F2F'};">${adjustmentTotal >= 0 ? '+' : ''}${Math.round(adjustmentTotal).toLocaleString('ru-RU')} ₽</span>
+                        </div>
+                    ` : ''}
+                    <div class="worker-total-row" ${hasAdjustments ? 'style="background:#FFF8E1;border-radius:8px;padding:8px 12px;margin-top:4px;"' : ''}>
+                        <span class="worker-total-label">${hasAdjustments ? '💰 К выплате:' : 'Итого:'}</span>
+                        <span class="worker-total-value" ${hasAdjustments ? 'style="color:#E65100;font-size:18px;"' : ''}>${Math.round(finalTotal).toLocaleString('ru-RU')} ₽</span>
+                    </div>
                 </div>`;
             });
             workersHtml += '</div>';
 
             workersHtml += `<div class="grand-totals"><div class="grand-totals-grid">
-                <div class="grand-total-item company"><div class="grand-total-value">${Math.round(grandCompany).toLocaleString('ru-RU')} ₽</div><div class="grand-total-label">🏢 Компания</div></div>
+                <div class="grand-total-item company"><div class="grand-total-value">${Math.round(grandCompanyFinal).toLocaleString('ru-RU')} ₽</div><div class="grand-total-label">🏢 Компания</div></div>
                 <div class="grand-total-item client"><div class="grand-total-value">${Math.round(grandClient).toLocaleString('ru-RU')} ₽</div><div class="grand-total-label">👤 Клиент</div></div>
-                <div class="grand-total-item total"><div class="grand-total-value">${Math.round(grandTotal).toLocaleString('ru-RU')} ₽</div><div class="grand-total-label">💰 Итого</div></div>
+                <div class="grand-total-item total"><div class="grand-total-value">${Math.round(grandTotalFinal).toLocaleString('ru-RU')} ₽</div><div class="grand-total-label">💰 К выплате</div></div>
             </div></div>`;
 
             let changesHtml = '';
