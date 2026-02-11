@@ -1000,105 +1000,6 @@ async def get_upload_details(upload_id: int) -> Optional[dict]:
     edit_rows = await database.fetch_all(query)
     upload["manual_edits"] = [dict(row._mapping) for row in edit_rows]
     
-    # Get ALL manual edits including YANDEX_FUEL for adjustments calculation
-    query = manual_edits.select().where(
-        manual_edits.c.upload_id == upload_id
-    )
-    all_edits_rows = await database.fetch_all(query)
-    all_manual_edits = [dict(row._mapping) for row in all_edits_rows]
-    
-    # Calculate adjustments per worker
-    # Adjustments include: YANDEX_FUEL, ADDED rows, DELETED rows, and field changes
-    worker_adjustments = {}
-    for edit in all_manual_edits:
-        worker = edit.get("worker", "")
-        if not worker:
-            continue
-        
-        if worker not in worker_adjustments:
-            worker_adjustments[worker] = {
-                "yandex_fuel": 0,
-                "added_rows": 0,
-                "deleted_rows": 0,
-                "field_changes": 0,
-                "total_adjustment": 0,
-                "details": []
-            }
-        
-        field_name = edit.get("field_name", "")
-        old_val = edit.get("old_value") or 0
-        new_val = edit.get("new_value") or 0
-        diff = new_val - old_val
-        
-        if field_name == "YANDEX_FUEL":
-            # Yandex fuel is always a deduction (negative)
-            worker_adjustments[worker]["yandex_fuel"] -= new_val
-            worker_adjustments[worker]["total_adjustment"] -= new_val
-            worker_adjustments[worker]["details"].append({
-                "type": "yandex_fuel",
-                "amount": -new_val,
-                "description": "Яндекс Заправки"
-            })
-        elif field_name == "ADDED":
-            # Added row - positive adjustment
-            worker_adjustments[worker]["added_rows"] += new_val
-            worker_adjustments[worker]["total_adjustment"] += new_val
-            worker_adjustments[worker]["details"].append({
-                "type": "added",
-                "amount": new_val,
-                "description": f"Добавлено: {edit.get('order_code') or edit.get('address') or 'строка'}"
-            })
-        elif field_name == "DELETED":
-            # Deleted row - negative adjustment
-            worker_adjustments[worker]["deleted_rows"] -= old_val
-            worker_adjustments[worker]["total_adjustment"] -= old_val
-            worker_adjustments[worker]["details"].append({
-                "type": "deleted",
-                "amount": -old_val,
-                "description": f"Удалено: {edit.get('order_code') or edit.get('address') or 'строка'}"
-            })
-        elif field_name == "total":
-            # Direct total change
-            worker_adjustments[worker]["field_changes"] += diff
-            worker_adjustments[worker]["total_adjustment"] += diff
-            worker_adjustments[worker]["details"].append({
-                "type": "total_change",
-                "amount": diff,
-                "description": f"Изменение итого: {edit.get('order_code') or 'заказ'}"
-            })
-    
-    # Get diagnostic_50 deductions from calculations
-    query = """
-        SELECT o.worker, SUM(c.diagnostic_50) as diagnostic_total
-        FROM orders o
-        JOIN calculations c ON o.id = c.order_id
-        WHERE o.upload_id = :upload_id AND c.diagnostic_50 > 0
-        GROUP BY o.worker
-    """
-    diag_rows = await database.fetch_all(query, {"upload_id": upload_id})
-    for row in diag_rows:
-        worker = row._mapping["worker"]
-        diag_total = row._mapping["diagnostic_total"] or 0
-        if worker not in worker_adjustments:
-            worker_adjustments[worker] = {
-                "yandex_fuel": 0,
-                "added_rows": 0,
-                "deleted_rows": 0,
-                "field_changes": 0,
-                "diagnostic_50": 0,
-                "total_adjustment": 0,
-                "details": []
-            }
-        worker_adjustments[worker]["diagnostic_50"] = -diag_total
-        worker_adjustments[worker]["total_adjustment"] -= diag_total
-        worker_adjustments[worker]["details"].append({
-            "type": "diagnostic_50",
-            "amount": -diag_total,
-            "description": "Диагностика -50%"
-        })
-    
-    upload["worker_adjustments"] = worker_adjustments
-    
     # Get version changes (changes compared to previous version)
     query = version_changes.select().where(
         version_changes.c.upload_id == upload_id
@@ -1439,3 +1340,53 @@ async def is_duplicate_excluded(address_hash: str, work_type: str) -> bool:
     )
     row = await database.fetch_one(query)
     return row is not None
+
+
+async def get_period_full_history(period_id: int) -> List[dict]:
+    """Get full history of all changes across all versions of a period"""
+    if not database or not database.is_connected:
+        return []
+    
+    # Get all uploads for this period, ordered by version descending
+    query = uploads.select().where(
+        uploads.c.period_id == period_id
+    ).order_by(uploads.c.version.desc())
+    upload_rows = await database.fetch_all(query)
+    
+    result = []
+    for upload_row in upload_rows:
+        upload_id = upload_row["id"]
+        version = upload_row["version"]
+        created_at = upload_row["created_at"]
+        
+        # Get manual edits for this version (excluding YANDEX_FUEL)
+        edits_query = manual_edits.select().where(
+            and_(
+                manual_edits.c.upload_id == upload_id,
+                manual_edits.c.field_name != "YANDEX_FUEL"
+            )
+        ).order_by(manual_edits.c.created_at.desc())
+        edits_rows = await database.fetch_all(edits_query)
+        
+        # Get version changes
+        vc_query = version_changes.select().where(
+            version_changes.c.upload_id == upload_id
+        ).order_by(version_changes.c.change_type)
+        vc_rows = await database.fetch_all(vc_query)
+        
+        # Get old-style changes (for backward compatibility)
+        ch_query = changes.select().where(
+            changes.c.upload_id == upload_id
+        ).order_by(changes.c.change_type)
+        ch_rows = await database.fetch_all(ch_query)
+        
+        result.append({
+            "upload_id": upload_id,
+            "version": version,
+            "created_at": created_at.isoformat() if created_at else None,
+            "manual_edits": [dict(row._mapping) for row in edits_rows],
+            "version_changes": [dict(row._mapping) for row in vc_rows],
+            "changes": [dict(row._mapping) for row in ch_rows]
+        })
+    
+    return result

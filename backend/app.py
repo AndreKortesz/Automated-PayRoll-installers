@@ -736,9 +736,6 @@ async def upload_files(
                                         "order_code": order["order_code"],
                                         "worker": order["worker"],
                                         "address": order["address"],
-                                        "service_payment": order.get("service_payment", 0),
-                                        "total": order.get("total", 0),
-                                        "is_client_payment": order.get("is_client_payment", False),
                                         "details": details
                                     })
                             
@@ -772,9 +769,6 @@ async def upload_files(
                                         "order_code": order.get("order_code", ""),
                                         "worker": order.get("worker", ""),
                                         "address": order.get("address", ""),
-                                        "service_payment": safe_float_db(order.get("service_payment", 0)),
-                                        "total": safe_float_db(order.get("total", 0)),
-                                        "is_client_payment": order.get("is_client_payment", False),
                                         "details": details
                                     })
                             
@@ -909,9 +903,6 @@ async def upload_files(
                                             "order_code": new_order["order_code"],
                                             "worker": new_order["worker"],
                                             "address": new_order["address"],
-                                            "service_payment": new_order.get("service_payment", 0),
-                                            "total": new_order.get("total", 0),
-                                            "is_client_payment": new_order.get("is_client_payment", False),
                                             "changes": field_changes
                                         })
                             
@@ -2561,6 +2552,32 @@ async def api_comparison_export():
         return JSONResponse({"success": False, "error": str(e)})
 
 
+@app.get("/api/period/{period_id}/history")
+async def get_period_history(period_id: int):
+    """Get full history of changes across all versions of a period"""
+    try:
+        from database import get_period_full_history
+        from datetime import datetime
+        
+        history = await get_period_full_history(period_id)
+        
+        # Serialize datetime objects
+        for version_data in history:
+            for edit in version_data.get("manual_edits", []):
+                if "created_at" in edit and edit["created_at"]:
+                    if isinstance(edit["created_at"], datetime):
+                        edit["created_at"] = edit["created_at"].isoformat()
+        
+        return JSONResponse({
+            "success": True,
+            "data": history
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JSONResponse({"success": False, "error": str(e)})
+
+
 @app.get("/api/period/{period_id}/download/{archive_type}")
 async def download_period_archive(period_id: int, archive_type: str):
     """Download archive for a specific period - generates full archive like step 4"""
@@ -2766,8 +2783,8 @@ async def update_calculation(calc_id: int, request: Request):
         total = data.get("total")
         
         # Build update query
-        from sqlalchemy import update, and_
-        from database import calculations, orders, save_manual_edit, uploads, periods, manual_edits
+        from sqlalchemy import update
+        from database import calculations, orders, save_manual_edit, uploads, periods
         
         # First, get current values to record the change
         calc_query = calculations.select().where(calculations.c.id == calc_id)
@@ -2848,6 +2865,8 @@ async def update_calculation(calc_id: int, request: Request):
         
         # If this is an extra_row (manually added) and total changed, update the ADDED record
         if order_row and order_row.get("is_extra_row") and "total" in update_values:
+            from database import manual_edits
+            from sqlalchemy import and_
             # Find and update the ADDED record for this order
             added_query = manual_edits.select().where(
                 and_(
