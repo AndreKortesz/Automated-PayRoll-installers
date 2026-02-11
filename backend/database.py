@@ -1041,6 +1041,7 @@ async def get_upload_details(upload_id: int) -> Optional[dict]:
                 "description": "Яндекс Заправки"
             })
         elif field_name == "ADDED":
+            # Added rows - these are additional payments
             worker_adjustments[base_worker]["added_rows"] += new_val
             worker_adjustments[base_worker]["total_adjustment"] += new_val
             worker_adjustments[base_worker]["details"].append({
@@ -1049,6 +1050,7 @@ async def get_upload_details(upload_id: int) -> Optional[dict]:
                 "description": f"Добавлено: {edit['order_code'] or edit['address'] or 'строка'}"
             })
         elif field_name == "DELETED":
+            # Deleted rows - these reduce the payment
             worker_adjustments[base_worker]["deleted_rows"] -= old_val
             worker_adjustments[base_worker]["total_adjustment"] -= old_val
             worker_adjustments[base_worker]["details"].append({
