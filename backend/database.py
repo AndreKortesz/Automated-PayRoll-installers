@@ -1388,7 +1388,7 @@ async def get_period_full_history(period_id: int) -> List[dict]:
                     order_query = orders.select().where(orders.c.id == order_id)
                     order_row = await database.fetch_one(order_query)
                     if order_row:
-                        edit["address"] = order_row.get("address") or order_row.get("order_full") or ""
+                        edit["address"] = order_row["address"] or order_row["order_full"] or ""
             
             processed_edits.append(edit)
         

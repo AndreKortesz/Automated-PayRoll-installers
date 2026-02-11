@@ -2864,7 +2864,7 @@ async def update_calculation(calc_id: int, request: Request):
             logger.info(f"📝 Manual edit saved: {order_code} {worker} - {edit['field']}: {edit['old_value']} → {edit['new_value']} by {user.get('name') if user else 'Unknown'} (status: {period_status})")
         
         # If this is an extra_row (manually added) and total changed, update the ADDED record
-        if order_row and order_row.get("is_extra_row") and "total" in update_values:
+        if order_row and order_row["is_extra_row"] and "total" in update_values:
             from database import manual_edits
             from sqlalchemy import and_
             # Find and update the ADDED record for this order
@@ -2976,7 +2976,7 @@ async def delete_order(order_id: int, request: Request):
         full_worker = order["worker"]
         base_worker = full_worker.replace(" (оплата клиентом)", "")
         order_code = order["order_code"] or ""
-        address = order["address"] or order.get("order_full", "")[:100] if order.get("order_full") else ""
+        address = order["address"] or (order["order_full"][:100] if order["order_full"] else "")
         
         # Get period status
         from database import uploads, periods
