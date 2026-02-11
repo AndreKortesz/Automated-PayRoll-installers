@@ -1031,11 +1031,13 @@ async def get_upload_details(upload_id: int) -> Optional[dict]:
         new_val = edit["new_value"] or 0
         
         if field_name == "YANDEX_FUEL":
-            worker_adjustments[base_worker]["yandex_fuel"] -= new_val
-            worker_adjustments[base_worker]["total_adjustment"] -= new_val
+            # new_value is already negative (e.g., -7855), so we add it directly
+            amount = new_val  # This is negative
+            worker_adjustments[base_worker]["yandex_fuel"] += amount
+            worker_adjustments[base_worker]["total_adjustment"] += amount
             worker_adjustments[base_worker]["details"].append({
                 "type": "yandex_fuel",
-                "amount": -new_val,
+                "amount": amount,
                 "description": "Яндекс Заправки"
             })
         elif field_name == "ADDED":
