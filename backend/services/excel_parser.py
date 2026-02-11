@@ -150,6 +150,7 @@ def parse_excel_file(file_bytes: bytes, is_over_10k: bool, name_map: dict = None
                    "КАУТ-" in first_col_str or 
                    "ИБУТ-" in first_col_str or 
                    "ТДУТ-" in first_col_str or
+                   "00УТ-" in first_col_str or
                    "В прошлом расчете" in first_col_str)
         
         if not is_order and is_valid_worker_name(first_col_str):
@@ -180,6 +181,7 @@ def parse_excel_file(file_bytes: bytes, is_over_10k: bool, name_map: dict = None
                    "КАУТ-" in first_col_str or 
                    "ИБУТ-" in first_col_str or 
                    "ТДУТ-" in first_col_str or
+                   "00УТ-" in first_col_str or
                    "В прошлом расчете" in first_col_str)
         
         if not is_order:

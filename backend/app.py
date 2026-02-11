@@ -628,7 +628,7 @@ async def upload_files(
                                     continue
                                     
                                 order_text = str(row.get("order", ""))
-                                order_code_match = re.search(r'(КАУТ|ИБУТ|ТДУТ)-\d+', order_text)
+                                order_code_match = re.search(r'(КАУТ|ИБУТ|ТДУТ|00УТ)-\d+', order_text)
                                 order_code = order_code_match.group(0) if order_code_match else ""
                                 
                                 # Skip rows without order code (they are totals or headers)
@@ -1154,7 +1154,7 @@ async def apply_review_changes(request: Request):
                         # Update records with old values
                         for i, record in enumerate(modified_records):
                             order_text = str(record.get("order", ""))
-                            order_code_match = re.search(r'(КАУТ|ИБУТ|ТДУТ)-\d+', order_text)
+                            order_code_match = re.search(r'(КАУТ|ИБУТ|ТДУТ|00УТ)-\d+', order_text)
                             order_code = order_code_match.group(0) if order_code_match else ""
                             # Normalize worker name for consistent key matching
                             worker = normalize_worker_name(str(record.get("worker", "")), name_map).replace(" (оплата клиентом)", "")
@@ -1194,7 +1194,7 @@ async def apply_review_changes(request: Request):
             filtered_records = []
             for record in modified_records:
                 order_text = str(record.get("order", ""))
-                order_code_match = re.search(r'(КАУТ|ИБУТ|ТДУТ)-\d+', order_text)
+                order_code_match = re.search(r'(КАУТ|ИБУТ|ТДУТ|00УТ)-\d+', order_text)
                 order_code = order_code_match.group(0) if order_code_match else ""
                 # Normalize worker name for consistent key matching
                 worker = normalize_worker_name(str(record.get("worker", "")), name_map).replace(" (оплата клиентом)", "")
@@ -1220,7 +1220,7 @@ async def apply_review_changes(request: Request):
         if manager_selections:
             for record in modified_records:
                 order_text = str(record.get("order", ""))
-                order_code_match = re.search(r'(КАУТ|ИБУТ|ТДУТ)-\d+', order_text)
+                order_code_match = re.search(r'(КАУТ|ИБУТ|ТДУТ|00УТ)-\d+', order_text)
                 order_code = order_code_match.group(0) if order_code_match else ""
                 worker = normalize_worker_name(str(record.get("worker", "")), name_map).replace(" (оплата клиентом)", "")
                 key = order_code + "_" + worker
@@ -1322,7 +1322,7 @@ async def apply_review_changes(request: Request):
             # Otherwise extract from order text
             order_code = row.get("order_code", "")
             if not order_code:
-                match = re.search(r'(КАУТ|ИБУТ|ТДУТ)-\d+', order_text)
+                match = re.search(r'(КАУТ|ИБУТ|ТДУТ|00УТ)-\d+', order_text)
                 if match:
                     order_code = match.group(0)
 
@@ -1525,7 +1525,7 @@ async def process_first_upload(request: Request):
             # Otherwise extract from order text
             order_code = row.get("order_code", "")
             if not order_code:
-                match = re.search(r'(КАУТ|ИБУТ|ТДУТ)-\d+', order_text)
+                match = re.search(r'(КАУТ|ИБУТ|ТДУТ|00УТ)-\d+', order_text)
                 if match:
                     order_code = match.group(0)
 
@@ -1942,7 +1942,7 @@ async def calculate_salaries(
                     
                     # Extract order code from order text (for regular rows)
                     order_text = row.get("order", "")
-                    order_code_match = re.search(r'(КАУТ|ИБУТ|ТДУТ)-\d+', order_text)
+                    order_code_match = re.search(r'(КАУТ|ИБУТ|ТДУТ|00УТ)-\d+', order_text)
                     order_code = order_code_match.group(0) if order_code_match else ""
                     
                     # For extra rows, use description as order text
