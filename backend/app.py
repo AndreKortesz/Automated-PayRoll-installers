@@ -442,6 +442,17 @@ async def upload_files(
 ):
     """Upload and parse Excel files"""
     try:
+        # Get current user (safely)
+        user = None
+        try:
+            user = request.session.get("user")
+        except Exception:
+            pass
+        
+        # Check if financier - they cannot upload
+        if user and user.get("role") == "financier":
+            raise HTTPException(status_code=403, detail="Финансист имеет доступ только для просмотра")
+        
         content_under = await file_under_10k.read()
         content_over = await file_over_10k.read()
         
@@ -2777,6 +2788,10 @@ async def update_calculation(calc_id: int, request: Request):
             if DEBUG_MODE:
                 logger.debug(f"Session not available: {e}")
         
+        # Check if financier - they cannot edit
+        if user and user.get("role") == "financier":
+            raise HTTPException(status_code=403, detail="Финансист имеет доступ только для просмотра")
+        
         data = await request.json()
         fuel_payment = data.get("fuel_payment")
         transport = data.get("transport")
@@ -2965,6 +2980,10 @@ async def delete_order(order_id: int, request: Request):
             if DEBUG_MODE:
                 logger.debug(f"Session not available: {e}")
         
+        # Check if financier - they cannot delete
+        if user and user.get("role") == "financier":
+            raise HTTPException(status_code=403, detail="Финансист имеет доступ только для просмотра")
+        
         # First, get order info for updating worker_totals
         order_query = orders.select().where(orders.c.id == order_id)
         order = await database.fetch_one(order_query)
@@ -3104,6 +3123,17 @@ async def add_order_row(upload_id: int, worker: str, request: Request):
     try:
         if not database:
             raise HTTPException(status_code=500, detail="Database not connected")
+        
+        # Get current user (safely)
+        user = None
+        try:
+            user = request.session.get("user")
+        except Exception:
+            pass
+        
+        # Check if financier - they cannot add rows
+        if user and user.get("role") == "financier":
+            raise HTTPException(status_code=403, detail="Финансист имеет доступ только для просмотра")
         
         from urllib.parse import unquote
         from sqlalchemy import and_, update
@@ -3434,7 +3464,7 @@ async def get_1c_status():
 
 
 @app.post("/api/upload/{upload_id}/recalculate")
-async def recalculate_worker_totals(upload_id: int):
+async def recalculate_worker_totals(upload_id: int, request: Request):
     """
     Force recalculation of all worker_totals for an upload.
     Use this to fix any inconsistencies in the data.
@@ -3442,6 +3472,17 @@ async def recalculate_worker_totals(upload_id: int):
     try:
         if not database:
             raise HTTPException(status_code=500, detail="Database not connected")
+        
+        # Get current user (safely)
+        user = None
+        try:
+            user = request.session.get("user")
+        except Exception:
+            pass
+        
+        # Check if financier - they cannot recalculate
+        if user and user.get("role") == "financier":
+            raise HTTPException(status_code=403, detail="Финансист имеет доступ только для просмотра")
         
         from sqlalchemy import and_, update, text
         from database import worker_totals
