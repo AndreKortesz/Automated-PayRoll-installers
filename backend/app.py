@@ -442,12 +442,8 @@ async def upload_files(
 ):
     """Upload and parse Excel files"""
     try:
-        # Get current user (safely)
-        user = None
-        try:
-            user = request.session.get("user")
-        except Exception:
-            pass
+        # Get current user
+        user = get_current_user(request)
         
         # Check if financier - they cannot upload
         if user and user.get("role") == "financier":
@@ -2780,13 +2776,8 @@ async def update_calculation(calc_id: int, request: Request):
         if not database:
             raise HTTPException(status_code=500, detail="Database not connected")
         
-        # Get current user from session (safely)
-        user = None
-        try:
-            user = request.session.get("user")
-        except Exception as e:
-            if DEBUG_MODE:
-                logger.debug(f"Session not available: {e}")
+        # Get current user from session
+        user = get_current_user(request)
         
         # Check if financier - they cannot edit
         if user and user.get("role") == "financier":
@@ -2972,13 +2963,8 @@ async def delete_order(order_id: int, request: Request):
         from sqlalchemy import delete, and_, update, text
         from database import orders, calculations, worker_totals, manual_edits, log_action, save_manual_edit
         
-        # Get current user (safely)
-        user = None
-        try:
-            user = request.session.get("user")
-        except Exception as e:
-            if DEBUG_MODE:
-                logger.debug(f"Session not available: {e}")
+        # Get current user
+        user = get_current_user(request)
         
         # Check if financier - they cannot delete
         if user and user.get("role") == "financier":
@@ -3124,12 +3110,8 @@ async def add_order_row(upload_id: int, worker: str, request: Request):
         if not database:
             raise HTTPException(status_code=500, detail="Database not connected")
         
-        # Get current user (safely)
-        user = None
-        try:
-            user = request.session.get("user")
-        except Exception:
-            pass
+        # Get current user
+        user = get_current_user(request)
         
         # Check if financier - they cannot add rows
         if user and user.get("role") == "financier":
@@ -3473,12 +3455,8 @@ async def recalculate_worker_totals(upload_id: int, request: Request):
         if not database:
             raise HTTPException(status_code=500, detail="Database not connected")
         
-        # Get current user (safely)
-        user = None
-        try:
-            user = request.session.get("user")
-        except Exception:
-            pass
+        # Get current user
+        user = get_current_user(request)
         
         # Check if financier - they cannot recalculate
         if user and user.get("role") == "financier":
