@@ -272,10 +272,13 @@ async def get_user_permissions(request: Request, period_id: int = None) -> dict:
             "can_send_to_workers": False,
             "can_send_to_accountant": False,
             "can_unlock": False,
+            "can_view_comparison": False,
+            "can_view_duplicates": False,
         }
     
     role = user.get("role", "employee")
     is_admin = role == "admin"
+    is_financier = role == "financier"
     
     # Default permissions
     permissions = {
@@ -287,6 +290,7 @@ async def get_user_permissions(request: Request, period_id: int = None) -> dict:
             "role": role,
         },
         "is_admin": is_admin,
+        "is_financier": is_financier,
         "can_view": True,  # Everyone can view
         "can_edit": is_admin,
         "can_upload": is_admin,
@@ -295,7 +299,20 @@ async def get_user_permissions(request: Request, period_id: int = None) -> dict:
         "can_send_to_workers": is_admin,
         "can_send_to_accountant": is_admin,
         "can_unlock": is_admin,  # Only admin can unlock PAID periods
+        "can_view_comparison": not is_financier,  # Financier cannot view comparison
+        "can_view_duplicates": is_admin,  # Only admin can view duplicates
     }
+    
+    # Financier - view only, no actions
+    if is_financier:
+        permissions["can_edit"] = False
+        permissions["can_upload"] = False
+        permissions["can_delete_row"] = False
+        permissions["can_delete_period"] = False
+        permissions["can_send_to_workers"] = False
+        permissions["can_send_to_accountant"] = False
+        permissions["can_unlock"] = False
+        return permissions
     
     # Check period-specific permissions
     if period_id:

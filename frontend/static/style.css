@@ -145,6 +145,11 @@ body {
     color: #000;
 }
 
+.role-financier {
+    background: linear-gradient(135deg, #4CAF50, #2E7D32);
+    color: #fff;
+}
+
 .role-employee {
     background: var(--gray);
     color: var(--gray-dark);

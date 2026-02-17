@@ -19,6 +19,10 @@ BITRIX_REDIRECT_URI = os.getenv("BITRIX_REDIRECT_URI", "")
 # Set this in environment as comma-separated IDs: "1,9,311"
 ADMIN_USER_IDS = [int(x) for x in os.getenv("BITRIX_ADMIN_IDS", "9").split(",") if x.strip()]
 
+# Financier user IDs (can only view, no editing/uploading)
+# Set this in environment as comma-separated IDs: "5,10"
+FINANCIER_USER_IDS = [int(x) for x in os.getenv("BITRIX_FINANCIER_IDS", "").split(",") if x.strip()]
+
 # Session cookie name
 SESSION_COOKIE = "mos_gsm_session"
 
@@ -194,6 +198,8 @@ def determine_role(bitrix_id: int) -> str:
     """Determine user role based on Bitrix24 ID"""
     if bitrix_id in ADMIN_USER_IDS:
         return "admin"
+    if bitrix_id in FINANCIER_USER_IDS:
+        return "financier"
     return "employee"
 
 

@@ -460,6 +460,10 @@ def can_user_edit_period(user: dict, period_status: str, is_latest_period: bool)
     
     role = user.get("role", "employee")
     
+    # Financier cannot edit anything
+    if role == "financier":
+        return False, "Финансист имеет доступ только для просмотра"
+    
     # Admin can edit anything except PAID
     if role == "admin":
         if period_status == PeriodStatus.PAID:
@@ -492,6 +496,10 @@ def can_user_upload(user: dict, period_status: str, is_latest_period: bool) -> t
     
     role = user.get("role", "employee")
     
+    # Financier cannot upload
+    if role == "financier":
+        return False, "Финансист имеет доступ только для просмотра"
+    
     # Admin can always upload
     if role == "admin":
         return True, "Админ"
@@ -520,6 +528,10 @@ def can_user_delete_row(user: dict, period_status: str, is_latest_period: bool) 
         return False, "Необходима авторизация"
     
     role = user.get("role", "employee")
+    
+    # Financier cannot delete
+    if role == "financier":
+        return False, "Финансист имеет доступ только для просмотра"
     
     # Admin can delete rows anytime except PAID
     if role == "admin":
@@ -565,6 +577,10 @@ def can_user_send_to_workers(user: dict, period_status: str, is_latest_period: b
     
     role = user.get("role", "employee")
     
+    # Financier cannot send
+    if role == "financier":
+        return False, "Финансист имеет доступ только для просмотра"
+    
     # Admin can always send
     if role == "admin":
         return True, "Админ"
@@ -591,6 +607,10 @@ def can_user_send_to_accountant(user: dict, period_status: str, is_latest_period
         return False, "Необходима авторизация"
     
     role = user.get("role", "employee")
+    
+    # Financier cannot send
+    if role == "financier":
+        return False, "Финансист имеет доступ только для просмотра"
     
     # Cannot send already paid period
     if period_status == PeriodStatus.PAID:
