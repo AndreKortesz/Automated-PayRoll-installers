@@ -23,6 +23,9 @@ ADMIN_USER_IDS = [int(x) for x in os.getenv("BITRIX_ADMIN_IDS", "9").split(",") 
 # Set this in environment as comma-separated IDs: "5,10"
 FINANCIER_USER_IDS = [int(x) for x in os.getenv("BITRIX_FINANCIER_IDS", "").split(",") if x.strip()]
 
+# Log role configuration at startup
+logger.info(f"🔑 Role config: ADMIN_IDS={ADMIN_USER_IDS}, FINANCIER_IDS={FINANCIER_USER_IDS}")
+
 # Session cookie name
 SESSION_COOKIE = "mos_gsm_session"
 

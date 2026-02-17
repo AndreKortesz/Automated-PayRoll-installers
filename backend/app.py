@@ -315,7 +315,7 @@ async def auth_callback(request: Request):
         secure=True       # Required when samesite=none
     )
 
-    logger.info("✅ User logged in: {name} (ID: {bitrix_id}, role: {role})")
+    logger.info(f"✅ User logged in: {name} (ID: {bitrix_id}, role: {role})")
     return response
 
 
