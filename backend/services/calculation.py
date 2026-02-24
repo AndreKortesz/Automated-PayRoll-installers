@@ -52,7 +52,12 @@ async def calculate_row(row: dict, config: dict, days_map: dict) -> dict:
     
     # 1. Fuel payment - only if specialist_fee is empty and has real address in Moscow/MO
     if specialist_fee == 0 and address:
-        days = days_map.get(order, 1)
+        # Priority: days_on_site from Excel > days_map from user input > default 1
+        days_from_excel = row.get("days_on_site")
+        if days_from_excel and days_from_excel > 0:
+            days = int(days_from_excel)
+        else:
+            days = days_map.get(order, 1)
         result["fuel_payment"] = await calculate_fuel_cost(address, config, days)
     
     # 2. Transport - only for revenue > 10k with percent between 20% and 40%, and NOT on company car
