@@ -823,6 +823,18 @@ async def save_order(upload_id: int, order_data: dict) -> int:
         if isinstance(percent_val, (int, float)):
             filtered_data['percent'] = f"{percent_val}%"
     
+    # Convert days_on_site: NaN -> None, float -> int
+    if 'days_on_site' in filtered_data:
+        import pandas as pd
+        days_val = filtered_data['days_on_site']
+        if days_val is None or (isinstance(days_val, float) and pd.isna(days_val)):
+            filtered_data['days_on_site'] = None
+        elif days_val:
+            try:
+                filtered_data['days_on_site'] = int(days_val)
+            except (ValueError, TypeError):
+                filtered_data['days_on_site'] = None
+    
     query = orders.insert().values(
         upload_id=upload_id,
         **filtered_data
