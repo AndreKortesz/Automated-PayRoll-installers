@@ -115,18 +115,20 @@ def parse_excel_file(file_bytes: bytes, is_over_10k: bool, name_map: dict = None
                     print(f"📋 Обнаружена колонка 'Комментарий' в позиции {idx} (новый формат 1С)")
     
     # Define column indices based on layout
-    # New format (with manager column): col 5 is manager, data starts at col 6
+    # New format (with manager column): col 5 is manager, col 6 is days_on_site, data starts at col 7
     # Old format: data starts at col 4
     if has_manager_column:
-        col_revenue_total = 6
-        col_revenue_services = 7
-        col_diagnostic = 8
-        col_diagnostic_payment = 9
-        col_specialist_fee = 10
-        col_additional_expenses = 11
-        col_service_payment = 12
-        col_percent = 13
+        col_days_on_site = 6      # NEW: "Дней выезда на монтаж"
+        col_revenue_total = 7
+        col_revenue_services = 8
+        col_diagnostic = 9
+        col_diagnostic_payment = 10
+        col_specialist_fee = 11
+        col_additional_expenses = 12
+        col_service_payment = 13
+        col_percent = 14
     else:
+        col_days_on_site = None   # Not present in old format
         col_revenue_total = 4
         col_revenue_services = 5
         col_diagnostic = 6
@@ -238,11 +240,22 @@ def parse_excel_file(file_bytes: bytes, is_over_10k: bool, name_map: dict = None
                     # Old format: order already contains address
                     order_full = first_col_str
                 
+                # Extract days_on_site if column exists
+                days_on_site = None
+                if col_days_on_site is not None and col_days_on_site < len(row):
+                    days_val = row.iloc[col_days_on_site]
+                    if pd.notna(days_val):
+                        try:
+                            days_on_site = int(float(days_val))
+                        except (ValueError, TypeError):
+                            days_on_site = None
+                
                 record = {
                     "worker": normalize_worker_name(current_worker, name_map),
                     "order": order_full,  # Combined order + comment for old system compatibility
                     "order_raw": first_col_str,  # Original order column (for full report)
                     "order_comment": order_comment,  # Separate comment (for full report)
+                    "days_on_site": days_on_site,  # NEW: "Дней выезда на монтаж"
                     "revenue_total": row.iloc[col_revenue_total] if col_revenue_total < len(row) and pd.notna(row.iloc[col_revenue_total]) else 0,
                     "revenue_services": row.iloc[col_revenue_services] if col_revenue_services < len(row) and pd.notna(row.iloc[col_revenue_services]) else 0,
                     "diagnostic": row.iloc[col_diagnostic] if col_diagnostic < len(row) and pd.notna(row.iloc[col_diagnostic]) else 0,

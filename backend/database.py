@@ -111,6 +111,7 @@ orders = Table(
     Column("order_full", Text),  # Полный текст заказа
     Column("order_date", DateTime),
     Column("address", Text),
+    Column("days_on_site", Integer),  # Дней выезда на монтаж
     Column("revenue_total", Float, default=0),
     Column("revenue_services", Float, default=0),
     Column("diagnostic", Float, default=0),
@@ -377,6 +378,8 @@ def create_tables():
                     details JSONB,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )""",
+                # Add days_on_site column to orders
+                "ALTER TABLE orders ADD COLUMN IF NOT EXISTS days_on_site INTEGER",
             ]
             
             for migration in migrations:
@@ -807,7 +810,7 @@ async def save_order(upload_id: int, order_data: dict) -> int:
     # Only include fields that exist in orders table
     allowed_fields = {
         'worker', 'order_code', 'order_full', 'order_date', 'address',
-        'revenue_total', 'revenue_services', 'diagnostic', 'diagnostic_payment',
+        'days_on_site', 'revenue_total', 'revenue_services', 'diagnostic', 'diagnostic_payment',
         'specialist_fee', 'additional_expenses', 'service_payment', 'percent',
         'is_client_payment', 'is_over_10k', 'is_extra_row', 'manager_comment'
     }
