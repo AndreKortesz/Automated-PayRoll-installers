@@ -380,6 +380,24 @@ def create_tables():
                 )""",
                 # Add days_on_site column to orders
                 "ALTER TABLE orders ADD COLUMN IF NOT EXISTS days_on_site INTEGER",
+                # Remove duplicates in worker_totals before adding UNIQUE constraint
+                """DELETE FROM worker_totals wt1
+                   USING worker_totals wt2
+                   WHERE wt1.id < wt2.id
+                   AND wt1.upload_id = wt2.upload_id
+                   AND wt1.worker = wt2.worker""",
+                # Add UNIQUE constraint for worker_totals (upload_id + worker) for UPSERT
+                """DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint 
+                        WHERE conname = 'worker_totals_upload_worker_unique'
+                    ) THEN
+                        ALTER TABLE worker_totals 
+                        ADD CONSTRAINT worker_totals_upload_worker_unique 
+                        UNIQUE (upload_id, worker);
+                    END IF;
+                END $$""",
             ]
             
             for migration in migrations:

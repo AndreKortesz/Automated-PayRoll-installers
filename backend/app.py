@@ -2925,28 +2925,33 @@ async def update_calculation(calc_id: int, request: Request):
         new_fuel = sum(c["fuel_payment"] or 0 for c in all_calcs)
         new_transport = sum(c["transport"] or 0 for c in all_calcs)
         
-        # Update worker_totals - use direct SQL with TRIM for reliability
-        update_sql = text("""
-            UPDATE worker_totals 
-            SET total_amount = :total_amount,
-                company_amount = :company_amount,
-                client_amount = :client_amount,
-                fuel_total = :fuel_total,
-                transport_total = :transport_total
-            WHERE upload_id = :upload_id
-            AND TRIM(worker) = TRIM(:worker)
+        # Update worker_totals - use UPSERT for reliability
+        upsert_sql = text("""
+            INSERT INTO worker_totals (
+                upload_id, worker, total_amount, company_amount, client_amount,
+                fuel_total, transport_total
+            ) VALUES (
+                :upload_id, :worker, :total_amount, :company_amount, :client_amount,
+                :fuel_total, :transport_total
+            )
+            ON CONFLICT (upload_id, worker) DO UPDATE SET
+                total_amount = EXCLUDED.total_amount,
+                company_amount = EXCLUDED.company_amount,
+                client_amount = EXCLUDED.client_amount,
+                fuel_total = EXCLUDED.fuel_total,
+                transport_total = EXCLUDED.transport_total
         """).bindparams(
+            upload_id=upload_id,
+            worker=base_worker,
             total_amount=total_amount,
             company_amount=company_amount,
             client_amount=client_amount,
             fuel_total=new_fuel,
-            transport_total=new_transport,
-            upload_id=upload_id,
-            worker=base_worker
+            transport_total=new_transport
         )
-        result = await database.execute(update_sql)
+        await database.execute(upsert_sql)
         
-        logger.info(f"✅ Updated calculation {calc_id}: {update_values}, worker_totals_updated={result}")
+        logger.info(f"✅ Updated calculation {calc_id}: {update_values}")
         logger.info(f"   Worker {base_worker}: company={company_amount}, client={client_amount}, total={total_amount}")
         
         return JSONResponse({
@@ -3207,20 +3212,30 @@ async def add_order_row(upload_id: int, worker: str, request: Request):
         company_count = sum(1 for c in all_calcs if not c["is_client_payment"])
         client_count = sum(1 for c in all_calcs if c["is_client_payment"])
         
-        # Update worker_totals - use direct SQL for reliability
-        update_sql = text("""
-            UPDATE worker_totals 
-            SET total_amount = :total_amount,
-                company_amount = :company_amount,
-                client_amount = :client_amount,
-                fuel_total = :fuel_total,
-                transport_total = :transport_total,
-                orders_count = :orders_count,
-                company_orders_count = :company_orders_count,
-                client_orders_count = :client_orders_count
-            WHERE upload_id = :upload_id
-            AND TRIM(worker) = TRIM(:worker)
+        # Update worker_totals - use UPSERT (INSERT ... ON CONFLICT) for reliability
+        # This handles case when worker_totals row doesn't exist yet
+        upsert_sql = text("""
+            INSERT INTO worker_totals (
+                upload_id, worker, total_amount, company_amount, client_amount,
+                fuel_total, transport_total, orders_count, 
+                company_orders_count, client_orders_count
+            ) VALUES (
+                :upload_id, :worker, :total_amount, :company_amount, :client_amount,
+                :fuel_total, :transport_total, :orders_count,
+                :company_orders_count, :client_orders_count
+            )
+            ON CONFLICT (upload_id, worker) DO UPDATE SET
+                total_amount = EXCLUDED.total_amount,
+                company_amount = EXCLUDED.company_amount,
+                client_amount = EXCLUDED.client_amount,
+                fuel_total = EXCLUDED.fuel_total,
+                transport_total = EXCLUDED.transport_total,
+                orders_count = EXCLUDED.orders_count,
+                company_orders_count = EXCLUDED.company_orders_count,
+                client_orders_count = EXCLUDED.client_orders_count
         """).bindparams(
+            upload_id=upload_id,
+            worker=base_worker,
             total_amount=total_amount,
             company_amount=company_amount,
             client_amount=client_amount,
@@ -3228,14 +3243,12 @@ async def add_order_row(upload_id: int, worker: str, request: Request):
             transport_total=new_transport,
             orders_count=company_count + client_count,
             company_orders_count=company_count,
-            client_orders_count=client_count,
-            upload_id=upload_id,
-            worker=base_worker
+            client_orders_count=client_count
         )
-        result = await database.execute(update_sql)
+        await database.execute(upsert_sql)
         
-        logger.info(f"➕ Added new row for {worker_decoded}: order_code={order_code}, total={total}, updated_rows={result}")
-        logger.info(f"   Recalculated totals: company={company_amount}, client={client_amount}, total={total_amount}")
+        logger.info(f"➕ Added row for {worker_decoded}: order_code={order_code}, total={total}")
+        logger.info(f"   Recalculated: company={company_amount}, client={client_amount}, total={total_amount}")
         
         # Save to manual_edits for history tracking
         from database import save_manual_edit, uploads, periods
@@ -3710,7 +3723,7 @@ async def delete_period(period_id: int, request: Request):
         if not user or user.get("role") != "admin":
             raise HTTPException(status_code=403, detail="Только администратор может удалять периоды")
         
-        from sqlalchemy import delete
+        from sqlalchemy import delete, text
         from database import periods, uploads, orders, calculations, worker_totals, manual_edits, changes, audit_log
         
         # Check period exists
@@ -3729,37 +3742,53 @@ async def delete_period(period_id: int, request: Request):
         
         if upload_ids:
             # Delete in correct order (foreign key constraints)
-            # 1. manual_edits
+            # 1. version_changes (references uploads)
+            try:
+                await database.execute(
+                    text("DELETE FROM version_changes WHERE upload_id = ANY(:ids) OR prev_upload_id = ANY(:ids)").bindparams(ids=upload_ids)
+                )
+            except Exception:
+                pass  # Table may not exist
+            
+            # 2. manual_edits
             await database.execute(
                 delete(manual_edits).where(manual_edits.c.upload_id.in_(upload_ids))
             )
             
-            # 2. changes
+            # 3. changes
             await database.execute(
                 delete(changes).where(changes.c.upload_id.in_(upload_ids))
             )
             
-            # 3. calculations
+            # 4. calculations
             await database.execute(
                 delete(calculations).where(calculations.c.upload_id.in_(upload_ids))
             )
             
-            # 4. orders
+            # 5. orders
             await database.execute(
                 delete(orders).where(orders.c.upload_id.in_(upload_ids))
             )
             
-            # 5. worker_totals
+            # 6. worker_totals
             await database.execute(
                 delete(worker_totals).where(worker_totals.c.upload_id.in_(upload_ids))
             )
             
-            # 6. uploads
+            # 7. uploads
             await database.execute(
                 delete(uploads).where(uploads.c.period_id == period_id)
             )
         
-        # 7. period itself
+        # 8. sent_notifications (references period_id)
+        try:
+            await database.execute(
+                text("DELETE FROM sent_notifications WHERE period_id = :pid").bindparams(pid=period_id)
+            )
+        except Exception:
+            pass
+        
+        # 9. period itself
         await database.execute(
             delete(periods).where(periods.c.id == period_id)
         )
