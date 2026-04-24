@@ -398,6 +398,16 @@ def create_tables():
                         UNIQUE (upload_id, worker);
                     END IF;
                 END $$""",
+                # Indexes for performance (speed up frequent queries)
+                "CREATE INDEX IF NOT EXISTS idx_orders_upload_id ON orders(upload_id)",
+                "CREATE INDEX IF NOT EXISTS idx_orders_worker ON orders(worker)",
+                "CREATE INDEX IF NOT EXISTS idx_orders_upload_worker ON orders(upload_id, worker)",
+                "CREATE INDEX IF NOT EXISTS idx_calculations_upload_id ON calculations(upload_id)",
+                "CREATE INDEX IF NOT EXISTS idx_calculations_order_id ON calculations(order_id)",
+                "CREATE INDEX IF NOT EXISTS idx_worker_totals_upload_id ON worker_totals(upload_id)",
+                "CREATE INDEX IF NOT EXISTS idx_manual_edits_upload_id ON manual_edits(upload_id)",
+                "CREATE INDEX IF NOT EXISTS idx_manual_edits_order_id ON manual_edits(order_id)",
+                "CREATE INDEX IF NOT EXISTS idx_uploads_period_id ON uploads(period_id)",
             ]
             
             for migration in migrations:

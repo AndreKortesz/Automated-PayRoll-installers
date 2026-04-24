@@ -212,7 +212,7 @@ async def auth_callback(request: Request):
     # Merge params (form data takes precedence)
     params = {**query_params, **form_params}
 
-    logger.info("🔐 Auth callback received: method={request.method}, params={list(params.keys())}")
+    logger.info(f"🔐 Auth callback received: method={request.method}, params={list(params.keys())}")
 
     # Check for error
     error = params.get("error")
@@ -232,7 +232,7 @@ async def auth_callback(request: Request):
         access_token = auth_id
         refresh_token = params.get("REFRESH_ID", "")
         expires_in = int(params.get("AUTH_EXPIRES", 3600))
-        logger.info("🔐 Using direct AUTH_ID from Bitrix24, expires in {expires_in}s")
+        logger.info(f"🔐 Using direct AUTH_ID from Bitrix24, expires in {expires_in}s")
     else:
         # Standard OAuth callback with code
         code = params.get("code")
@@ -262,7 +262,7 @@ async def auth_callback(request: Request):
         # else keep domain from query params (svyaz.bitrix24.ru)
         expires_in = token_data.get("expires_in", 3600)
         
-    logger.info("🔐 Using domain for user info: {domain}")
+    logger.info(f"🔐 Using domain for user info: {domain}")
 
     # Get user info from Bitrix24
     bitrix_user = await get_bitrix_user(access_token, domain)
@@ -356,6 +356,40 @@ async def login_page(request: Request):
         "auth_configured": is_auth_configured(),
         "auth_url": get_auth_url() if is_auth_configured() else None
     })
+
+
+@app.get("/api/health")
+async def health_check():
+    """
+    Health check endpoint for Railway/monitoring.
+    Checks: DB connection, session storage availability.
+    Returns 200 if healthy, 503 if unhealthy.
+    """
+    status = {"status": "ok", "checks": {}}
+    
+    # Check database
+    try:
+        if database and database.is_connected:
+            await database.execute("SELECT 1")
+            status["checks"]["database"] = "ok"
+        else:
+            status["checks"]["database"] = "disconnected"
+            status["status"] = "degraded"
+    except Exception as e:
+        status["checks"]["database"] = f"error: {str(e)[:100]}"
+        status["status"] = "degraded"
+    
+    # Check session storage
+    try:
+        status["checks"]["sessions"] = f"ok ({len(session_data)} active)"
+    except Exception:
+        status["checks"]["sessions"] = "error"
+    
+    # Return 503 if degraded
+    if status["status"] != "ok":
+        return JSONResponse(status, status_code=503)
+    
+    return JSONResponse(status)
 
 
 # ============== MAIN ROUTES ==============
@@ -477,9 +511,9 @@ async def upload_files(
                         )
                     
                     yandex_fuel_data = parse_yandex_fuel_file(content_yandex, name_map)
-                    if DEBUG_MODE: logger.debug("⛽ Яндекс Заправки загружены: {len(yandex_fuel_data)} монтажников")
+                    if DEBUG_MODE: logger.debug(f"⛽ Яндекс Заправки загружены: {len(yandex_fuel_data)} монтажников")
                 else:
-                    logger.warning("⚠️ Яндекс Заправки: период {period} - первая половина месяца, файл игнорируется")
+                    logger.warning(f"⚠️ Яндекс Заправки: период {period} - первая половина месяца, файл игнорируется")
         elif is_second_half:
             # Yandex Fuel file is required for second half periods
             return JSONResponse(
@@ -567,13 +601,13 @@ async def upload_files(
                                 latest_upload_version = upload["version"]
                                 latest_upload_date = str(upload.get("created_at", ""))
                                 old_orders = orders_check
-                                if DEBUG_MODE: logger.debug("📊 Found version {latest_upload_version} with {len(old_orders)} orders")
+                                if DEBUG_MODE: logger.debug(f"📊 Found version {latest_upload_version} with {len(old_orders)} orders")
                                 break
                             else:
-                                logger.warning("⚠️ Skipping empty version {upload['version']}")
+                                logger.warning(f"⚠️ Skipping empty version {upload['version']}")
                         
                         if not latest_upload_id:
-                            if DEBUG_MODE: logger.debug("📊 No previous version with orders found")
+                            if DEBUG_MODE: logger.debug(f"📊 No previous version with orders found")
                         
                         # Also get extra rows (manual additions) from previous upload
                         from database import get_upload_details
@@ -587,9 +621,9 @@ async def upload_files(
                                 is_extra = o.get("is_extra_row", False)
                                 if is_extra:
                                     extra_rows_from_prev.append(o)
-                                    if DEBUG_MODE: logger.debug("📋 Found extra_row: {o.get('order_code', '')} - {o.get('worker', '')}")
+                                    if DEBUG_MODE: logger.debug(f"📋 Found extra_row: {o.get('order_code', '')} - {o.get('worker', '')}")
                             
-                            if DEBUG_MODE: logger.debug("📋 Total extra_rows found: {len(extra_rows_from_prev)} out of {len(old_orders)} orders")
+                            if DEBUG_MODE: logger.debug(f"📋 Total extra_rows found: {len(extra_rows_from_prev)} out of {len(old_orders)} orders")
                             
                             # Debug: show is_extra_row values
                             extra_counts = {"True": 0, "False": 0, "None": 0}
@@ -601,7 +635,7 @@ async def upload_files(
                                     extra_counts["False"] += 1
                                 else:
                                     extra_counts["None"] += 1
-                            if DEBUG_MODE: logger.debug("📋 is_extra_row distribution: {extra_counts}")
+                            if DEBUG_MODE: logger.debug(f"📋 is_extra_row distribution: {extra_counts}")
                             
                             # Get manual edits
                             manual_edits_from_prev = prev_upload_details.get("manual_edits", [])
@@ -626,7 +660,7 @@ async def upload_files(
                                 key = (o.get("order_code", ""), worker_normalized)
                                 old_map[key] = o
                             
-                            if DEBUG_MODE: logger.debug("📊 Comparison: {len(old_map)} orders in DB")
+                            if DEBUG_MODE: logger.debug(f"📊 Comparison: {len(old_map)} orders in DB")
                             
                             new_map = {}
                             for _, row in combined.iterrows():
@@ -688,7 +722,7 @@ async def upload_files(
                                     "percent": percent_val,
                                 }
                             
-                            if DEBUG_MODE: logger.debug("📊 Comparison: {len(new_map)} orders in new files")
+                            if DEBUG_MODE: logger.debug(f"📊 Comparison: {len(new_map)} orders in new files")
                             
                             # Calculate fuel and transport for new orders BEFORE comparison
                             # This ensures we compare apples to apples
@@ -717,7 +751,7 @@ async def upload_files(
                                 # Calculate total
                                 order["total"] = order["service_payment"] + fuel_payment + transport
                             
-                            if DEBUG_MODE: logger.debug("📊 Calculated fuel/transport for {len(new_map)} new orders")
+                            if DEBUG_MODE: logger.debug(f"📊 Calculated fuel/transport for {len(new_map)} new orders")
                             
                             # Find added - include all details
                             for key, order in new_map.items():
@@ -784,7 +818,7 @@ async def upload_files(
                                 # total comes directly from JOIN query now
                                 calc_total = extra_order.get("total", 0) or 0
                                 order_text = extra_order.get("order", "") or extra_order.get("order_full", "")
-                                if DEBUG_MODE: logger.debug("📋 Found extra row: {order_text[:30]}_{extra_order.get('worker', '')} total={calc_total}")
+                                if DEBUG_MODE: logger.debug(f"📋 Found extra row: {order_text[:30]}_{extra_order.get('worker', '')} total={calc_total}")
                             
                             # Find modified - compare all fields
                             compare_fields = [
@@ -798,22 +832,22 @@ async def upload_files(
                             ]
                             
                             # Debug: show some keys from both maps
-                            if DEBUG_MODE: logger.debug("📊 Sample old_map keys: {list(old_map.keys())[:5]}")
-                            if DEBUG_MODE: logger.debug("📊 Sample new_map keys: {list(new_map.keys())[:5]}")
+                            if DEBUG_MODE: logger.debug(f"📊 Sample old_map keys: {list(old_map.keys())[:5]}")
+                            if DEBUG_MODE: logger.debug(f"📊 Sample new_map keys: {list(new_map.keys())[:5]}")
 
                             # Debug: find КАУТ-001143 specifically - compare SAME worker in both maps
                             debug_order = "КАУТ-001143"
                             old_keys_with_debug = [k for k in old_map.keys() if debug_order in k[0]]
                             new_keys_with_debug = [k for k in new_map.keys() if debug_order in k[0]]
-                            if DEBUG_MODE: logger.debug("🔍 {debug_order} in old_map: {old_keys_with_debug}")
-                            if DEBUG_MODE: logger.debug("🔍 {debug_order} in new_map: {new_keys_with_debug}")
+                            if DEBUG_MODE: logger.debug(f"🔍 {debug_order} in old_map: {old_keys_with_debug}")
+                            if DEBUG_MODE: logger.debug(f"🔍 {debug_order} in new_map: {new_keys_with_debug}")
 
                             # Compare EACH worker for this order between old and new
                             for key in old_keys_with_debug:
                                 if key in new_map:
                                     old_data = old_map[key]
                                     new_data = new_map[key]
-                                    if DEBUG_MODE: logger.debug("🔍 comparing {key}:")
+                                    if DEBUG_MODE: logger.debug(f"🔍 comparing {key}:")
                                     if DEBUG_MODE: logger.debug(f"   OLD: rt={old_data.get('revenue_total')}, rs={old_data.get('revenue_services')}, sp={old_data.get('service_payment')}")
                                     if DEBUG_MODE: logger.debug(f"   NEW: rt={new_data.get('revenue_total')}, rs={new_data.get('revenue_services')}, sp={new_data.get('service_payment')}")
                                     # Check differences
@@ -823,14 +857,14 @@ async def upload_files(
                                         if abs(old_val - new_val) > 0.01:
                                             if DEBUG_MODE: logger.debug(f"   ⚠️ DIFF {field}: {old_val} → {new_val}")
                                 else:
-                                    if DEBUG_MODE: logger.debug("🔍 {key} NOT in new_map - will be DELETED")
+                                    if DEBUG_MODE: logger.debug(f"🔍 {key} NOT in new_map - will be DELETED")
 
                             # Debug: compare a sample order
                             for key in list(new_map.keys())[:3]:
                                 if key in old_map:
                                     old_o = old_map[key]
                                     new_o = new_map[key]
-                                    if DEBUG_MODE: logger.debug("📊 Sample compare {key}:")
+                                    if DEBUG_MODE: logger.debug(f"📊 Sample compare {key}:")
                                     if DEBUG_MODE: logger.debug(f"   old revenue_total={old_o.get('revenue_total')} ({type(old_o.get('revenue_total')).__name__})")
                                     if DEBUG_MODE: logger.debug(f"   new revenue_total={new_o.get('revenue_total')} ({type(new_o.get('revenue_total')).__name__})")
                             
@@ -884,7 +918,7 @@ async def upload_files(
                                             "old": f"{old_total:,.0f}".replace(",", " "),
                                             "new": f"{expected_total_with_old_fuel:,.0f}".replace(",", " ") + " (пересчитано)"
                                         })
-                                        if DEBUG_MODE: logger.debug("📊 Manual edit detected: {key} - old_total={old_total}, expected={expected_total_with_old_fuel}")
+                                        if DEBUG_MODE: logger.debug(f"📊 Manual edit detected: {key} - old_total={old_total}, expected={expected_total_with_old_fuel}")
                                     
                                     # Check if transport differs (this is a real change, not API fluctuation)
                                     if abs(old_transport - new_transport) > 0.01:
@@ -893,7 +927,7 @@ async def upload_files(
                                             "old": f"{old_transport:,.0f}".replace(",", " "),
                                             "new": f"{new_transport:,.0f}".replace(",", " ")
                                         })
-                                        if DEBUG_MODE: logger.debug("📊 Transport differs: {key} - old={old_transport}, new={new_transport}")
+                                        if DEBUG_MODE: logger.debug(f"📊 Transport differs: {key} - old={old_transport}, new={new_transport}")
                                     
                                     # Check if fuel differs SIGNIFICANTLY (more than API fluctuation)
                                     if abs(old_fuel - new_fuel) > 250:
@@ -902,10 +936,10 @@ async def upload_files(
                                             "old": f"{old_fuel:,.0f}".replace(",", " "),
                                             "new": f"{new_fuel:,.0f}".replace(",", " ")
                                         })
-                                        if DEBUG_MODE: logger.debug("📊 Fuel differs significantly: {key} - old={old_fuel}, new={new_fuel}")
+                                        if DEBUG_MODE: logger.debug(f"📊 Fuel differs significantly: {key} - old={old_fuel}, new={new_fuel}")
 
                                     if field_changes:
-                                        if DEBUG_MODE: logger.debug("📊 Modified found: {key} - {field_changes}")
+                                        if DEBUG_MODE: logger.debug(f"📊 Modified found: {key} - {field_changes}")
                                         changes_summary["modified"].append({
                                             "order_code": new_order["order_code"],
                                             "worker": new_order["worker"],
@@ -913,17 +947,17 @@ async def upload_files(
                                             "changes": field_changes
                                         })
                             
-                            if DEBUG_MODE: logger.debug("📊 Comparison result: {len(changes_summary['added'])} added, {len(changes_summary['deleted'])} deleted, {len(changes_summary['modified'])} modified")
+                            if DEBUG_MODE: logger.debug(f"📊 Comparison result: {len(changes_summary['added'])} added, {len(changes_summary['deleted'])} deleted, {len(changes_summary['modified'])} modified")
                             
                             # Add extra rows (manual additions) from previous version to deleted list
                             # These are rows that were manually added and won't be in new 1C files
-                            if DEBUG_MODE: logger.debug("📋 DEBUG: extra_rows_from_prev has {len(extra_rows_from_prev)} items before loop")
+                            if DEBUG_MODE: logger.debug(f"📋 DEBUG: extra_rows_from_prev has {len(extra_rows_from_prev)} items before loop")
                             changes_summary["extra_rows"] = []  # Store for later restoration
                             for extra in extra_rows_from_prev:
                                 order_text = extra.get("order_full", "") or extra.get("order", "") or extra.get("order_code", "")
                                 worker = extra.get("worker", "")
                                 
-                                if DEBUG_MODE: logger.debug("📋 Extra row from DB: order_full='{extra.get('order_full', '')}', order='{extra.get('order', '')}', order_code='{extra.get('order_code', '')}' -> order_text='{order_text}'")
+                                if DEBUG_MODE: logger.debug(f"📋 Extra row from DB: order_full='{extra.get('order_full', '')}', order='{extra.get('order', '')}', order_code='{extra.get('order_code', '')}' -> order_text='{order_text}'")
                                 
                                 # Get total directly from extra (from JOIN query)
                                 total = extra.get("total", 0) or 0
@@ -953,10 +987,10 @@ async def upload_files(
                             # Also add manual_edits info for potential restoration
                             changes_summary["manual_edits_prev"] = manual_edits_from_prev
                             
-                            if DEBUG_MODE: logger.debug("📋 FINAL: changes_summary has {len(changes_summary['added'])} added, {len(changes_summary['deleted'])} deleted (including {len(changes_summary.get('extra_rows', []))} extra_rows)")
+                            if DEBUG_MODE: logger.debug(f"📋 FINAL: changes_summary has {len(changes_summary['added'])} added, {len(changes_summary['deleted'])} deleted (including {len(changes_summary.get('extra_rows', []))} extra_rows)")
                             
         except Exception as e:
-            logger.warning("⚠️ Changes comparison error (non-critical): {e}")
+            logger.warning(f"⚠️ Changes comparison error (non-critical): {e}")
             import traceback
             traceback.print_exc()
         
@@ -1073,11 +1107,11 @@ async def apply_review_changes(request: Request):
                         if orders_check and len(orders_check) > 0:
                             latest_upload_id = upload_id_check
                             old_orders = orders_check
-                            if DEBUG_MODE: logger.debug("📋 Found previous version with {len(old_orders)} orders for restoration")
+                            if DEBUG_MODE: logger.debug(f"📋 Found previous version with {len(old_orders)} orders for restoration")
                             break
                     
                     if not latest_upload_id or not old_orders:
-                        logger.warning("⚠️ No previous version with orders found for restoration")
+                        logger.warning(f"⚠️ No previous version with orders found for restoration")
                     else:
                         # Get upload details for extra rows with calculations
                         upload_details = await get_upload_details(latest_upload_id)
@@ -1100,7 +1134,7 @@ async def apply_review_changes(request: Request):
                                 calc_fuel = old_order.get("fuel_payment", 0) or 0
                                 calc_transport = old_order.get("transport", 0) or 0
                                 
-                                if DEBUG_MODE: logger.debug("📋 Restoring {key}: total={calc_total}, fuel={calc_fuel}, transport={calc_transport}")
+                                if DEBUG_MODE: logger.debug(f"📋 Restoring {key}: total={calc_total}, fuel={calc_fuel}, transport={calc_transport}")
                                 
                                 # Add this order back to combined records
                                 restored_record = {
@@ -1125,7 +1159,7 @@ async def apply_review_changes(request: Request):
                                     "total": calc_total,
                                 }
                                 modified_records.append(restored_record)
-                                logger.info("✅ Restored: {key} (extra_row={is_extra}, total={calc_total})")
+                                logger.info(f"✅ Restored: {key} (extra_row={is_extra}, total={calc_total})")
             except Exception as e:
                 logger.error(f"Error restoring deleted orders: {e}")
                 import traceback
@@ -1189,7 +1223,7 @@ async def apply_review_changes(request: Request):
                                     modified_records[i]["_old_calc_total"] = old_total
                                     modified_records[i]["_old_calc_fuel"] = old_fuel
                                     modified_records[i]["_old_calc_transport"] = old_transport
-                                    if DEBUG_MODE: logger.debug("📋 Preserving old calc for {key}: total={old_total}")
+                                    if DEBUG_MODE: logger.debug(f"📋 Preserving old calc for {key}: total={old_total}")
             except Exception as e:
                 logger.error(f"Error reverting modified orders: {e}")
         
@@ -1197,7 +1231,7 @@ async def apply_review_changes(request: Request):
         added_to_skip = set(selections.get("added", []))
         
         if added_to_skip:
-            if DEBUG_MODE: logger.debug("📋 Skipping {len(added_to_skip)} added orders: {added_to_skip}")
+            if DEBUG_MODE: logger.debug(f"📋 Skipping {len(added_to_skip)} added orders: {added_to_skip}")
             filtered_records = []
             for record in modified_records:
                 order_text = str(record.get("order", ""))
@@ -1272,7 +1306,7 @@ async def apply_review_changes(request: Request):
         # Add Yandex Fuel data to config
         yandex_fuel = session.get("yandex_fuel", {})
         config["yandex_fuel"] = yandex_fuel
-        logger.info("💾 /api/apply-review: yandex_fuel from session: {list(yandex_fuel.keys()) if yandex_fuel else 'EMPTY'}")
+        logger.info(f"💾 /api/apply-review: yandex_fuel from session: {list(yandex_fuel.keys()) if yandex_fuel else 'EMPTY'}")
         
         name_map = session.get("name_map", {})
         
@@ -1286,7 +1320,7 @@ async def apply_review_changes(request: Request):
                 calc_row["total"] = row["_old_calc_total"]
                 calc_row["fuel_payment"] = row.get("_old_calc_fuel", 0)
                 calc_row["transport"] = row.get("_old_calc_transport", 0)
-                logger.info("✅ Restored old calc values for {row.get('order', '')[:30]}: total={calc_row['total']}")
+                logger.info(f"✅ Restored old calc values for {row.get('order', '')[:30]}: total={calc_row['total']}")
 
             # For restored records (deleted items brought back), preserve their saved total/fuel/transport
             # This is critical for extra rows like "Переплата" which have no service_payment
@@ -1297,7 +1331,7 @@ async def apply_review_changes(request: Request):
                     calc_row["fuel_payment"] = row["fuel_payment"]
                 if row.get("transport", 0) != 0:
                     calc_row["transport"] = row["transport"]
-                logger.info("✅ Preserved restored row values for {row.get('order', '')[:40]}: total={calc_row['total']}")
+                logger.info(f"✅ Preserved restored row values for {row.get('order', '')[:40]}: total={calc_row['total']}")
 
             calculated_data.append(calc_row)
         
@@ -1443,7 +1477,7 @@ async def apply_review_changes(request: Request):
                         new_value=-deduction,
                         period_status="DRAFT"
                     )
-                    if DEBUG_MODE: logger.debug("⛽ Saved Yandex fuel deduction for {worker}: -{deduction}₽")
+                    if DEBUG_MODE: logger.debug(f"⛽ Saved Yandex fuel deduction for {worker}: -{deduction}₽")
         
         # Compare with previous upload and save changes
         prev_upload_id = await get_previous_upload(period_id, upload_id)
@@ -1496,7 +1530,7 @@ async def process_first_upload(request: Request):
         config = DEFAULT_CONFIG.copy()
         yandex_fuel = session.get("yandex_fuel", {})
         config["yandex_fuel"] = yandex_fuel
-        logger.info("💾 /api/process-first-upload: yandex_fuel from session: {list(yandex_fuel.keys()) if yandex_fuel else 'EMPTY'}")
+        logger.info(f"💾 /api/process-first-upload: yandex_fuel from session: {list(yandex_fuel.keys()) if yandex_fuel else 'EMPTY'}")
         
         name_map = session.get("name_map", {})
         
@@ -1647,7 +1681,7 @@ async def process_first_upload(request: Request):
                         new_value=-deduction,
                         period_status="DRAFT"
                     )
-                    if DEBUG_MODE: logger.debug("⛽ Saved Yandex fuel deduction for {worker}: -{deduction}₽")
+                    if DEBUG_MODE: logger.debug(f"⛽ Saved Yandex fuel deduction for {worker}: -{deduction}₽")
         
         # Cleanup session
         del session_data[session_id]
@@ -1926,7 +1960,7 @@ async def calculate_salaries(
             if database:
                 # Debug: check yandex_fuel before saving
                 yf = full_config.get("yandex_fuel", {})
-                logger.info("💾 /calculate: yandex_fuel in full_config: {list(yf.keys()) if yf else 'EMPTY'}")
+                logger.info(f"💾 /calculate: yandex_fuel in full_config: {list(yf.keys()) if yf else 'EMPTY'}")
                 
                 # 1. Get or create period
                 period_id = await get_or_create_period(period)
@@ -2069,9 +2103,9 @@ async def calculate_salaries(
                                 str(field_change.get("new", ""))
                             )
                 
-                logger.info("✅ Saved to database: period={period}, upload_id={upload_id}")
+                logger.info(f"✅ Saved to database: period={period}, upload_id={upload_id}")
         except Exception as db_error:
-            logger.warning("⚠️ Database save error (non-critical): {db_error}")
+            logger.warning(f"⚠️ Database save error (non-critical): {db_error}")
             # Don't fail the request if DB save fails
         
         return JSONResponse({
@@ -2640,7 +2674,7 @@ async def download_period_archive(period_id: int, archive_type: str):
             }
             calculated_data.append(row)
         
-        if DEBUG_MODE: logger.debug("📊 Generating archive from {len(calculated_data)} orders")
+        if DEBUG_MODE: logger.debug(f"📊 Generating archive from {len(calculated_data)} orders")
         # Debug: show some totals
         for wt in worker_totals_list[:3]:
             worker_data = [r for r in calculated_data if r["worker"].replace(" (оплата клиентом)", "") == wt["worker"]]
@@ -2658,7 +2692,7 @@ async def download_period_archive(period_id: int, archive_type: str):
         
         # Debug: check if yandex_fuel is in config
         yandex_fuel = report_config.get("yandex_fuel", {})
-        if DEBUG_MODE: logger.debug("📊 Download config yandex_fuel: {yandex_fuel}")
+        if DEBUG_MODE: logger.debug(f"📊 Download config yandex_fuel: {yandex_fuel}")
         
         # Generate FULL archive with all worker files (like step 4)
         zip_buffer = BytesIO()
@@ -2747,7 +2781,7 @@ async def create_or_update_order_calculation(order_id: int, request: Request):
             }
             query = update(calculations).where(calculations.c.id == calc_id).values(**update_values)
             await database.execute(query)
-            logger.info("✅ Updated calculation for order {order_id}: {update_values}")
+            logger.info(f"✅ Updated calculation for order {order_id}: {update_values}")
         else:
             # Create new calculation
             calc_data = {
@@ -2757,7 +2791,7 @@ async def create_or_update_order_calculation(order_id: int, request: Request):
                 "total": float(total)
             }
             calc_id = await save_calculation(upload_id, order_id, calc_data)
-            logger.info("✅ Created calculation {calc_id} for order {order_id}")
+            logger.info(f"✅ Created calculation {calc_id} for order {order_id}")
         
         return JSONResponse({
             "success": True,
@@ -3051,57 +3085,75 @@ async def delete_order(order_id: int, request: Request):
         )
         logger.info(f"📝 Deletion saved to history: {order_code} {full_worker} - total was {deleted_total} by {user.get('name') if user else 'Unknown'} (status: {period_status})")
         
-        # Delete order
-        del_order = delete(orders).where(orders.c.id == order_id)
-        await database.execute(del_order)
-        
-        # FULL RECALCULATION of worker_totals (same logic as update_calculation)
-        # This is more reliable than incremental subtraction
-        query = text("""
-            SELECT c.total, c.fuel_payment, c.transport, o.is_client_payment
-            FROM calculations c
-            JOIN orders o ON c.order_id = o.id
-            WHERE c.upload_id = :upload_id
-            AND (o.worker = :worker OR o.worker = :worker_client)
-        """).bindparams(
-            upload_id=upload_id,
-            worker=base_worker,
-            worker_client=f"{base_worker} (оплата клиентом)"
-        )
-        
-        all_calcs = await database.fetch_all(query)
-        
-        company_amount = sum(c["total"] or 0 for c in all_calcs if not c["is_client_payment"])
-        client_amount = sum(c["total"] or 0 for c in all_calcs if c["is_client_payment"])
-        total_amount = company_amount + client_amount
-        
-        new_fuel = sum(c["fuel_payment"] or 0 for c in all_calcs)
-        new_transport = sum(c["transport"] or 0 for c in all_calcs)
-        
-        # Count orders
-        company_count = sum(1 for c in all_calcs if not c["is_client_payment"])
-        client_count = sum(1 for c in all_calcs if c["is_client_payment"])
-        
-        # Update worker_totals
-        update_wt = update(worker_totals).where(
-            and_(
-                worker_totals.c.upload_id == upload_id,
-                worker_totals.c.worker == base_worker
+        # Wrap delete + recalculation in a transaction
+        # Either everything succeeds, or nothing changes
+        async with database.transaction():
+            # Delete order (calculations will be deleted via ON DELETE CASCADE)
+            del_order = delete(orders).where(orders.c.id == order_id)
+            await database.execute(del_order)
+            
+            # FULL RECALCULATION of worker_totals
+            query = text("""
+                SELECT c.total, c.fuel_payment, c.transport, o.is_client_payment
+                FROM calculations c
+                JOIN orders o ON c.order_id = o.id
+                WHERE c.upload_id = :upload_id
+                AND (o.worker = :worker OR o.worker = :worker_client)
+            """).bindparams(
+                upload_id=upload_id,
+                worker=base_worker,
+                worker_client=f"{base_worker} (оплата клиентом)"
             )
-        ).values(
-            total_amount=total_amount,
-            company_amount=company_amount,
-            client_amount=client_amount,
-            fuel_total=new_fuel,
-            transport_total=new_transport,
-            orders_count=company_count + client_count,
-            company_orders_count=company_count,
-            client_orders_count=client_count
-        )
-        await database.execute(update_wt)
+            
+            all_calcs = await database.fetch_all(query)
+            
+            company_amount = sum(c["total"] or 0 for c in all_calcs if not c["is_client_payment"])
+            client_amount = sum(c["total"] or 0 for c in all_calcs if c["is_client_payment"])
+            total_amount = company_amount + client_amount
+            
+            new_fuel = sum(c["fuel_payment"] or 0 for c in all_calcs)
+            new_transport = sum(c["transport"] or 0 for c in all_calcs)
+            
+            # Count orders
+            company_count = sum(1 for c in all_calcs if not c["is_client_payment"])
+            client_count = sum(1 for c in all_calcs if c["is_client_payment"])
+            
+            # UPSERT worker_totals (reliable even if row doesn't exist)
+            upsert_sql = text("""
+                INSERT INTO worker_totals (
+                    upload_id, worker, total_amount, company_amount, client_amount,
+                    fuel_total, transport_total, orders_count,
+                    company_orders_count, client_orders_count
+                ) VALUES (
+                    :upload_id, :worker, :total_amount, :company_amount, :client_amount,
+                    :fuel_total, :transport_total, :orders_count,
+                    :company_orders_count, :client_orders_count
+                )
+                ON CONFLICT (upload_id, worker) DO UPDATE SET
+                    total_amount = EXCLUDED.total_amount,
+                    company_amount = EXCLUDED.company_amount,
+                    client_amount = EXCLUDED.client_amount,
+                    fuel_total = EXCLUDED.fuel_total,
+                    transport_total = EXCLUDED.transport_total,
+                    orders_count = EXCLUDED.orders_count,
+                    company_orders_count = EXCLUDED.company_orders_count,
+                    client_orders_count = EXCLUDED.client_orders_count
+            """).bindparams(
+                upload_id=upload_id,
+                worker=base_worker,
+                total_amount=total_amount,
+                company_amount=company_amount,
+                client_amount=client_amount,
+                fuel_total=new_fuel,
+                transport_total=new_transport,
+                orders_count=company_count + client_count,
+                company_orders_count=company_count,
+                client_orders_count=client_count
+            )
+            await database.execute(upsert_sql)
         
         logger.info(f"🗑️ Deleted order {order_id} (worker: {base_worker}, deleted_total: {deleted_total})")
-        if DEBUG_MODE: logger.debug(f"   Recalculated: company={company_amount}, client={client_amount}, total={total_amount}")
+        logger.info(f"   Recalculated: company={company_amount}, client={client_amount}, total={total_amount}")
         
         return JSONResponse({
             "success": True,
@@ -3151,101 +3203,102 @@ async def add_order_row(upload_id: int, worker: str, request: Request):
         # Create order text
         order_text = f"{order_code}, {address}" if order_code and address else (order_code or address or "Ручная запись")
         
-        # Insert new order
-        order_insert = orders.insert().values(
-            upload_id=upload_id,
-            worker=worker_decoded,
-            order_code=order_code,
-            order_full=order_text,
-            address=address,
-            revenue_total=0,
-            revenue_services=0,
-            diagnostic=0,
-            diagnostic_payment=0,
-            specialist_fee=0,
-            additional_expenses=0,
-            service_payment=0,
-            percent="",
-            is_client_payment=is_client_payment,
-            is_over_10k=False,
-            is_extra_row=True  # Mark as manual/extra row
-        )
-        order_id = await database.execute(order_insert)
-        
-        # Insert calculation
-        calc_insert = calculations.insert().values(
-            upload_id=upload_id,
-            order_id=order_id,
-            worker=worker_decoded,
-            fuel_payment=fuel_payment,
-            transport=transport,
-            diagnostic_50=0,
-            total=total
-        )
-        calc_id = await database.execute(calc_insert)
-        
-        # FULL RECALCULATION of worker_totals (same logic as update_calculation)
+        # Wrap all DB modifications in a transaction
+        # If anything fails — nothing is saved
         from sqlalchemy import text
-        
-        query = text("""
-            SELECT c.total, c.fuel_payment, c.transport, o.is_client_payment
-            FROM calculations c
-            JOIN orders o ON c.order_id = o.id
-            WHERE c.upload_id = :upload_id
-            AND (o.worker = :worker OR o.worker = :worker_client)
-        """).bindparams(
-            upload_id=upload_id,
-            worker=base_worker,
-            worker_client=f"{base_worker} (оплата клиентом)"
-        )
-        
-        all_calcs = await database.fetch_all(query)
-        
-        company_amount = sum(c["total"] or 0 for c in all_calcs if not c["is_client_payment"])
-        client_amount = sum(c["total"] or 0 for c in all_calcs if c["is_client_payment"])
-        total_amount = company_amount + client_amount
-        
-        new_fuel = sum(c["fuel_payment"] or 0 for c in all_calcs)
-        new_transport = sum(c["transport"] or 0 for c in all_calcs)
-        
-        # Count orders
-        company_count = sum(1 for c in all_calcs if not c["is_client_payment"])
-        client_count = sum(1 for c in all_calcs if c["is_client_payment"])
-        
-        # Update worker_totals - use UPSERT (INSERT ... ON CONFLICT) for reliability
-        # This handles case when worker_totals row doesn't exist yet
-        upsert_sql = text("""
-            INSERT INTO worker_totals (
-                upload_id, worker, total_amount, company_amount, client_amount,
-                fuel_total, transport_total, orders_count, 
-                company_orders_count, client_orders_count
-            ) VALUES (
-                :upload_id, :worker, :total_amount, :company_amount, :client_amount,
-                :fuel_total, :transport_total, :orders_count,
-                :company_orders_count, :client_orders_count
+        async with database.transaction():
+            # Insert new order
+            order_insert = orders.insert().values(
+                upload_id=upload_id,
+                worker=worker_decoded,
+                order_code=order_code,
+                order_full=order_text,
+                address=address,
+                revenue_total=0,
+                revenue_services=0,
+                diagnostic=0,
+                diagnostic_payment=0,
+                specialist_fee=0,
+                additional_expenses=0,
+                service_payment=0,
+                percent="",
+                is_client_payment=is_client_payment,
+                is_over_10k=False,
+                is_extra_row=True  # Mark as manual/extra row
             )
-            ON CONFLICT (upload_id, worker) DO UPDATE SET
-                total_amount = EXCLUDED.total_amount,
-                company_amount = EXCLUDED.company_amount,
-                client_amount = EXCLUDED.client_amount,
-                fuel_total = EXCLUDED.fuel_total,
-                transport_total = EXCLUDED.transport_total,
-                orders_count = EXCLUDED.orders_count,
-                company_orders_count = EXCLUDED.company_orders_count,
-                client_orders_count = EXCLUDED.client_orders_count
-        """).bindparams(
-            upload_id=upload_id,
-            worker=base_worker,
-            total_amount=total_amount,
-            company_amount=company_amount,
-            client_amount=client_amount,
-            fuel_total=new_fuel,
-            transport_total=new_transport,
-            orders_count=company_count + client_count,
-            company_orders_count=company_count,
-            client_orders_count=client_count
-        )
-        await database.execute(upsert_sql)
+            order_id = await database.execute(order_insert)
+            
+            # Insert calculation
+            calc_insert = calculations.insert().values(
+                upload_id=upload_id,
+                order_id=order_id,
+                worker=worker_decoded,
+                fuel_payment=fuel_payment,
+                transport=transport,
+                diagnostic_50=0,
+                total=total
+            )
+            calc_id = await database.execute(calc_insert)
+            
+            # FULL RECALCULATION of worker_totals
+            query = text("""
+                SELECT c.total, c.fuel_payment, c.transport, o.is_client_payment
+                FROM calculations c
+                JOIN orders o ON c.order_id = o.id
+                WHERE c.upload_id = :upload_id
+                AND (o.worker = :worker OR o.worker = :worker_client)
+            """).bindparams(
+                upload_id=upload_id,
+                worker=base_worker,
+                worker_client=f"{base_worker} (оплата клиентом)"
+            )
+            
+            all_calcs = await database.fetch_all(query)
+            
+            company_amount = sum(c["total"] or 0 for c in all_calcs if not c["is_client_payment"])
+            client_amount = sum(c["total"] or 0 for c in all_calcs if c["is_client_payment"])
+            total_amount = company_amount + client_amount
+            
+            new_fuel = sum(c["fuel_payment"] or 0 for c in all_calcs)
+            new_transport = sum(c["transport"] or 0 for c in all_calcs)
+            
+            # Count orders
+            company_count = sum(1 for c in all_calcs if not c["is_client_payment"])
+            client_count = sum(1 for c in all_calcs if c["is_client_payment"])
+            
+            # UPSERT worker_totals (reliable even when row doesn't exist)
+            upsert_sql = text("""
+                INSERT INTO worker_totals (
+                    upload_id, worker, total_amount, company_amount, client_amount,
+                    fuel_total, transport_total, orders_count, 
+                    company_orders_count, client_orders_count
+                ) VALUES (
+                    :upload_id, :worker, :total_amount, :company_amount, :client_amount,
+                    :fuel_total, :transport_total, :orders_count,
+                    :company_orders_count, :client_orders_count
+                )
+                ON CONFLICT (upload_id, worker) DO UPDATE SET
+                    total_amount = EXCLUDED.total_amount,
+                    company_amount = EXCLUDED.company_amount,
+                    client_amount = EXCLUDED.client_amount,
+                    fuel_total = EXCLUDED.fuel_total,
+                    transport_total = EXCLUDED.transport_total,
+                    orders_count = EXCLUDED.orders_count,
+                    company_orders_count = EXCLUDED.company_orders_count,
+                    client_orders_count = EXCLUDED.client_orders_count
+            """).bindparams(
+                upload_id=upload_id,
+                worker=base_worker,
+                total_amount=total_amount,
+                company_amount=company_amount,
+                client_amount=client_amount,
+                fuel_total=new_fuel,
+                transport_total=new_transport,
+                orders_count=company_count + client_count,
+                company_orders_count=company_count,
+                client_orders_count=client_count
+            )
+            await database.execute(upsert_sql)
         
         logger.info(f"➕ Added row for {worker_decoded}: order_code={order_code}, total={total}")
         logger.info(f"   Recalculated: company={company_amount}, client={client_amount}, total={total_amount}")
@@ -3645,7 +3698,7 @@ async def recalculate_all_totals():
                 "upload_id": upload_id,
                 "workers_count": len(worker_sums)
             })
-            logger.info("✅ Recalculated upload {upload_id}: {len(worker_sums)} workers")
+            logger.info(f"✅ Recalculated upload {upload_id}: {len(worker_sums)} workers")
         
         return JSONResponse({
             "success": True,
@@ -3672,7 +3725,7 @@ async def delete_upload(upload_id: int):
         await database.execute(text("DELETE FROM orders WHERE upload_id = :id").bindparams(id=upload_id))
         await database.execute(text("DELETE FROM uploads WHERE id = :id").bindparams(id=upload_id))
         
-        logger.info("✅ Deleted upload {upload_id}")
+        logger.info(f"✅ Deleted upload {upload_id}")
         return JSONResponse({"success": True, "deleted_upload_id": upload_id})
         
     except Exception as e:
@@ -3740,58 +3793,61 @@ async def delete_period(period_id: int, request: Request):
         period_uploads = await database.fetch_all(uploads_query)
         upload_ids = [u["id"] for u in period_uploads]
         
-        if upload_ids:
-            # Delete in correct order (foreign key constraints)
-            # 1. version_changes (references uploads)
+        # Wrap all deletions in a transaction
+        # Either everything is deleted or nothing (no "half-deleted" period)
+        async with database.transaction():
+            if upload_ids:
+                # Delete in correct order (foreign key constraints)
+                # 1. version_changes (references uploads)
+                try:
+                    await database.execute(
+                        text("DELETE FROM version_changes WHERE upload_id = ANY(:ids) OR prev_upload_id = ANY(:ids)").bindparams(ids=upload_ids)
+                    )
+                except Exception:
+                    pass  # Table may not exist
+                
+                # 2. manual_edits
+                await database.execute(
+                    delete(manual_edits).where(manual_edits.c.upload_id.in_(upload_ids))
+                )
+                
+                # 3. changes
+                await database.execute(
+                    delete(changes).where(changes.c.upload_id.in_(upload_ids))
+                )
+                
+                # 4. calculations
+                await database.execute(
+                    delete(calculations).where(calculations.c.upload_id.in_(upload_ids))
+                )
+                
+                # 5. orders
+                await database.execute(
+                    delete(orders).where(orders.c.upload_id.in_(upload_ids))
+                )
+                
+                # 6. worker_totals
+                await database.execute(
+                    delete(worker_totals).where(worker_totals.c.upload_id.in_(upload_ids))
+                )
+                
+                # 7. uploads
+                await database.execute(
+                    delete(uploads).where(uploads.c.period_id == period_id)
+                )
+            
+            # 8. sent_notifications (references period_id)
             try:
                 await database.execute(
-                    text("DELETE FROM version_changes WHERE upload_id = ANY(:ids) OR prev_upload_id = ANY(:ids)").bindparams(ids=upload_ids)
+                    text("DELETE FROM sent_notifications WHERE period_id = :pid").bindparams(pid=period_id)
                 )
             except Exception:
-                pass  # Table may not exist
+                pass
             
-            # 2. manual_edits
+            # 9. period itself
             await database.execute(
-                delete(manual_edits).where(manual_edits.c.upload_id.in_(upload_ids))
+                delete(periods).where(periods.c.id == period_id)
             )
-            
-            # 3. changes
-            await database.execute(
-                delete(changes).where(changes.c.upload_id.in_(upload_ids))
-            )
-            
-            # 4. calculations
-            await database.execute(
-                delete(calculations).where(calculations.c.upload_id.in_(upload_ids))
-            )
-            
-            # 5. orders
-            await database.execute(
-                delete(orders).where(orders.c.upload_id.in_(upload_ids))
-            )
-            
-            # 6. worker_totals
-            await database.execute(
-                delete(worker_totals).where(worker_totals.c.upload_id.in_(upload_ids))
-            )
-            
-            # 7. uploads
-            await database.execute(
-                delete(uploads).where(uploads.c.period_id == period_id)
-            )
-        
-        # 8. sent_notifications (references period_id)
-        try:
-            await database.execute(
-                text("DELETE FROM sent_notifications WHERE period_id = :pid").bindparams(pid=period_id)
-            )
-        except Exception:
-            pass
-        
-        # 9. period itself
-        await database.execute(
-            delete(periods).where(periods.c.id == period_id)
-        )
         
         logger.info(f"🗑️ Period '{period_name}' (id={period_id}) deleted by {user.get('name', 'Unknown')}")
         
@@ -3907,7 +3963,7 @@ async def search_orders(q: str = "", limit: int = 10):
             })
         except Exception as e:
             # Fallback to simple search if pg_trgm not available
-            logger.warning("⚠️ Fuzzy search failed, using simple search: {e}")
+            logger.warning(f"⚠️ Fuzzy search failed, using simple search: {e}")
             query = """
                 SELECT 
                     o.id as order_id,
@@ -4214,12 +4270,12 @@ async def get_duplicates(request: Request):
         
         # Load existing exclusions - map by (address_hash, work_type) to set of excluded order_ids
         exclusions = await get_duplicate_exclusions()
-        if DEBUG_MODE: logger.debug("🔍 exclusions from DB: {exclusions}")
+        if DEBUG_MODE: logger.debug(f"🔍 exclusions from DB: {exclusions}")
         exclusions_map = {}
         for e in exclusions:
             key = (e["address_hash"], e["work_type"])
             excluded_ids = set(e.get("order_ids") or [])
-            if DEBUG_MODE: logger.debug("🔍 exclusion: key={key}, order_ids={e.get('order_ids')}, excluded_ids={excluded_ids}")
+            if DEBUG_MODE: logger.debug(f"🔍 exclusion: key={key}, order_ids={e.get('order_ids')}, excluded_ids={excluded_ids}")
             if key in exclusions_map:
                 exclusions_map[key].update(excluded_ids)
             else:
@@ -4250,7 +4306,7 @@ async def get_duplicates(request: Request):
             
             # Debug: log dates for Люберцы
             if "люберц" in orders[0]["address"].lower() or "октябрьский" in orders[0]["address"].lower():
-                if DEBUG_MODE: logger.debug("🔍 Люберцы: dates={dates}, unique={unique_dates}, totals={totals}")
+                if DEBUG_MODE: logger.debug(f"🔍 Люберцы: dates={dates}, unique={unique_dates}, totals={totals}")
             
             # All dates are different (each order on different day)
             all_different_dates = len(unique_dates) == len(non_null_dates) and len(unique_dates) >= 2
@@ -4268,12 +4324,12 @@ async def get_duplicates(request: Request):
             
             # Check if ALL current orders were already marked as "not a duplicate"
             excluded_ids = exclusions_map.get((address_hash, work_type), set())
-            if DEBUG_MODE: logger.debug("🔍 cluster check: addr_key={addr_key}, hash={address_hash}, work_type={work_type}")
-            if DEBUG_MODE: logger.debug("🔍 cluster check: current_ids={current_order_ids}, excluded_ids={excluded_ids}")
-            if DEBUG_MODE: logger.debug("🔍 cluster check: issubset={current_order_ids.issubset(excluded_ids)}")
+            if DEBUG_MODE: logger.debug(f"🔍 cluster check: addr_key={addr_key}, hash={address_hash}, work_type={work_type}")
+            if DEBUG_MODE: logger.debug(f"🔍 cluster check: current_ids={current_order_ids}, excluded_ids={excluded_ids}")
+            if DEBUG_MODE: logger.debug(f"🔍 cluster check: issubset={current_order_ids.issubset(excluded_ids)}")
             if excluded_ids and current_order_ids.issubset(excluded_ids):
                 # All orders in this cluster were already checked - skip
-                if DEBUG_MODE: logger.debug("🔍 cluster SKIPPED")
+                if DEBUG_MODE: logger.debug(f"🔍 cluster SKIPPED")
                 continue
             # If there are new orders not in exclusion - show the cluster
             
@@ -4376,7 +4432,7 @@ async def get_duplicates(request: Request):
         }
         
     except Exception as e:
-        logger.error("❌ Duplicates API error: {e}")
+        logger.error(f"❌ Duplicates API error: {e}")
         import traceback
         traceback.print_exc()
         return {"success": False, "error": str(e)}
@@ -4397,7 +4453,7 @@ async def duplicates_page(request: Request):
 @app.post("/api/duplicates/exclude")
 async def exclude_duplicate(request: Request):
     """Mark a duplicate cluster as 'not a duplicate'"""
-    if DEBUG_MODE: logger.debug("🔍 exclude_duplicate called")
+    if DEBUG_MODE: logger.debug(f"🔍 exclude_duplicate called")
     user = get_current_user(request)
     if not user or user.get("role") != "admin":
         logger.warning("🔍 exclude_duplicate: access denied")
@@ -4405,7 +4461,7 @@ async def exclude_duplicate(request: Request):
     
     try:
         data = await request.json()
-        if DEBUG_MODE: logger.debug("🔍 exclude_duplicate data: {data}")
+        if DEBUG_MODE: logger.debug(f"🔍 exclude_duplicate data: {data}")
         address_hash = data.get("address_hash")
         work_type = data.get("work_type")
         address_display = data.get("address_display", "")
@@ -4415,7 +4471,7 @@ async def exclude_duplicate(request: Request):
         if not address_hash or not work_type:
             return {"success": False, "error": "Не указан адрес или тип работ"}
         
-        if DEBUG_MODE: logger.debug("🔍 Calling add_duplicate_exclusion with order_ids={order_ids}, type={type(order_ids)}")
+        if DEBUG_MODE: logger.debug(f"🔍 Calling add_duplicate_exclusion with order_ids={order_ids}, type={type(order_ids)}")
         exclusion_id = await add_duplicate_exclusion(
             address_hash=address_hash,
             work_type=work_type,
@@ -4425,12 +4481,12 @@ async def exclude_duplicate(request: Request):
             excluded_by_name=user.get("display_name", user.get("name", "")),
             reason=reason
         )
-        if DEBUG_MODE: logger.debug("🔍 add_duplicate_exclusion returned: {exclusion_id}")
+        if DEBUG_MODE: logger.debug(f"🔍 add_duplicate_exclusion returned: {exclusion_id}")
         
         return {"success": True, "exclusion_id": exclusion_id}
         
     except Exception as e:
-        logger.error("❌ Exclude duplicate error: {e}")
+        logger.error(f"❌ Exclude duplicate error: {e}")
         import traceback
         traceback.print_exc()
         return {"success": False, "error": str(e)}
@@ -4447,7 +4503,7 @@ async def restore_duplicate(request: Request, exclusion_id: int):
         await remove_duplicate_exclusion(exclusion_id)
         return {"success": True}
     except Exception as e:
-        logger.error("❌ Restore duplicate error: {e}")
+        logger.error(f"❌ Restore duplicate error: {e}")
         return {"success": False, "error": str(e)}
 
 
@@ -4462,7 +4518,7 @@ async def list_exclusions(request: Request):
         exclusions = await get_duplicate_exclusions()
         return {"success": True, "exclusions": exclusions}
     except Exception as e:
-        logger.error("❌ List exclusions error: {e}")
+        logger.error(f"❌ List exclusions error: {e}")
         return {"success": False, "error": str(e)}
 
 
