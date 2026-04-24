@@ -15,6 +15,8 @@ EXCLUDED_GROUPS = {
     "отбор:",
     "монтажник",
     "заказ, комментарий",
+    "аренда",
+    "аренда автовышки",
 }
 
 # Managers - should NOT be in salary calculation (warning if found)
