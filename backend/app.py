@@ -2925,23 +2925,29 @@ async def update_calculation(calc_id: int, request: Request):
         new_fuel = sum(c["fuel_payment"] or 0 for c in all_calcs)
         new_transport = sum(c["transport"] or 0 for c in all_calcs)
         
-        # Update worker_totals
-        update_wt = update(worker_totals).where(
-            and_(
-                worker_totals.c.upload_id == upload_id,
-                worker_totals.c.worker == base_worker
-            )
-        ).values(
+        # Update worker_totals - use direct SQL with TRIM for reliability
+        update_sql = text("""
+            UPDATE worker_totals 
+            SET total_amount = :total_amount,
+                company_amount = :company_amount,
+                client_amount = :client_amount,
+                fuel_total = :fuel_total,
+                transport_total = :transport_total
+            WHERE upload_id = :upload_id
+            AND TRIM(worker) = TRIM(:worker)
+        """).bindparams(
             total_amount=total_amount,
             company_amount=company_amount,
             client_amount=client_amount,
             fuel_total=new_fuel,
-            transport_total=new_transport
+            transport_total=new_transport,
+            upload_id=upload_id,
+            worker=base_worker
         )
-        await database.execute(update_wt)
+        result = await database.execute(update_sql)
         
-        logger.info("✅ Updated calculation {calc_id}: {update_values}")
-        if DEBUG_MODE: logger.debug(f"   Worker {base_worker}: company={company_amount}, client={client_amount}, total={total_amount}")
+        logger.info(f"✅ Updated calculation {calc_id}: {update_values}, worker_totals_updated={result}")
+        logger.info(f"   Worker {base_worker}: company={company_amount}, client={client_amount}, total={total_amount}")
         
         return JSONResponse({
             "success": True,
@@ -3201,13 +3207,20 @@ async def add_order_row(upload_id: int, worker: str, request: Request):
         company_count = sum(1 for c in all_calcs if not c["is_client_payment"])
         client_count = sum(1 for c in all_calcs if c["is_client_payment"])
         
-        # Update worker_totals
-        update_wt = update(worker_totals).where(
-            and_(
-                worker_totals.c.upload_id == upload_id,
-                worker_totals.c.worker == base_worker
-            )
-        ).values(
+        # Update worker_totals - use direct SQL for reliability
+        update_sql = text("""
+            UPDATE worker_totals 
+            SET total_amount = :total_amount,
+                company_amount = :company_amount,
+                client_amount = :client_amount,
+                fuel_total = :fuel_total,
+                transport_total = :transport_total,
+                orders_count = :orders_count,
+                company_orders_count = :company_orders_count,
+                client_orders_count = :client_orders_count
+            WHERE upload_id = :upload_id
+            AND TRIM(worker) = TRIM(:worker)
+        """).bindparams(
             total_amount=total_amount,
             company_amount=company_amount,
             client_amount=client_amount,
@@ -3215,12 +3228,14 @@ async def add_order_row(upload_id: int, worker: str, request: Request):
             transport_total=new_transport,
             orders_count=company_count + client_count,
             company_orders_count=company_count,
-            client_orders_count=client_count
+            client_orders_count=client_count,
+            upload_id=upload_id,
+            worker=base_worker
         )
-        await database.execute(update_wt)
+        result = await database.execute(update_sql)
         
-        logger.info(f"➕ Added new row for {worker_decoded}: order_code={order_code}, total={total}")
-        if DEBUG_MODE: logger.debug(f"   Recalculated: company={company_amount}, client={client_amount}, total={total_amount}")
+        logger.info(f"➕ Added new row for {worker_decoded}: order_code={order_code}, total={total}, updated_rows={result}")
+        logger.info(f"   Recalculated totals: company={company_amount}, client={client_amount}, total={total_amount}")
         
         # Save to manual_edits for history tracking
         from database import save_manual_edit, uploads, periods
